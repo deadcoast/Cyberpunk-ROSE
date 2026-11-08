@@ -1,0 +1,112 @@
+# The Mat: purple ooze cords, tips, nodes, necrosis, organs. The signal pulse is a shader, not frames.
+[[slot]]
+id = "mat.cord"
+kind = "tile"
+size = [32, 32]
+frames = 4
+states = ["fed", "lean", "starving"]
+ramp = "ooze"
+silhouette = "strip"
+tag = "CRD"
+anchor = "anchor.tile"
+prompt = "a thick purple ooze cord running across a sewer tile, dark violet core with a lighter violet edge, wet, translucent over the brick, 1 px highlight; state fed glows, lean is dim, starving is grey-violet"
+negative = "green, fungus texture, outline, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "mat.tip"
+kind = "tile"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "strip"
+tag = "TIP"
+anchor = "anchor.tile"
+prompt = "the thin growing tip of a purple ooze strand, 2-3 px wide, bright violet, reaching across a dark tile, 4 frames of extension"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.node"
+kind = "tile"
+size = [32, 32]
+frames = 4
+states = ["fed", "lean", "starving"]
+ramp = "ooze"
+silhouette = "disc"
+tag = "NOD"
+anchor = "anchor.tile"
+prompt = "a bulbous purple ooze junction where three cords meet, pale violet glow at the centre, slow pulse over 4 frames"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.necro"
+kind = "tile"
+size = [32, 32]
+frames = 2
+states = [""]
+ramp = "flesh"
+silhouette = "strip"
+tag = "NEC"
+anchor = "anchor.tile"
+prompt = "a dead ooze cord gone bruise-purple then silt-brown, cracked and dry, no glow"
+negative = "bright, glow, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.organ.bulb"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "disc"
+tag = "BLB"
+anchor = "anchor.tile"
+prompt = "a Lume Bulb organ: a translucent violet sac on a cord emitting pale pink light, 4 frames of breathing"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.organ.lung"
+kind = "sprite"
+size = [32, 48]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "capsule"
+tag = "LNG"
+anchor = "anchor.tile"
+prompt = "a Filter Lung organ: a ribbed violet bladder on a cord above water, swelling and contracting over 4 frames, brine dripping"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.organ.sphincter"
+kind = "sprite"
+size = [32, 64]
+frames = 4
+states = ["open", "closed"]
+ramp = "ooze"
+silhouette = "frame"
+tag = "SPH"
+anchor = "anchor.tile"
+prompt = "a Sphincter organ filling a narrow tunnel: a ring of violet muscle with chrome inclusions, open and closed states, 4 frames of motion"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.organ.sac"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "disc"
+tag = "SAC"
+anchor = "anchor.tile"
+prompt = "a Spore Sac organ: a dark violet pod with pink spots, twitching, something moving inside"
+negative = "green, outline"
+status = "placeholder"

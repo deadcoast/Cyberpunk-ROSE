@@ -1,0 +1,10 @@
+[package]
+name = "inventory"
+description = "Cyberpunk: ROSE - grid inventories, rigs, containers, the Stash"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+items = { path = "../items" }
+serde.workspace = true

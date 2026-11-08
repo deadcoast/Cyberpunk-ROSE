@@ -1,0 +1,100 @@
+# UI: frames whose background ends at the frame line, gauges, cursor, the pixel font sheet. 4 px rhythm.
+
+[[slot]]
+id = "ui.frame"
+kind = "ui"
+size = [48, 48]
+frames = 1
+states = [""]
+ramp = "noir"
+silhouette = "frame"
+tag = "FRM"
+anchor = "anchor.item"
+prompt = "a 9-slice UI frame: 1 px Void outer line, 1 px Rebar inner line, Sump fill, hard corners, no glow"
+negative = "rounded corners, gradient, glow, bevel"
+status = "placeholder"
+
+[[slot]]
+id = "ui.button"
+kind = "ui"
+size = [64, 16]
+frames = 1
+states = ["idle", "hover", "down"]
+ramp = "noir"
+silhouette = "frame"
+tag = "BTN"
+anchor = "anchor.item"
+prompt = "a 9-slice button: Void line, Culvert fill, hover brightens the line to Cyan, down fills Culvert darker"
+negative = "rounded, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "ui.gauge.attention"
+kind = "ui"
+size = [96, 8]
+frames = 1
+states = [""]
+ramp = "white"
+silhouette = "strip"
+tag = "GAT"
+anchor = "anchor.item"
+prompt = "a thin horizontal gauge, Void track, fills Vestment White, three tick marks for Patrol Sweep Cleansing"
+negative = "gradient"
+status = "placeholder"
+
+[[slot]]
+id = "ui.gauge.ooze"
+kind = "ui"
+size = [96, 8]
+frames = 1
+states = [""]
+ramp = "ooze"
+silhouette = "strip"
+tag = "GOZ"
+anchor = "anchor.item"
+prompt = "a thin horizontal gauge, Void track, fills purple ooze with a pink highlight pixel line"
+negative = "gradient"
+status = "placeholder"
+
+[[slot]]
+id = "ui.cursor"
+kind = "ui"
+size = [16, 16]
+frames = 1
+states = ["point", "grab", "dig", "sever"]
+ramp = "neon"
+silhouette = "disc"
+tag = "CUR"
+anchor = "anchor.item"
+prompt = "a 16 px pixel cursor: Acid Yellow arrow with Void outline; grab hand; dig claw; a Hot Pink sever blade"
+negative = "anti-aliasing, drop shadow"
+status = "placeholder"
+
+[[slot]]
+id = "ui.font.mono"
+kind = "ui"
+size = [4, 6]
+frames = 96
+states = [""]
+ramp = "industrial"
+silhouette = "strip"
+tag = "FNT"
+anchor = "anchor.item"
+prompt = "placeholder is the built-in 3x5 glyph sheet; the shipped font is a 5x7 pixel monospace designed in Phase F"
+negative = "-"
+status = "placeholder"
+
+[[slot]]
+id = "icon.item"
+kind = "icon"
+size = [32, 32]
+frames = 1
+states = [""]
+ramp = "industrial"
+silhouette = "rect"
+tag = "ITM"
+anchor = "anchor.item"
+prompt = "inventory icon; one per entry of data/items.toml (expanded by the tool), 24x24 inner silhouette grid, tier corner mark"
+negative = "shadow on ground, text, border"
+status = "placeholder"
+expand = "items"

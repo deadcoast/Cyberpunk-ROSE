@@ -1,6 +1,0 @@
-target/
-out/
-godot/.godot/
-godot/bin/*.so
-godot/bin/*.dll
-godot/bin/*.dylib

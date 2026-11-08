@@ -1,0 +1,43 @@
+# VFX and panels.
+
+[[slot]]
+id = "vfx.spark"
+kind = "vfx"
+size = [16, 16]
+frames = 6
+states = [""]
+ramp = "neon"
+silhouette = "disc"
+tag = "SPK"
+anchor = "anchor.item"
+prompt = "a muzzle-orange spark burst, 6 frames, 2-tone, no glow halo"
+negative = "glow, blur"
+status = "placeholder"
+
+[[slot]]
+id = "vfx.ooze_drip"
+kind = "vfx"
+size = [16, 16]
+frames = 6
+states = [""]
+ramp = "ooze"
+silhouette = "strip"
+tag = "DRP"
+anchor = "anchor.item"
+prompt = "a purple ooze drip forming and falling, 6 frames"
+negative = "green, blur"
+status = "placeholder"
+
+[[slot]]
+id = "panel.ch1.01"
+kind = "panel"
+size = [1280, 720]
+frames = 1
+states = [""]
+ramp = "noir"
+silhouette = "frame"
+tag = "P11"
+anchor = "anchor.tile"
+prompt = "chapter 1 panel 1: Ivan Ooze in the Sump welcoming the player, graphic-novel still, hard ink, high contrast, purple ooze light, text box space at the bottom"
+negative = "soft shading, photoreal, bright colours"
+status = "placeholder"

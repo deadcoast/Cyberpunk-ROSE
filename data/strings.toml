@@ -1,0 +1,18 @@
+# Cyberpunk: ROSE — string table. Every proper noun the design borrows sits here once, so a commercial build can
+# rename in one place. Nothing mechanical depends on these values.
+
+[narrator]
+name = "Ivan Ooze"
+short = "Ivan"
+
+[world]
+city_above = "Night City"
+fallen_corp = "Arasaka"
+sickness = "cyberpsychosis"
+vaccine = "MAP-SSRI-II"
+order = "Oathkeepers"
+city_below = "Slimecity"
+people = "slimos"
+ferals = "sewerats"
+engineers = "tech-tweakers"
+currency = "eddies"

@@ -1,0 +1,44 @@
+# Style anchors: the three hand-curated references every PixelLab generation matches against (bitforge).
+# Made first, in PixelLab, by hand-picking from pixflux outputs; nothing else is generated until these are approved.
+
+[[slot]]
+id = "anchor.tile"
+kind = "anchor"
+size = [64, 64]
+frames = 1
+states = [""]
+ramp = "mud"
+silhouette = "hatch"
+tag = "ANT"
+anchor = ""
+prompt = "a 64x64 panel of a wet brick sewer culvert wall with a rusted pipe run, top-down lit by one dim purple light from the left, hard shadows, 2-tone dither only, no outline on the bricks, one-pixel wet highlight on every horizontal edge"
+negative = "smooth gradients, anti-aliasing, outlines on tiles, green light, blur, photo texture"
+status = "placeholder"
+
+[[slot]]
+id = "anchor.slimo"
+kind = "anchor"
+size = [32, 48]
+frames = 1
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "ANS"
+anchor = ""
+prompt = "a 32x48 side-view pixel art figure of a gaunt person with chrome fragments embedded in grey-pink flesh and faint purple veins glowing under the skin, 1 px black selective outline, 3-step shading with blue shadows, dark grimy clothes, standing idle"
+negative = "anime eyes, smooth shading, more than one light source, green glow, outline on every edge, bright colours on cloth"
+status = "placeholder"
+
+[[slot]]
+id = "anchor.item"
+kind = "anchor"
+size = [32, 32]
+frames = 1
+states = [""]
+ramp = "industrial"
+silhouette = "rect"
+tag = "ANI"
+anchor = ""
+prompt = "a 32x32 pixel art inventory icon of a salvaged cybernetic eye implant with a cracked lens, 1 px black selective outline, one top-left light, 3-step grey chrome shading, tiny purple residue at the socket, transparent background"
+negative = "shadow on the ground, text, border, gradient background, more than three steps of shading"
+status = "placeholder"
