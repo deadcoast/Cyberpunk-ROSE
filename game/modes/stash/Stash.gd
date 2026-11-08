@@ -10,6 +10,7 @@ var cells: Control
 var card: Control
 var selected := -1
 var status: Label
+var haul_note := ""
 
 func _ready() -> void:
 	screen_title = "STASH"
@@ -34,6 +35,12 @@ func _build_content(c: Control) -> void:
 	# a starting haul so the screen is never empty
 	for id in ["chr_street_eye", "prt_pipe", "ger_nail_rifle", "org_paste", "cur_ooze_toy", "chr_lamp_core", "prt_plate", "tec_shard_corpo"]:
 		stash.add(items.find(id), 60 + (hash(id) % 40), true)
+	# a Runner's rig handed over by the Run on extraction
+	if not Sim.pending_haul.is_empty():
+		var before: int = stash.count()
+		var left: int = stash.import_rig(Sim.pending_haul)
+		Sim.pending_haul = PackedByteArray()
+		haul_note = "   haul from %s: %d in%s" % [Sim.pending_haul_from, stash.count() - before, ("   %d left at the Mat edge: no room" % left) if left > 0 else ""]
 	_redraw()
 
 func _add_loot() -> void:
@@ -79,7 +86,7 @@ func _redraw() -> void:
 			pin.position = Vector2(btn.size.x - 4, 0)
 			pin.size = Vector2(4, 4)
 			btn.add_child(pin)
-	status.text = "tier %d   %d items   %d free cells" % [stash.tier(), stash.count(), stash.free_cells()]
+	status.text = "tier %d   %d items   %d free cells%s" % [stash.tier(), stash.count(), stash.free_cells(), haul_note]
 	if selected >= 0:
 		_select(selected)
 

@@ -14,4 +14,5 @@ mat = { path = "../mat" }
 logistics = { path = "../logistics" }
 render = { path = "../render" }
 run = { path = "../run" }
+items = { path = "../items" }
 clap.workspace = true

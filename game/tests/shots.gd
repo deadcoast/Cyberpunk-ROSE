@@ -41,13 +41,28 @@ func _process(_delta: float) -> bool:
 	if frames_on_screen == 16 and screen_i >= 0 and screen_ids[screen_i] == "colony":
 		var img: Image = root.get_viewport().get_texture().get_image()
 		img.save_png(out_dir + "/colony_stack.png")
+	if frames_on_screen == 13 and screen_i >= 0 and screen_ids[screen_i] == "run":
+		# a second Run shot: standing at the first crate or locker with its manifest unrolled
+		var scr: Node = screens.current
+		for src in scr.route.sources():
+			if src.state == "closed" and (src.kind == "crate" or src.kind == "locker"):
+				scr.tile = Vector2i(int(src.x), int(src.y))
+				scr._place()
+				scr._sense_tick()
+				if scr.open_here():
+					scr.loot_shown = scr.loot_items.size()
+					scr._redraw_loot()
+				break
+	if frames_on_screen == 16 and screen_i >= 0 and screen_ids[screen_i] == "run":
+		var img: Image = root.get_viewport().get_texture().get_image()
+		img.save_png(out_dir + "/run_loot.png")
 	if frames_on_screen >= 18:
 		screen_i += 1
 		frames_on_screen = 0
 		if screen_i < screen_ids.size():
 			screens.show_screen(screen_ids[screen_i])
 		else:
-			print("[shots] wrote %d screens to %s" % [screen_ids.size() + 1, out_dir])
+			print("[shots] wrote %d screens to %s" % [screen_ids.size() + 2, out_dir])
 			quit(0)
 			return true
 	return false

@@ -111,3 +111,48 @@ step's cyan footprint eight tiles in.
 capacitor are PAC-023's. The gear light comes from a lantern toggle, not the rig (PAC-026 wires gear). Route memory
 is produced and restorable but not yet written to the save by the shell (PAC-026). The HUD light gem is text; the arcs
 are PAC-025. Authored sound traps (chains, loose grates) are a later chunk-authoring pass.
+
+## PAC-022 — `run` crate: loot tables and containers (2026-11-08)
+
+**Research first.** `docs/research/08-loot-tables.md`: Diablo 2's treasure classes (pool first, item second, quality
+last, level gates the top), Dota 2's pseudo-random distribution (C·N ramp, reset on hit, "to limit the influence of
+huge streaks"), Risk of Rain 2's 79/20/1 chest, Tarkov's 12.6 spawn randomisation (where is learnable, whether is
+not), Darkest Dungeon's curios (a supply item buys certainty), plus research 01 and 02. Eleven decisions; every
+number ROSE adds is marked ours and lives in `data/loot.toml`.
+
+**What exists.** `run::loot`: tables from `data/loot.toml` (seven sources — locker, crate, deposit, newcomer corpse,
+scout drop, carrier drop, cache — each with picks, NoDrop, condition band, category weights and six tier rows),
+D2-style resolution, PRD on notable picks with the constant solved by bisection (matches Dota's published table to
+±0.2 %), first-run generosity on the first three opens, the S1–S2 cap that keeps S2 at Uncommon, pry-bar versus
+hands (noise, an extra pick on crates, forced lockers damage half their contents), piles from dug deposits,
+corpses as sources, Oathkeeper drop tables ready for PAC-023, and taking into a `Rig` by auto-place. Contents roll
+from (route seed, run nonce, source index). The bridge adds `begin_run`, `sources`, `source_at`, `open_source`,
+`source_items`, `take`, `take_all`, `rig_*`, `rig_export`, `loot_stats` on `RoseRun` and `import_rig` on
+`RoseStash`; `Sim` carries the run hand-off (nonce, per-route run count, pending haul). The Run screen shows the
+source prompt under the Runner, opens with E (pry bar when carried), unrolls the manifest one line per 0.22 s with
+the notable last on a longer beat, takes all with F, shows the rig line (items, free cells, weight, blind value), and
+hands the rig to the Stash on extraction; the Stash reports the intake. `rose route --loot N` sweeps the tables.
+
+**Automated.** `cargo test -p run` — 35 tests (7 new): PRD constants for 5/10/25/30 % within 0.002 of Dota's
+0.38/1.5/8.5/12 %; sources = containers + corpses and 20–40 % of lockers locked over 60 routes; S1 and S2 lockers
+roll no Rare over 40 routes each while S3 does; per-container value climbs ×1.4–3.2 per stratum; generosity flags
+exactly the first three opens of a first run and never on a second; same seed/nonce/index gives identical
+contents, a new nonce differs; pry is quiet and yields ≥ hands, a forced locked locker damages ⌈n/2⌉ items and a
+pried one none; piles are Parts/Chrome at 40–80, corpses ≤ 60, scout drops are all Blackline plus vestment cloth
+10–40 % of the time, carriers drop the lamp pole; 400 locker rolls keep the dry streak under the PRD bound with a
+notable rate in 6–20 %; take_all fills the rig and leaves the rest. Workspace: 62 tests, 0 failures.
+
+`rose route --loot 200` — per container, pry bar, not a first run: S1 mean 9.4 e (p50 7, p90 21), 68/32 C/U;
+S2 19.0 (×2.02), 44/56, no Rare; S3 37.2 (×1.95), 38/45/14/3, notable 16.6 %, longest dry streak 25.
+
+Godot headless smoke — ≥ 8 sources on the route; six opened in place with `source_at` agreeing with `sources()`,
+items revealed, taken into the rig, every taken item unidentified with a hidden name, rig weight and blind value
+read, the exported rig imports into a fresh Stash with count = taken − left, and a dug deposit adds a pile. PASS.
+
+**On the screenshots.** `docs/shots/run_loot.png`: the Runner at a tier-1 locker with the panel open — one line,
+tier colour, "unidentified common chrome 1x1 0.6kg c75", F take all.
+
+**Known gaps, by design of the PAC.** The pry bar is a kit flag, not a rig slot (PAC-026 wires gear and the Rig
+screen); quick-slot use, dropping and the body pickup are PAC-024/026; the manifest has no stinger sound or tier
+colour wash yet (PAC-025/028); the loot panel is a label list, the grid-to-grid panel of the design lands with the
+Run HUD; scout and carrier drop tables wait for kills (PAC-023); caches wait for Sever rooms and S5 vaults.

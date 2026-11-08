@@ -132,6 +132,50 @@ func _verify_current() -> void:
 			_check(seen_total > scr.route.sense_stats()[0], "run: nothing remembered after moving (%d seen, %d visible)" % [seen_total, scr.route.sense_stats()[0]])
 			_check(scr.fog != null and scr.fog.texture != null, "run: fog overlay missing")
 			scr.lantern_on = true
+			# loot (PAC-022): sources, opening, the manifest, the rig, the hand-off
+			var ls: PackedInt32Array = scr.route.loot_stats()
+			_check(ls.size() == 6 and ls[0] >= 8, "run: loot sources %s" % str(ls))
+			var opened := 0
+			var revealed := 0
+			var took := 0
+			for src in scr.route.sources():
+				if src.state != "closed":
+					continue
+				scr.tile = Vector2i(int(src.x), int(src.y))
+				scr._place()
+				_check(scr.source_here() == int(src.index), "run: source_at disagrees with sources()")
+				if scr.open_here():
+					opened += 1
+					revealed += scr.loot_items.size()
+					scr.loot_shown = scr.loot_items.size()
+					var r: Array = scr.take_all_here()
+					took += int(r[0])
+					scr.close_loot()
+				if opened >= 6:
+					break
+			_check(opened >= 4, "run: opened %d sources" % opened)
+			_check(revealed >= opened, "run: %d items revealed from %d opens" % [revealed, opened])
+			_check(took >= 1 and scr.route.rig_stats()[0] == took, "run: rig holds %d, took %d" % [scr.route.rig_stats()[0], took])
+			_check(scr.route.rig_weight() > 0.0 and scr.route.rig_value_blind() >= 0, "run: rig weight/value")
+			for it in scr.route.rig_items():
+				_check(not bool(it.ident) and String(it.label).begins_with("unidentified"), "run: found item identified on pickup: %s" % str(it))
+				break
+			var export: PackedByteArray = scr.route.rig_export()
+			_check(export.size() > 8, "run: rig export empty")
+			var probe := RoseStash.new()
+			var left: int = probe.import_rig(export)
+			_check(left >= 0 and probe.count() == took - left, "run: stash import %d of %d (left %d)" % [probe.count(), took, left])
+			# a dug deposit leaves a pile
+			var before_sources: int = scr.route.loot_stats()[0]
+			var dug_pile := false
+			for y in scr.world.h:
+				for x in scr.world.w:
+					if int(scr.substrate[y * scr.world.w + x]) == 4:
+						dug_pile = scr.route.dig(x, y)
+						break
+				if dug_pile:
+					break
+			_check(dug_pile and scr.route.loot_stats()[0] == before_sources + 1, "run: dug deposit did not leave a pile")
 	print("[smoke] %-9s ok  slots %d" % [id, slots])
 
 func _has_kind(arr: Array, kind: String) -> bool:

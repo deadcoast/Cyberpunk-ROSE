@@ -39,3 +39,27 @@ func _process(delta: float) -> void:
 
 func set_speed(hz: float) -> void:
 	tick_hz = hz
+
+# ---------------------------------------------------------------- the colony's clock and the run hand-off
+## Day counter for provenance and the raider roll; a shift is a sim day for now.
+var day := 1
+## How many runs each route (key "s<stratum>:<seed>") has had: first-run generosity reads 0.
+var route_runs := {}
+## A Runner's rig handed from the Run to the Stash on extraction (RoseRun.rig_export bytes), consumed once.
+var pending_haul := PackedByteArray()
+var pending_haul_from := ""
+
+func route_key(stratum: int, seed_value: int) -> String:
+	return "s%d:%d" % [stratum, seed_value]
+
+func runs_of(stratum: int, seed_value: int) -> int:
+	return int(route_runs.get(route_key(stratum, seed_value), 0))
+
+func note_run(stratum: int, seed_value: int) -> void:
+	var k := route_key(stratum, seed_value)
+	route_runs[k] = int(route_runs.get(k, 0)) + 1
+
+## A nonce for this run's loot: the colony tick at departure, so re-running a route rolls fresh contents.
+func run_nonce() -> int:
+	var s: Dictionary = ensure().stats()
+	return int(s.get("tick", 0)) * 131 + day

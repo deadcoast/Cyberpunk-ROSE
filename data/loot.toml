@@ -1,0 +1,135 @@
+# Cyberpunk: ROSE — loot tables (research 08). Resolved D2-style: NoDrop, then category by weight, then tier from the
+# row for the source's tier (1-6 = stratum; crates are chunk stratum + 1), then an item uniformly from that category
+# and tier, stepping down a tier when none exists. Tier rows are [common, uncommon, rare, blackline, relic] weights.
+# S2 tops out at Uncommon (design): rows 1 and 2 carry no Rare. Relic appears only in `cache`.
+#
+# count       [min, max] picks
+# nodrop      chance per pick that nothing drops (0-1)
+# condition   [lo, hi] found condition
+# categories  weights; a category absent here never drops from this source
+# rows        one tier-weight row per source tier 1..6
+# notable     which tier index and up counts as a notable for PRD (2 = Rare and up)
+
+[source.locker]
+count = [1, 3]
+nodrop = 0.10
+condition = [35, 90]
+categories = { chrome = 30, part = 25, organic = 15, gear = 12, tech = 8, curio = 7, key = 3 }
+rows = [
+  [80, 20, 0, 0, 0],
+  [55, 45, 0, 0, 0],
+  [50, 38, 12, 0, 0],
+  [35, 40, 20, 5, 0],
+  [20, 35, 30, 15, 0],
+  [10, 30, 35, 25, 0],
+]
+notable = 2
+
+[source.crate]
+count = [2, 3]
+nodrop = 0.05
+condition = [55, 100]
+categories = { chrome = 30, part = 20, tech = 18, gear = 15, contraband = 10, curio = 7 }
+rows = [
+  [75, 25, 0, 0, 0],
+  [45, 55, 0, 0, 0],
+  [40, 42, 18, 0, 0],
+  [25, 40, 27, 8, 0],
+  [12, 33, 35, 20, 0],
+  [5, 25, 38, 32, 0],
+]
+notable = 2
+
+[source.deposit]
+count = [1, 2]
+nodrop = 0.15
+condition = [40, 80]
+categories = { part = 60, chrome = 40 }
+rows = [
+  [90, 10, 0, 0, 0],
+  [75, 25, 0, 0, 0],
+  [60, 34, 6, 0, 0],
+  [45, 40, 13, 2, 0],
+  [30, 40, 22, 8, 0],
+  [20, 35, 30, 15, 0],
+]
+notable = 2
+
+[source.corpse_newcomer]
+count = [2, 4]
+nodrop = 0.10
+condition = [20, 60]
+categories = { organic = 35, curio = 20, part = 20, gear = 15, tech = 10 }
+rows = [
+  [85, 15, 0, 0, 0],
+  [70, 30, 0, 0, 0],
+  [55, 37, 8, 0, 0],
+  [40, 40, 17, 3, 0],
+  [25, 38, 27, 10, 0],
+  [15, 32, 33, 20, 0],
+]
+notable = 2
+
+[source.scout_drop]
+count = [1, 2]
+nodrop = 0.0
+condition = [60, 95]
+categories = { chrome = 45, gear = 35, tech = 20 }
+rows = [
+  [0, 0, 0, 100, 0],
+  [0, 0, 0, 100, 0],
+  [0, 0, 0, 100, 0],
+  [0, 0, 0, 100, 0],
+  [0, 0, 0, 100, 0],
+  [0, 0, 0, 100, 0],
+]
+notable = 3
+extra = { item = "con_vestment_cloth", chance = 0.5 }
+
+[source.carrier_drop]
+count = [1, 2]
+nodrop = 0.0
+condition = [60, 95]
+categories = { chrome = 50, tech = 30, gear = 20 }
+rows = [
+  [0, 0, 0, 100, 0],
+  [0, 0, 0, 100, 0],
+  [0, 0, 0, 100, 0],
+  [0, 0, 0, 100, 0],
+  [0, 0, 0, 100, 0],
+  [0, 0, 0, 100, 0],
+]
+notable = 3
+extra = { item = "ger_lamp_pole", chance = 1.0 }
+
+[source.cache]
+count = [3, 5]
+nodrop = 0.0
+condition = [60, 100]
+categories = { chrome = 25, tech = 25, contraband = 20, curio = 15, key = 10, relic = 5 }
+rows = [
+  [0, 60, 40, 0, 0],
+  [0, 50, 45, 5, 0],
+  [0, 35, 50, 15, 0],
+  [0, 20, 50, 28, 2],
+  [0, 10, 45, 40, 5],
+  [0, 5, 35, 50, 10],
+]
+notable = 2
+
+[rules]
+# first-run generosity (research 02): first N opens of a route's first run roll the row one tier up
+generous_opens = 3
+# lockers: chance of being locked at tier 1 and the rise per tier
+locker_locked = 0.30
+locker_locked_per_tier = 0.05
+# condition lost by half the contents when a locked locker is forced without a pry bar
+force_damage = 30
+# noise of opening (noise.rs loudness scale 0-15)
+noise_locker = 3
+noise_locker_pry = 4
+noise_locker_force = 8
+noise_crate_pry = 3
+noise_crate_force = 6
+noise_corpse = 4
+noise_pile = 2

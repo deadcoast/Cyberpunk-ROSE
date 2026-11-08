@@ -18,7 +18,7 @@ step "assets" "rose-tools all"
 step "sim" "rose scale (headless renders to out/)"
 ./target/release/rose --out out scale --agents 3000 --seed 11 | tail -4
 step "route" "rose route (seeded assembly, 200-seed sweep per stratum)"
-./target/release/rose --out out route --seed 11 --stratum 1 --sweep 200 | tail -6
+./target/release/rose --out out route --seed 11 --stratum 1 --sweep 200 --loot 200 | tail -11
 
 mkdir -p game/bin
 case "$(uname -s)" in

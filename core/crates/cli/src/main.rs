@@ -69,6 +69,9 @@ enum Cmd {
         /// also sweep this many seeds and report the route statistics
         #[arg(long, default_value_t = 0)]
         sweep: u64,
+        /// open every container on this many seeds per stratum and report the loot distribution
+        #[arg(long, default_value_t = 0)]
+        loot: u64,
     },
 }
 
@@ -292,7 +295,7 @@ fn cmd_bench(t: &Term, seed: u64, ticks: u64) {
     }
 }
 
-fn cmd_route(t: &Term, out: &Path, seed: u64, stratum: u8, chunks: usize, sweep: u64) {
+fn cmd_route(t: &Term, out: &Path, seed: u64, stratum: u8, chunks: usize, sweep: u64, loot: u64) {
     let lib = run::ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
     t.head("route", &format!("seed {seed}  stratum {stratum}  library {} chunks over strata {:?}", lib.chunks.len(), lib.strata()));
     let lay = if chunks == 0 { run::route(&lib, seed, stratum) } else { run::assemble(&lib, seed, stratum, chunks) }.expect("assemble");
@@ -333,6 +336,9 @@ fn cmd_route(t: &Term, out: &Path, seed: u64, stratum: u8, chunks: usize, sweep:
     let p = out.join(format!("route_light_s{stratum}_seed{seed}.png"));
     light_img.save_png(&p).expect("png");
     t.wrote(&p, light_img.w, light_img.h);
+    if loot > 0 {
+        loot_sweep(t, &lib, loot);
+    }
     if sweep > 0 {
         t.hrow(&[("stratum", 8), ("routes", 7), ("chunks", 10), ("containers", 11), ("spawns", 8), ("reach min", 10), ("ms/route", 9)]);
         for s in lib.strata() {
@@ -360,6 +366,57 @@ fn cmd_route(t: &Term, out: &Path, seed: u64, stratum: u8, chunks: usize, sweep:
     }
 }
 
+/// Open every locker, crate and corpse on `n` seeds per stratum with a pry bar (not a first run), and report what
+/// the tables pay: value per container, tier mix, notable rate, stratum-to-stratum ratio, longest dry streak.
+fn loot_sweep(t: &Term, lib: &run::ChunkLib, n: u64) {
+    let tables = run::LootTables::shipped();
+    let table = items::ItemTable::from_toml(include_str!("../../../../data/items.toml")).expect("items");
+    t.hrow(&[("loot", 6), ("opens", 6), ("mean", 7), ("p50", 6), ("p90", 6), ("x prev", 7), ("C/U/R/B/X %", 20), ("notable", 8), ("dry max", 8)]);
+    let mut prev_mean = 0.0f32;
+    for stratum in lib.strata() {
+        let mut values: Vec<u32> = Vec::new();
+        let mut tiers = [0u32; 5];
+        let mut notable = 0usize;
+        let mut picks = 0usize;
+        let mut dry = 0u32;
+        for seed in 0..n {
+            let lay = run::route(lib, seed, stratum).expect("assemble");
+            let m = run::RouteMap::compile(lib, &lay);
+            let mut st = run::LootState::new(&m, &tables, seed ^ 0xA5, 1, 1);
+            for i in 0..st.sources.len() {
+                let Ok(r) = st.open(&tables, &table, i, run::OpenMethod::PryBar) else { continue };
+                notable += r.notable;
+                let mut v = 0u32;
+                for it in &st.sources[i].items {
+                    let d = table.def(it.def);
+                    tiers[d.tier.index()] += 1;
+                    v += run::loot::value_of(d, it);
+                    picks += 1;
+                }
+                values.push(v);
+            }
+            dry = dry.max(st.longest_dry);
+        }
+        values.sort_unstable();
+        let mean = values.iter().sum::<u32>() as f32 / values.len().max(1) as f32;
+        let p = |q: f32| values.get(((values.len() as f32 - 1.0) * q) as usize).copied().unwrap_or(0);
+        let total = tiers.iter().sum::<u32>().max(1) as f32;
+        let mix: Vec<String> = tiers.iter().map(|&c| format!("{:.0}", c as f32 * 100.0 / total)).collect();
+        t.row(&[
+            (&format!("S{stratum}"), 6),
+            (&values.len().to_string(), 6),
+            (&format!("{mean:.1}"), 7),
+            (&p(0.5).to_string(), 6),
+            (&p(0.9).to_string(), 6),
+            (&if prev_mean > 0.0 { format!("{:.2}", mean / prev_mean) } else { "-".into() }, 7),
+            (&mix.join("/"), 20),
+            (&format!("{:.1}%", notable as f32 * 100.0 / picks.max(1) as f32), 8),
+            (&dry.to_string(), 8),
+        ]);
+        prev_mean = mean;
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
     std::fs::create_dir_all(&cli.out).expect("out dir");
@@ -371,7 +428,7 @@ fn main() {
         Cmd::Evidence { seed } => cmd_evidence(&t, &cli.out, seed),
         Cmd::Scale { seed, agents, grow, ticks } => cmd_scale(&t, &cli.out, seed, agents, grow, ticks),
         Cmd::Bench { seed, ticks } => cmd_bench(&t, seed, ticks),
-        Cmd::Route { seed, stratum, chunks, sweep } => cmd_route(&t, &cli.out, seed, stratum, chunks, sweep),
+        Cmd::Route { seed, stratum, chunks, sweep, loot } => cmd_route(&t, &cli.out, seed, stratum, chunks, sweep, loot),
     }
     println!();
 }

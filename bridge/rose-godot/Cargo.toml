@@ -16,3 +16,4 @@ items = { path = "../../core/crates/items" }
 inventory = { path = "../../core/crates/inventory" }
 save = { path = "../../core/crates/save" }
 run = { path = "../../core/crates/run" }
+postcard.workspace = true

@@ -7,5 +7,7 @@ license.workspace = true
 
 [dependencies]
 mat = { path = "../mat" }
+items = { path = "../items" }
+inventory = { path = "../inventory" }
 serde.workspace = true
 toml.workspace = true

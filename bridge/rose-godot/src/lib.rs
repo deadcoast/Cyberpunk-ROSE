@@ -428,6 +428,26 @@ impl RoseStash {
         self.stash.as_ref().unwrap().grid.free_cells() as i64
     }
 
+    /// Take a Runner's rig (RoseRun.rig_export) into the Stash grid, best value first. Returns how many did not fit.
+    #[func]
+    fn import_rig(&mut self, bytes: PackedByteArray) -> i64 {
+        self.ensure();
+        let Ok(rig) = postcard::from_bytes::<inventory::Rig>(bytes.to_vec().as_slice()) else { return -1 };
+        let t = self.table.as_ref().unwrap();
+        let mut items: Vec<ItemInstance> = rig.backpack.items().cloned().collect();
+        items.extend(rig.quick.iter().flatten().cloned());
+        items.sort_by_key(|it| std::cmp::Reverse(t.def(it.def).value));
+        let stash = self.stash.as_mut().unwrap();
+        let mut left = 0i64;
+        for it in items {
+            let def = t.def(it.def);
+            if stash.grid.auto_place(def, it).is_err() {
+                left += 1;
+            }
+        }
+        left
+    }
+
     /// Serialise through the save crate and back; returns true when the round trip reproduces the Stash.
     #[func]
     fn save_round_trip(&mut self) -> bool {
@@ -453,6 +473,36 @@ fn chunk_lib() -> run::ChunkLib {
     run::ChunkLib::from_toml(&text).unwrap_or_else(|_| run::ChunkLib::from_toml(CHUNKS_TOML).expect("built-in chunk library"))
 }
 
+fn source_state(s: run::SourceState) -> &'static str {
+    match s {
+        run::SourceState::Closed => "closed",
+        run::SourceState::Open => "open",
+        run::SourceState::Empty => "empty",
+    }
+}
+
+/// An item as the Runner sees it in the run: unidentified items keep their name hidden behind the tier and category.
+fn item_view(table: &ItemTable, k: usize, it: &ItemInstance) -> VarDictionary {
+    let d = table.def(it.def);
+    let mut out = VarDictionary::new();
+    let tier = format!("{:?}", d.tier).to_lowercase();
+    let cat = format!("{:?}", d.category).to_lowercase();
+    out.set("k", k as i64);
+    out.set("index", it.def.0 as i64);
+    out.set("id", d.id.as_str());
+    let label = if it.ident == items::Ident::Full { d.name.clone() } else { format!("unidentified {} {}", tier, cat) };
+    out.set("label", label.as_str());
+    out.set("tier", tier.as_str());
+    out.set("category", cat.as_str());
+    out.set("w", d.size[0] as i64);
+    out.set("h", d.size[1] as i64);
+    out.set("weight", d.weight as f64);
+    out.set("condition", it.condition as i64);
+    out.set("ident", it.ident == items::Ident::Full);
+    out.set("value_blind", items::price(d, it, PriceContext::default()) as i64);
+    out
+}
+
 /// A run's route map: assembled from the authored chunks for (seed, stratum), exposed as the same substrate codes
 /// the colony uses plus the overlays the Run screen draws. One instance per run.
 #[derive(GodotClass)]
@@ -463,6 +513,10 @@ pub struct RoseRun {
     map: Option<run::RouteMap>,
     senses: Option<run::Senses>,
     mat_lume_gene: f32,
+    loot: Option<run::LootState>,
+    tables: Option<run::LootTables>,
+    table: Option<ItemTable>,
+    rig: Option<inventory::Rig>,
 }
 
 #[godot_api]
@@ -637,10 +691,27 @@ impl RoseRun {
         })
     }
 
-    /// Open a collapse or deposit tile; true when something was dug.
+    /// Open a collapse or deposit tile; true when something was dug. A dug deposit leaves a pile (a loot source)
+    /// on its tile once a run has begun.
     #[func]
     fn dig(&mut self, x: i64, y: i64) -> bool {
-        self.map.as_mut().is_some_and(|m| x >= 0 && y >= 0 && (x as usize) < m.w && (y as usize) < m.h && m.dig(x as usize, y as usize))
+        let Some(m) = self.map.as_mut() else { return false };
+        if x < 0 || y < 0 || x as usize >= m.w || y as usize >= m.h {
+            return false;
+        }
+        let (x, y) = (x as usize, y as usize);
+        let was_deposit = m.substrate[m.idx(x, y)] == mat::sim::sub::DEPOSIT;
+        let chunk = m.chunk_of[m.idx(x, y)];
+        if !m.dig(x, y) {
+            return false;
+        }
+        if was_deposit {
+            self.ensure_loot_tables();
+            if let (Some(loot), Some(tables), Some(table)) = (self.loot.as_mut(), self.tables.as_ref(), self.table.as_ref()) {
+                loot.add_pile(tables, table, x, y, if chunk == run::map::NO_CHUNK { 0 } else { chunk });
+            }
+        }
+        true
     }
 
     #[func]
@@ -803,6 +874,186 @@ impl RoseRun {
     fn sense_stats(&self) -> PackedInt32Array {
         self.senses.as_ref().map_or_else(PackedInt32Array::new, |s| {
             PackedInt32Array::from(&[s.fog.visible_count() as i32, s.fog.seen_count() as i32, s.noise.live_tiles() as i32, s.tick as i32][..])
+        })
+    }
+
+    // ------------------------------------------------------------ loot: sources, opening, the rig (PAC-022)
+
+    fn ensure_loot_tables(&mut self) {
+        if self.tables.is_none() {
+            let path = ProjectSettings::singleton().globalize_path("res://../data/loot.toml").to_string();
+            let text = std::fs::read_to_string(&path).unwrap_or_else(|_| run::loot::LOOT_TOML.to_string());
+            self.tables = Some(run::LootTables::from_toml(&text).unwrap_or_else(|_| run::LootTables::shipped()));
+        }
+        if self.table.is_none() {
+            self.table = Some(table());
+        }
+    }
+
+    /// Start the run's loot state: sources from the route, locked lockers rolled, an empty rig.
+    /// `nonce` makes this run's contents (the colony tick at departure), `route_runs` is how many runs this route
+    /// has had before (0 = first run: generosity applies), `day` goes into provenance.
+    #[func]
+    fn begin_run(&mut self, nonce: i64, route_runs: i64, day: i64, backpack_w: i64, backpack_h: i64, carry_kg: f64) {
+        self.ensure_loot_tables();
+        let Some(m) = &self.map else { return };
+        let tables = self.tables.as_ref().unwrap();
+        self.loot = Some(run::LootState::new(m, tables, nonce as u64, route_runs.clamp(0, u16::MAX as i64) as u16, day.max(0) as u32));
+        self.rig = Some(inventory::Rig::new(backpack_w.clamp(1, 12) as u8, backpack_h.clamp(1, 8) as u8, 4, carry_kg.max(1.0) as f32));
+    }
+
+    /// [{index, x, y, kind, tier, locked, state: "closed"|"open"|"empty", count}]
+    #[func]
+    fn sources(&self) -> VarArray {
+        let mut out = VarArray::new();
+        if let Some(l) = &self.loot {
+            for (i, s) in l.sources.iter().enumerate() {
+                let mut d = VarDictionary::new();
+                d.set("index", i as i64);
+                d.set("x", s.x as i64);
+                d.set("y", s.y as i64);
+                d.set("kind", s.kind.name());
+                d.set("tier", s.tier as i64);
+                d.set("locked", s.locked);
+                d.set("state", source_state(s.state));
+                d.set("count", s.items.len() as i64);
+                out.push(&d.to_variant());
+            }
+        }
+        out
+    }
+
+    /// Index of the loot source on a tile, -1 when none.
+    #[func]
+    fn source_at(&self, x: i64, y: i64) -> i64 {
+        self.loot.as_ref().and_then(|l| l.source_at(x.max(0) as usize, y.max(0) as usize)).map_or(-1, |i| i as i64)
+    }
+
+    /// Open a source. method: 0 hands, 1 pry bar, 2 key. Returns {ok, error, revealed, notable, damaged, noise,
+    /// generous, forced}. The noise is also stamped into the field at the source's tile.
+    #[func]
+    fn open_source(&mut self, index: i64, method: i64) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        self.ensure_loot_tables();
+        let method = match method {
+            1 => run::OpenMethod::PryBar,
+            2 => run::OpenMethod::Key,
+            _ => run::OpenMethod::Hands,
+        };
+        let (Some(l), Some(tables), Some(table)) = (self.loot.as_mut(), self.tables.as_ref(), self.table.as_ref()) else {
+            d.set("ok", false);
+            d.set("error", "no run");
+            return d;
+        };
+        match l.open(tables, table, index.max(0) as usize, method) {
+            Ok(r) => {
+                d.set("ok", true);
+                d.set("revealed", r.revealed as i64);
+                d.set("notable", r.notable as i64);
+                d.set("damaged", r.damaged as i64);
+                d.set("noise", r.noise as i64);
+                d.set("generous", r.generous);
+                d.set("forced", r.forced);
+                let (sx, sy) = (l.sources[index as usize].x as usize, l.sources[index as usize].y as usize);
+                if let (Some(m), Some(s)) = (self.map.as_ref(), self.senses.as_mut()) {
+                    let tick = s.tick;
+                    s.noise.emit(m, sx, sy, r.noise, tick, 0);
+                }
+            }
+            Err(e) => {
+                d.set("ok", false);
+                d.set("error", format!("{e:?}").as_str());
+            }
+        }
+        d
+    }
+
+    /// The contents of an open source as the Runner sees them: unidentified items show tier, category, size and
+    /// weight, never the name. [{k, index, id, label, tier, category, w, h, weight, condition, ident, value_blind}]
+    #[func]
+    fn source_items(&self, index: i64) -> VarArray {
+        let mut out = VarArray::new();
+        let (Some(l), Some(table)) = (self.loot.as_ref(), self.table.as_ref()) else { return out };
+        let Some(s) = l.sources.get(index.max(0) as usize) else { return out };
+        for (k, it) in s.items.iter().enumerate() {
+            out.push(&item_view(table, k, it).to_variant());
+        }
+        out
+    }
+
+    /// Take item `k` of source `index` into the backpack. true when it fit.
+    #[func]
+    fn take(&mut self, index: i64, k: i64) -> bool {
+        let (Some(l), Some(table), Some(rig)) = (self.loot.as_mut(), self.table.as_ref(), self.rig.as_mut()) else { return false };
+        matches!(l.take(table, index.max(0) as usize, k.max(0) as usize, rig), Ok(true))
+    }
+
+    /// Take everything that fits, best first. Returns [taken, left].
+    #[func]
+    fn take_all(&mut self, index: i64) -> PackedInt32Array {
+        let (Some(l), Some(table), Some(rig)) = (self.loot.as_mut(), self.table.as_ref(), self.rig.as_mut()) else { return PackedInt32Array::new() };
+        let (taken, left) = l.take_all(table, index.max(0) as usize, rig);
+        PackedInt32Array::from(&[taken as i32, left as i32][..])
+    }
+
+    /// The backpack as placed items: [{k, index, id, label, tier, category, w, h, weight, condition, ident, x, y}]
+    #[func]
+    fn rig_items(&self) -> VarArray {
+        let mut out = VarArray::new();
+        let (Some(rig), Some(table)) = (self.rig.as_ref(), self.table.as_ref()) else { return out };
+        for (k, (_, p)) in rig.backpack.iter().enumerate() {
+            let mut d = item_view(table, k, &p.item);
+            d.set("x", p.x as i64);
+            d.set("y", p.y as i64);
+            out.push(&d.to_variant());
+        }
+        out
+    }
+
+    /// [count, free cells, backpack w, backpack h]
+    #[func]
+    fn rig_stats(&self) -> PackedInt32Array {
+        self.rig.as_ref().map_or_else(PackedInt32Array::new, |r| PackedInt32Array::from(&[r.backpack.count() as i32, r.backpack.free_cells() as i32, r.backpack.w as i32, r.backpack.h as i32][..]))
+    }
+
+    #[func]
+    fn rig_weight(&self) -> f64 {
+        match (self.rig.as_ref(), self.table.as_ref()) {
+            (Some(r), Some(t)) => r.weight(t) as f64,
+            _ => 0.0,
+        }
+    }
+
+    #[func]
+    fn rig_carry_cap(&self) -> f64 {
+        self.rig.as_ref().map_or(0.0, |r| r.carry_cap as f64)
+    }
+
+    #[func]
+    fn rig_overweight(&self) -> bool {
+        matches!((self.rig.as_ref(), self.table.as_ref()), (Some(r), Some(t)) if r.overweight(t))
+    }
+
+    /// Blind value of the rig (unidentified items at 40 %), the number the Runner can count on.
+    #[func]
+    fn rig_value_blind(&self) -> i64 {
+        let (Some(r), Some(t)) = (self.rig.as_ref(), self.table.as_ref()) else { return 0 };
+        r.backpack.items().map(|it| items::price(t.def(it.def), it, PriceContext::default()) as i64).sum()
+    }
+
+    /// The rig serialised (postcard) for the Stash to import on extraction.
+    #[func]
+    fn rig_export(&self) -> PackedByteArray {
+        self.rig.as_ref().map_or_else(PackedByteArray::new, |r| PackedByteArray::from(postcard::to_allocvec(r).unwrap_or_default().as_slice()))
+    }
+
+    /// Loot counters for the HUD and tests: [sources, open, empty, opened containers, pity counter, longest dry]
+    #[func]
+    fn loot_stats(&self) -> PackedInt32Array {
+        self.loot.as_ref().map_or_else(PackedInt32Array::new, |l| {
+            let open = l.sources.iter().filter(|s| s.state == run::SourceState::Open).count() as i32;
+            let empty = l.sources.iter().filter(|s| s.state == run::SourceState::Empty).count() as i32;
+            PackedInt32Array::from(&[l.sources.len() as i32, open, empty, l.opened as i32, l.pity_n as i32, l.longest_dry as i32][..])
         })
     }
 

@@ -302,6 +302,13 @@ props.toml
 - prompt: an Oathkeeper waymark chalked on a sewer wall: a small white circle with a bar through it, vestment-white chalk on dark brick, worn
 - negative: cross, religious symbol, outline, glow
 
+### prop.pile
+
+- kind prop · one frame 32x32 · 1 frame · states full, picked
+- anchor `anchor.item` · ramp industrial · status placeholder
+- prompt: a dug-out pile of scrap on a sewer floor, side view, chrome shards and cable in grey muck with a purple fleck, 1 px Void selective outline; full / picked over and flattened
+- negative: outline on every edge, gradient, clean metal
+
 structures.toml
 ---------------
 

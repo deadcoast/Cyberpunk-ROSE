@@ -96,3 +96,17 @@ anchor = "anchor.tile"
 prompt = "an Oathkeeper waymark chalked on a sewer wall: a small white circle with a bar through it, vestment-white chalk on dark brick, worn"
 negative = "cross, religious symbol, outline, glow"
 status = "placeholder"
+
+[[slot]]
+id = "prop.pile"
+kind = "prop"
+size = [32, 32]
+frames = 1
+states = ["full", "picked"]
+ramp = "industrial"
+silhouette = "pile"
+tag = "PIL"
+anchor = "anchor.item"
+prompt = "a dug-out pile of scrap on a sewer floor, side view, chrome shards and cable in grey muck with a purple fleck, 1 px Void selective outline; full / picked over and flattened"
+negative = "outline on every edge, gradient, clean metal"
+status = "placeholder"

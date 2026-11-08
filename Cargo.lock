@@ -472,6 +472,7 @@ name = "rose-cli"
 version = "0.2.0"
 dependencies = [
  "clap",
+ "items",
  "logistics",
  "mat",
  "render",
@@ -487,6 +488,7 @@ dependencies = [
  "items",
  "logistics",
  "mat",
+ "postcard",
  "run",
  "save",
 ]
@@ -505,6 +507,8 @@ dependencies = [
 name = "run"
 version = "0.2.0"
 dependencies = [
+ "inventory",
+ "items",
  "mat",
  "serde",
  "toml",
