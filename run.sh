@@ -37,6 +37,8 @@ if command -v "$GODOT" >/dev/null 2>&1; then
   elif command -v xvfb-run >/dev/null 2>&1; then
     step "shots" "native screenshots via Xvfb -> docs/shots"
     xvfb-run -a -s "-screen 0 1920x1080x24" "$GODOT" --path game --rendering-driver opengl3 --script res://tests/shots.gd 2>&1 | grep "\[shots\]" || true
+    step "play" "scripted run under Xvfb -> docs/shots/play_*.png (review these by eye)"
+    xvfb-run -a -s "-screen 0 1920x1080x24" "$GODOT" --path game --rendering-driver opengl3 --script res://tests/play.gd 2>&1 | grep "\[play\] [0-9]" || true
   fi
 else
   step "godot" "binary not found ($GODOT): pass its path as the first argument to run the shell tests"

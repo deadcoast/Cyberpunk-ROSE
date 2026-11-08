@@ -466,11 +466,22 @@ impl RoseStash {
 
 const CHUNKS_TOML: &str = include_str!("../../../data/chunks.toml");
 
+/// Data files beside the project win in debug; the compiled copies ship.
+fn data_text(name: &str, shipped: &str) -> String {
+    let path = ProjectSettings::singleton().globalize_path(&format!("res://../data/{name}")).to_string();
+    std::fs::read_to_string(&path).unwrap_or_else(|_| shipped.to_string())
+}
+
 fn chunk_lib() -> run::ChunkLib {
-    // like the item table: the file beside the project wins in debug, the compiled copy ships
-    let path = ProjectSettings::singleton().globalize_path("res://../data/chunks.toml").to_string();
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|_| CHUNKS_TOML.to_string());
-    run::ChunkLib::from_toml(&text).unwrap_or_else(|_| run::ChunkLib::from_toml(CHUNKS_TOML).expect("built-in chunk library"))
+    run::ChunkLib::from_toml(&data_text("chunks.toml", CHUNKS_TOML)).unwrap_or_else(|_| run::ChunkLib::from_toml(CHUNKS_TOML).expect("built-in chunk library"))
+}
+
+fn loot_tables() -> run::LootTables {
+    run::LootTables::from_toml(&data_text("loot.toml", run::loot::LOOT_TOML)).unwrap_or_else(|_| run::LootTables::shipped())
+}
+
+fn creature_defs() -> run::CreatureFile {
+    run::CreatureFile::from_toml(&data_text("creatures.toml", run::creature::CREATURES_TOML)).unwrap_or_else(|_| run::CreatureFile::shipped())
 }
 
 fn source_state(s: run::SourceState) -> &'static str {
@@ -503,20 +514,21 @@ fn item_view(table: &ItemTable, k: usize, it: &ItemInstance) -> VarDictionary {
     out
 }
 
-/// A run's route map: assembled from the authored chunks for (seed, stratum), exposed as the same substrate codes
-/// the colony uses plus the overlays the Run screen draws. One instance per run.
+fn tiles_array(w: usize, v: &[(u16, u16)]) -> PackedInt32Array {
+    PackedInt32Array::from(v.iter().map(|&(x, y)| (y as usize * w + x as usize) as i32).collect::<Vec<i32>>().as_slice())
+}
+
+/// The run. `assemble` builds the route; `begin_run` starts the simulation on it; `step` advances it one tick
+/// (20 Hz) from the input word; everything else reads state. Godot decides nothing.
 #[derive(GodotClass)]
 #[class(base=RefCounted, init)]
 pub struct RoseRun {
     base: Base<RefCounted>,
     lib: Option<run::ChunkLib>,
     map: Option<run::RouteMap>,
-    senses: Option<run::Senses>,
+    sim: Option<run::RunSim>,
     mat_lume_gene: f32,
-    loot: Option<run::LootState>,
-    tables: Option<run::LootTables>,
-    table: Option<ItemTable>,
-    rig: Option<inventory::Rig>,
+    memory: Option<Vec<u8>>,
 }
 
 #[godot_api]
@@ -537,8 +549,8 @@ impl RoseRun {
             Ok(lay) => {
                 let m = run::RouteMap::compile(&lib, &lay);
                 let n = m.chunks.len() as i64;
-                self.senses = Some(run::Senses::new(&m, self.mat_lume_gene, None));
                 self.map = Some(m);
+                self.sim = None;
                 n
             }
             Err(e) => {
@@ -548,84 +560,140 @@ impl RoseRun {
         }
     }
 
+    /// Lume gene of the Mat the route starts from (0..1); set before `begin_run`.
+    #[func]
+    fn set_mat_lume(&mut self, gene: f64) {
+        self.mat_lume_gene = gene.clamp(0.0, 1.0) as f32;
+    }
+
+    /// Start this run's fog from a previous run's memory of the route (bits from `memory_bits`); before `begin_run`.
+    #[func]
+    fn restore_memory(&mut self, bits: PackedByteArray) {
+        self.memory = Some(bits.to_vec());
+    }
+
+    /// Start the run: creatures spawn, loot sources arm, the Runner stands on the Mat edge with the kit in the quick
+    /// slots and the melee weapon in hand. `nonce` makes this run's contents, `route_runs` is how many runs this route
+    /// has had before (0: first run), `day` goes into provenance; `kit` is up to four item ids for the quick slots.
+    #[func]
+    fn begin_run(&mut self, nonce: i64, route_runs: i64, day: i64, kit: PackedStringArray, weapon: GString, body: i64) {
+        let Some(m) = self.map.clone() else { return };
+        let table = table();
+        let mut rig = inventory::Rig::new(8, 5, 4, 18.0);
+        for (i, id) in kit.as_slice().iter().take(4).enumerate() {
+            if let Some((_, inst)) = inventory::instance(&table, &id.to_string()) {
+                rig.quick[i] = Some(inst);
+            }
+        }
+        if let Some((_, inst)) = inventory::instance(&table, &weapon.to_string()) {
+            rig.gear.hands[0] = Some(inst);
+        }
+        let setup = run::RunSetup {
+            mat_lume_gene: self.mat_lume_gene,
+            memory: self.memory.as_deref(),
+            run_nonce: nonce as u64,
+            route_runs: route_runs.clamp(0, u16::MAX as i64) as u16,
+            day: day.max(0) as u32,
+            rig,
+            body: body.clamp(1, 10) as u8,
+        };
+        self.sim = Some(run::RunSim::new(m, table, loot_tables(), creature_defs(), setup));
+    }
+
+    /// One tick from the input word (see run::sim::RunInput::pack). Returns false when the run is over.
+    #[func]
+    fn step(&mut self, buttons: i64, dx: i64, dy: i64) -> bool {
+        let Some(sim) = self.sim.as_mut() else { return false };
+        sim.step(run::RunInput::unpack(buttons as u16, dx as i16, dy as i16));
+        sim.result.is_none()
+    }
+
+    /// Development only: put the Runner on a tile (tests and the screenshot script). Not an input; never replayed.
+    #[func]
+    fn debug_teleport(&mut self, x: i64, y: i64) -> bool {
+        let Some(s) = self.sim.as_mut() else { return false };
+        if x < 0 || y < 0 || x as usize >= s.map.w || y as usize >= s.map.h || !s.map.passable(x as usize, y as usize) {
+            return false;
+        }
+        s.runner.x = x as i32 * run::creature::FP + run::creature::FP / 2;
+        s.runner.y = y as i32 * run::creature::FP + run::creature::FP / 2;
+        true
+    }
+
+    /// "running", "extracted" or "died".
+    #[func]
+    fn result(&self) -> GString {
+        GString::from(match self.sim.as_ref().and_then(|s| s.result) {
+            None => "running",
+            Some(run::RunResult::Extracted { .. }) => "extracted",
+            Some(run::RunResult::Died { .. }) => "died",
+        })
+    }
+
+    #[func]
+    fn tick(&self) -> i64 {
+        self.sim.as_ref().map_or(0, |s| s.tick as i64)
+    }
+
     #[func]
     fn library_size(&mut self) -> i64 {
         self.ensure_lib().chunks.len() as i64
     }
 
+    fn map_ref(&self) -> Option<&run::RouteMap> {
+        self.sim.as_ref().map(|s| &s.map).or(self.map.as_ref())
+    }
+
     #[func]
     fn width(&self) -> i64 {
-        self.map.as_ref().map_or(0, |m| m.w as i64)
+        self.map_ref().map_or(0, |m| m.w as i64)
     }
 
     #[func]
     fn height(&self) -> i64 {
-        self.map.as_ref().map_or(0, |m| m.h as i64)
+        self.map_ref().map_or(0, |m| m.h as i64)
     }
 
     #[func]
     fn chunk_count(&self) -> i64 {
-        self.map.as_ref().map_or(0, |m| m.chunks.len() as i64)
+        self.map_ref().map_or(0, |m| m.chunks.len() as i64)
     }
 
+    /// Substrate codes (mat::sim::sub) per tile, live: digging changes it.
     #[func]
     fn substrate(&self) -> PackedByteArray {
-        self.map.as_ref().map_or_else(PackedByteArray::new, |m| PackedByteArray::from(m.substrate.as_slice()))
+        self.map_ref().map_or_else(PackedByteArray::new, |m| PackedByteArray::from(m.substrate.as_slice()))
     }
 
-    /// 1 where a Runner can stand before anything is dug.
     #[func]
     fn passable(&self) -> PackedByteArray {
-        self.map.as_ref().map_or_else(PackedByteArray::new, |m| PackedByteArray::from(m.passable_mask().iter().map(|&p| p as u8).collect::<Vec<u8>>().as_slice()))
+        self.map_ref().map_or_else(PackedByteArray::new, |m| PackedByteArray::from(m.passable_mask().iter().map(|&p| p as u8).collect::<Vec<u8>>().as_slice()))
     }
 
-    /// Tile indices of the Mat edge (entry and free extraction).
     #[func]
     fn entry(&self) -> PackedInt32Array {
-        self.map.as_ref().map_or_else(PackedInt32Array::new, |m| PackedInt32Array::from(m.entry.iter().map(|&(x, y)| (y as usize * m.w + x as usize) as i32).collect::<Vec<i32>>().as_slice()))
+        self.map_ref().map_or_else(PackedInt32Array::new, |m| tiles_array(m.w, &m.entry))
     }
 
-    /// Tile indices of grates (extraction for a toll).
     #[func]
     fn grates(&self) -> PackedInt32Array {
-        self.map.as_ref().map_or_else(PackedInt32Array::new, |m| PackedInt32Array::from(m.grates.iter().map(|&(x, y)| (y as usize * m.w + x as usize) as i32).collect::<Vec<i32>>().as_slice()))
-    }
-
-    /// [{x, y, kind: "locker"|"crate", tier, chunk}]
-    #[func]
-    fn containers(&self) -> VarArray {
-        let mut out = VarArray::new();
-        if let Some(m) = &self.map {
-            for c in &m.containers {
-                let mut d = VarDictionary::new();
-                d.set("x", c.x as i64);
-                d.set("y", c.y as i64);
-                d.set("kind", if c.kind == run::ContainerKind::Crate { "crate" } else { "locker" });
-                d.set("tier", c.tier as i64);
-                d.set("chunk", c.chunk as i64);
-                out.push(&d.to_variant());
-            }
-        }
-        out
+        self.map_ref().map_or_else(PackedInt32Array::new, |m| tiles_array(m.w, &m.grates))
     }
 
     /// [{x, y, kind: "sewerat"|"patrol"|"corpse", chunk}]
     #[func]
     fn spawns(&self) -> VarArray {
         let mut out = VarArray::new();
-        if let Some(m) = &self.map {
+        if let Some(m) = self.map_ref() {
             for s in &m.spawns {
                 let mut d = VarDictionary::new();
                 d.set("x", s.x as i64);
                 d.set("y", s.y as i64);
-                d.set(
-                    "kind",
-                    match s.kind {
-                        run::SpawnKind::Sewerat => "sewerat",
-                        run::SpawnKind::Patrol => "patrol",
-                        run::SpawnKind::Corpse => "corpse",
-                    },
-                );
+                d.set("kind", match s.kind {
+                    run::SpawnKind::Sewerat => "sewerat",
+                    run::SpawnKind::Patrol => "patrol",
+                    run::SpawnKind::Corpse => "corpse",
+                });
                 d.set("chunk", s.chunk as i64);
                 out.push(&d.to_variant());
             }
@@ -637,7 +705,7 @@ impl RoseRun {
     #[func]
     fn lights(&self) -> VarArray {
         let mut out = VarArray::new();
-        if let Some(m) = &self.map {
+        if let Some(m) = self.map_ref() {
             for l in &m.lights {
                 let mut d = VarDictionary::new();
                 d.set("x", l.x as i64);
@@ -653,7 +721,7 @@ impl RoseRun {
     #[func]
     fn hazards(&self) -> VarArray {
         let mut out = VarArray::new();
-        if let Some(m) = &self.map {
+        if let Some(m) = self.map_ref() {
             for h in &m.hazards {
                 let mut d = VarDictionary::new();
                 d.set("x", h.x as i64);
@@ -669,7 +737,7 @@ impl RoseRun {
     #[func]
     fn chunks(&self) -> VarArray {
         let mut out = VarArray::new();
-        if let Some(m) = &self.map {
+        if let Some(m) = self.map_ref() {
             for c in &m.chunks {
                 let mut d = VarDictionary::new();
                 d.set("id", c.id.as_str());
@@ -683,326 +751,321 @@ impl RoseRun {
         out
     }
 
-    /// Chunk index per tile, -1 outside every chunk.
     #[func]
     fn chunk_of(&self) -> PackedInt32Array {
-        self.map.as_ref().map_or_else(PackedInt32Array::new, |m| {
+        self.map_ref().map_or_else(PackedInt32Array::new, |m| {
             PackedInt32Array::from(m.chunk_of.iter().map(|&c| if c == run::map::NO_CHUNK { -1 } else { c as i32 }).collect::<Vec<i32>>().as_slice())
         })
     }
 
-    /// Open a collapse or deposit tile; true when something was dug. A dug deposit leaves a pile (a loot source)
-    /// on its tile once a run has begun.
-    #[func]
-    fn dig(&mut self, x: i64, y: i64) -> bool {
-        let Some(m) = self.map.as_mut() else { return false };
-        if x < 0 || y < 0 || x as usize >= m.w || y as usize >= m.h {
-            return false;
-        }
-        let (x, y) = (x as usize, y as usize);
-        let was_deposit = m.substrate[m.idx(x, y)] == mat::sim::sub::DEPOSIT;
-        let chunk = m.chunk_of[m.idx(x, y)];
-        if !m.dig(x, y) {
-            return false;
-        }
-        if was_deposit {
-            self.ensure_loot_tables();
-            if let (Some(loot), Some(tables), Some(table)) = (self.loot.as_mut(), self.tables.as_ref(), self.table.as_ref()) {
-                loot.add_pile(tables, table, x, y, if chunk == run::map::NO_CHUNK { 0 } else { chunk });
-            }
-        }
-        true
-    }
-
     #[func]
     fn connectivity(&self) -> f64 {
-        self.map.as_ref().map_or(0.0, |m| m.connectivity() as f64)
+        self.map_ref().map_or(0.0, |m| m.connectivity() as f64)
     }
 
-    // ------------------------------------------------------------ senses: light, sight, fog, noise (PAC-021)
-
-    /// Lume gene of the Mat the route starts from (0..1); set before `assemble`.
     #[func]
-    fn set_mat_lume(&mut self, gene: f64) {
-        self.mat_lume_gene = gene.clamp(0.0, 1.0) as f32;
+    fn digest(&self) -> GString {
+        GString::from(self.map_ref().map_or_else(String::new, |m| m.digest()).as_str())
     }
 
-    /// Start this run's fog from a previous run's memory of the route (bits from `memory_bits`).
+    // ------------------------------------------------------------ the Runner
+
+    /// {x, y (units of 1/256 tile), tx, ty, facing, sections [4], max_sections [4], stamina (0-100), life, down_left,
+    ///  action, action_progress (0-1), statuses [names], lume, see_radius, exposure, exposure_band, notice_range,
+    ///  noise_here, lantern, dimming, sneaking, sprinting, moved, ammo, overweight, weight, carry, rig_count,
+    ///  rig_free, blind_value, on_extraction, source_here, open_source}
     #[func]
-    fn restore_memory(&mut self, bits: PackedByteArray) {
-        if let Some(m) = &self.map {
-            let v = bits.to_vec();
-            self.senses = Some(run::Senses::new(m, self.mat_lume_gene, Some(&v)));
+    fn runner(&self) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        let Some(s) = self.sim.as_ref() else { return d };
+        let r = &s.runner;
+        d.set("x", r.x as i64);
+        d.set("y", r.y as i64);
+        let (tx, ty) = r.tile();
+        d.set("tx", tx as i64);
+        d.set("ty", ty as i64);
+        d.set("facing", r.facing as i64);
+        d.set("sections", &PackedInt32Array::from(r.sections.map(|v| v as i32).as_slice()));
+        d.set("max_sections", &PackedInt32Array::from(r.max_sections.map(|v| v as i32).as_slice()));
+        d.set("stamina", (r.stamina as f64) / 100.0);
+        d.set("max_stamina", (r.max_stamina as f64) / 100.0);
+        let (life, down_left) = match r.life {
+            run::Life::Up => ("up", 0),
+            run::Life::Down { left } => ("down", left),
+            run::Life::Dead => ("dead", 0),
+        };
+        d.set("life", life);
+        d.set("down_left", down_left as i64);
+        let rules = &s.defs.runner;
+        let (action, progress) = match r.action {
+            run::Action::Idle => ("idle", 0.0),
+            run::Action::Windup { left } => ("windup", 1.0 - left as f64 / run::creature::ticks(rules.melee_windup).max(1) as f64),
+            run::Action::Swing { .. } => ("swing", 1.0),
+            run::Action::Dodge { left, .. } => ("dodge", 1.0 - left as f64 / run::creature::ticks(rules.dodge_s).max(1) as f64),
+            run::Action::Reload { left } => ("reload", 1.0 - left as f64 / run::creature::ticks(2.0) as f64),
+            run::Action::Dig { progress, .. } => ("dig", progress as f64 / run::creature::ticks(rules.dig_s) as f64),
+            run::Action::Extract { progress } => ("extract", progress as f64 / run::creature::ticks(rules.extract_s) as f64),
+        };
+        d.set("action", action);
+        d.set("action_progress", progress.clamp(0.0, 1.0));
+        let st = PackedStringArray::from(r.statuses.iter().map(|st| GString::from(st.kind.name())).collect::<Vec<_>>().as_slice());
+        d.set("statuses", &st);
+        d.set("lume", s.senses.lume.emit() as i64);
+        d.set("see_radius", s.senses.lume.see_radius(s.senses.eye) as i64);
+        d.set("exposure", s.senses.exposure as i64);
+        d.set("exposure_band", run::LightField::band(s.senses.exposure));
+        d.set("notice_range", s.senses.notice_range() as i64);
+        d.set("noise_here", s.senses.noise.at(tx as usize, ty as usize) as i64);
+        d.set("lantern", r.lantern_on);
+        d.set("dimming", r.dimming);
+        d.set("sneaking", r.sneaking);
+        d.set("sprinting", r.sprinting);
+        d.set("moved", r.moved);
+        d.set("pose", r.pose.name());
+        d.set("ammo", r.ammo as i64);
+        d.set("overweight", r.rig.overweight(&s.table));
+        d.set("weight", r.rig.weight(&s.table) as f64);
+        d.set("carry", r.rig.carry_cap as f64);
+        d.set("rig_count", r.rig.backpack.count() as i64);
+        d.set("rig_free", r.rig.backpack.free_cells() as i64);
+        let blind: i64 = r.rig.backpack.items().map(|it| items::price(s.table.def(it.def), it, PriceContext::default()) as i64).sum();
+        d.set("blind_value", blind);
+        let t16 = (tx as u16, ty as u16);
+        d.set("on_extraction", s.map.entry.contains(&t16) || s.map.grates.contains(&t16));
+        d.set("source_here", s.source_here().map_or(-1, |i| i as i64));
+        d.set("open_source", s.open_source.map_or(-1, |i| i as i64));
+        d.set("melee", {
+            let (dmg, _, reach) = r.melee(&s.table);
+            format!("{dmg} dmg reach {reach}").as_str()
+        });
+        d
+    }
+
+    /// Live creatures: [{id, kind, sprite, x, y, tx, ty, facing, hp, max_hp, phase, awareness, windup, visible}]
+    #[func]
+    fn creatures(&self) -> VarArray {
+        let mut out = VarArray::new();
+        let Some(s) = self.sim.as_ref() else { return out };
+        for c in &s.creatures {
+            let mut d = VarDictionary::new();
+            d.set("id", c.id as i64);
+            d.set("kind", c.kind.key());
+            d.set("sprite", s.defs.creature[c.kind.key()].sprite.as_str());
+            d.set("x", c.x as i64);
+            d.set("y", c.y as i64);
+            let (tx, ty) = c.tile();
+            d.set("tx", tx as i64);
+            d.set("ty", ty as i64);
+            d.set("facing", c.facing as i64);
+            d.set("hp", c.hp as i64);
+            d.set("max_hp", c.max_hp as i64);
+            d.set("phase", c.phase.name());
+            d.set("awareness", c.awareness as f64);
+            d.set("windup", c.windup_left > 0 || c.fuse_left > 0);
+            d.set("visible", s.senses.is_visible(tx as usize, ty as usize));
+            d.set("heard", !s.senses.is_visible(tx as usize, ty as usize) && c.phase != run::Phase::Calm);
+            out.push(&d.to_variant());
         }
+        out
     }
 
-    /// One bit per tile: everything seen on this route so far. Store it in the save under (seed, stratum).
+    /// Events since the last call, drained: [{kind, ...fields}]
+    #[func]
+    fn events(&mut self) -> VarArray {
+        let mut out = VarArray::new();
+        let Some(s) = self.sim.as_mut() else { return out };
+        for e in s.drain_events() {
+            let mut d = VarDictionary::new();
+            match e {
+                run::Event::RunnerHit { section, damage, by } => {
+                    d.set("kind", "runner_hit");
+                    d.set("section", run::runner::SECTION_NAMES[section]);
+                    d.set("damage", damage as i64);
+                    d.set("by", by as i64);
+                }
+                run::Event::Bleed { damage } => {
+                    d.set("kind", "bleed");
+                    d.set("damage", damage as i64);
+                }
+                run::Event::CreatureHit { id, damage, behind } => {
+                    d.set("kind", "creature_hit");
+                    d.set("id", id as i64);
+                    d.set("damage", damage as i64);
+                    d.set("behind", behind);
+                }
+                run::Event::CreatureDied { id, kind, x, y, source } => {
+                    d.set("kind", "creature_died");
+                    d.set("id", id as i64);
+                    d.set("creature", kind.key());
+                    d.set("x", x as i64);
+                    d.set("y", y as i64);
+                    d.set("source", source.map_or(-1, |v| v as i64));
+                }
+                run::Event::CreatureLeft { id } => {
+                    d.set("kind", "creature_left");
+                    d.set("id", id as i64);
+                }
+                run::Event::PhaseChange { id, phase } => {
+                    d.set("kind", "phase");
+                    d.set("id", id as i64);
+                    d.set("phase", phase.name());
+                }
+                run::Event::Swing { x, y, hit } => {
+                    d.set("kind", "swing");
+                    d.set("x", x as i64);
+                    d.set("y", y as i64);
+                    d.set("hit", hit);
+                }
+                run::Event::Shot { x0, y0, x1, y1, by_runner, hit } => {
+                    d.set("kind", "shot");
+                    d.set("x0", x0 as i64);
+                    d.set("y0", y0 as i64);
+                    d.set("x1", x1 as i64);
+                    d.set("y1", y1 as i64);
+                    d.set("by_runner", by_runner);
+                    d.set("hit", hit);
+                }
+                run::Event::Burst { x, y, radius } => {
+                    d.set("kind", "burst");
+                    d.set("x", x as i64);
+                    d.set("y", y as i64);
+                    d.set("radius", radius as i64);
+                }
+                run::Event::Opened { source, revealed, notable, generous, forced, noise } => {
+                    d.set("kind", "opened");
+                    d.set("source", source as i64);
+                    d.set("revealed", revealed as i64);
+                    d.set("notable", notable as i64);
+                    d.set("generous", generous);
+                    d.set("forced", forced);
+                    d.set("noise", noise as i64);
+                }
+                run::Event::Took { source, taken, left } => {
+                    d.set("kind", "took");
+                    d.set("source", source as i64);
+                    d.set("taken", taken as i64);
+                    d.set("left", left as i64);
+                }
+                run::Event::Dug { x, y, pile } => {
+                    d.set("kind", "dug");
+                    d.set("x", x as i64);
+                    d.set("y", y as i64);
+                    d.set("pile", pile.map_or(-1, |v| v as i64));
+                }
+                run::Event::Salted { x, y } => {
+                    d.set("kind", "salted");
+                    d.set("x", x as i64);
+                    d.set("y", y as i64);
+                }
+                run::Event::Used { slot, id } => {
+                    d.set("kind", "used");
+                    d.set("slot", slot as i64);
+                    d.set("id", id.as_str());
+                }
+                run::Event::Down => d.set("kind", "down"),
+                run::Event::Dead => d.set("kind", "dead"),
+                run::Event::Extracted => d.set("kind", "extracted"),
+                run::Event::Grabbed => d.set("kind", "grabbed"),
+            }
+            out.push(&d.to_variant());
+        }
+        out
+    }
+
+    // ------------------------------------------------------------ senses
+
     #[func]
     fn memory_bits(&self) -> PackedByteArray {
-        self.senses.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.fog.memory_bits().as_slice()))
+        self.sim.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.senses.fog.memory_bits().as_slice()))
     }
 
-    /// Advance the senses one tick (20 Hz). motion: 0 still, 1 sneak, 2 walk, 3 sprint, 4 dig.
-    #[func]
-    fn tick(&mut self, x: i64, y: i64, veins: i64, gear_light: i64, dimmed: bool, soaked: bool, eye: i64, motion: i64) {
-        let Some(m) = &self.map else { return };
-        let Some(s) = &mut self.senses else { return };
-        if x < 0 || y < 0 || x as usize >= m.w || y as usize >= m.h {
-            return;
-        }
-        s.runner = (x as usize, y as usize);
-        s.lume.veins = veins.clamp(0, 15) as u8;
-        s.lume.gear = gear_light.clamp(-15, 15) as i32;
-        s.lume.dimmed = dimmed;
-        s.lume.soaked = soaked;
-        s.eye = eye.clamp(0, 10) as u8;
-        s.motion = match motion {
-            1 => run::Motion::Sneak,
-            2 => run::Motion::Walk,
-            3 => run::Motion::Sprint,
-            4 => run::Motion::Dig,
-            _ => run::Motion::Still,
-        };
-        s.tick(m);
-    }
-
-    /// A one-tick light burst (muzzle flash, a carrier's lamp) at a tile; consumed by the next tick.
-    #[func]
-    fn flash(&mut self, x: i64, y: i64, emit: i64) {
-        if let Some(s) = &mut self.senses {
-            s.flashes.push(run::Source { x: x as u16, y: y as u16, emit: emit.clamp(0, 15) as u8 });
-        }
-    }
-
-    /// The Runner makes a sound at their tile. kind: 0 sneak step, 1 walk step, 2 sprint step, 3 dig,
-    /// 4 container open, 5 body pickup, 6 drop item, 7 extraction channel, 8 melee (gear noise in `gear`),
-    /// 9 gunshot (gear noise in `gear`). Returns tiles reached.
-    #[func]
-    fn runner_sound(&mut self, kind: i64, gear: i64) -> i64 {
-        let Some(m) = &self.map else { return 0 };
-        let Some(s) = &mut self.senses else { return 0 };
-        let sound = match kind {
-            0 => run::Sound::SneakStep,
-            1 => run::Sound::WalkStep,
-            2 => run::Sound::SprintStep,
-            3 => run::Sound::Dig,
-            4 => run::Sound::ContainerOpen,
-            5 => run::Sound::BodyPickup,
-            6 => run::Sound::DropItem,
-            7 => run::Sound::ExtractChannel,
-            8 => run::Sound::MeleeSwing(gear as i32),
-            _ => run::Sound::Gunshot(gear as i32),
-        };
-        s.runner_sound(m, sound) as i64
-    }
-
-    /// A sound by something else at a tile (a creature, a hazard, a trap). Returns tiles reached.
-    #[func]
-    fn world_sound(&mut self, x: i64, y: i64, loudness: i64) -> i64 {
-        let Some(m) = &self.map else { return 0 };
-        let Some(s) = &mut self.senses else { return 0 };
-        if x < 0 || y < 0 || x as usize >= m.w || y as usize >= m.h {
-            return 0;
-        }
-        let tick = s.tick;
-        s.noise.emit(m, x as usize, y as usize, loudness.clamp(0, 15) as u8, tick, 3) as i64
-    }
-
-    /// Light level 0-15 per tile.
     #[func]
     fn light(&self) -> PackedByteArray {
-        self.senses.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.light.level.as_slice()))
+        self.sim.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.senses.light.level.as_slice()))
     }
 
-    /// Fog state per tile: 0 unseen, 1 remembered, 2 visible.
     #[func]
     fn fog(&self) -> PackedByteArray {
-        self.senses.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.fog.state.as_slice()))
+        self.sim.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.senses.fog.state.as_slice()))
     }
 
-    /// Noise level 0-15 per tile, this tick.
     #[func]
     fn noise(&self) -> PackedByteArray {
-        self.senses.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.noise.level.as_slice()))
+        self.sim.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.senses.noise.level.as_slice()))
     }
 
     /// RGB8 per tile for the fog shader: R light*17, G fog (0/128/255), B noise*17.
     #[func]
     fn overlay_rgb(&self) -> PackedByteArray {
-        self.senses.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.overlay_rgb().as_slice()))
+        self.sim.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.senses.overlay_rgb().as_slice()))
+    }
+
+    /// Salted tiles, 1 where salt lies.
+    #[func]
+    fn salt(&self) -> PackedByteArray {
+        self.sim.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.salt.iter().map(|&b| b as u8).collect::<Vec<u8>>().as_slice()))
     }
 
     #[func]
     fn is_visible(&self, x: i64, y: i64) -> bool {
-        self.senses.as_ref().is_some_and(|s| x >= 0 && y >= 0 && (x as usize) < s.fog.w && (y as usize) < s.fog.h && s.is_visible(x as usize, y as usize))
+        self.sim.as_ref().is_some_and(|s| x >= 0 && y >= 0 && (x as usize) < s.map.w && (y as usize) < s.map.h && s.senses.is_visible(x as usize, y as usize))
     }
 
-    #[func]
-    fn lume_emit(&self) -> i64 {
-        self.senses.as_ref().map_or(0, |s| s.lume.emit() as i64)
-    }
-
-    #[func]
-    fn see_radius(&self) -> i64 {
-        self.senses.as_ref().map_or(0, |s| s.lume.see_radius(s.eye) as i64)
-    }
-
-    /// max(light at the Runner's tile, lume): the light gem.
-    #[func]
-    fn exposure(&self) -> i64 {
-        self.senses.as_ref().map_or(0, |s| s.exposure as i64)
-    }
-
-    #[func]
-    fn exposure_band(&self) -> GString {
-        GString::from(self.senses.as_ref().map_or("dark", |s| run::LightField::band(s.exposure)))
-    }
-
-    /// How far anything can notice the Runner this tick, in tiles.
-    #[func]
-    fn notice_range(&self) -> i64 {
-        self.senses.as_ref().map_or(0, |s| s.notice_range() as i64)
-    }
-
-    #[func]
-    fn noise_here(&self) -> i64 {
-        self.senses.as_ref().map_or(0, |s| s.noise.at(s.runner.0, s.runner.1) as i64)
-    }
-
-    /// Counts for the HUD and tests: [visible tiles, remembered+visible tiles, live noise tiles, tick].
+    /// [visible tiles, remembered+visible tiles, live noise tiles, tick]
     #[func]
     fn sense_stats(&self) -> PackedInt32Array {
-        self.senses.as_ref().map_or_else(PackedInt32Array::new, |s| {
-            PackedInt32Array::from(&[s.fog.visible_count() as i32, s.fog.seen_count() as i32, s.noise.live_tiles() as i32, s.tick as i32][..])
+        self.sim.as_ref().map_or_else(PackedInt32Array::new, |s| {
+            PackedInt32Array::from(&[s.senses.fog.visible_count() as i32, s.senses.fog.seen_count() as i32, s.senses.noise.live_tiles() as i32, s.tick as i32][..])
         })
     }
 
-    // ------------------------------------------------------------ loot: sources, opening, the rig (PAC-022)
+    // ------------------------------------------------------------ loot and the rig
 
-    fn ensure_loot_tables(&mut self) {
-        if self.tables.is_none() {
-            let path = ProjectSettings::singleton().globalize_path("res://../data/loot.toml").to_string();
-            let text = std::fs::read_to_string(&path).unwrap_or_else(|_| run::loot::LOOT_TOML.to_string());
-            self.tables = Some(run::LootTables::from_toml(&text).unwrap_or_else(|_| run::LootTables::shipped()));
-        }
-        if self.table.is_none() {
-            self.table = Some(table());
-        }
-    }
-
-    /// Start the run's loot state: sources from the route, locked lockers rolled, an empty rig.
-    /// `nonce` makes this run's contents (the colony tick at departure), `route_runs` is how many runs this route
-    /// has had before (0 = first run: generosity applies), `day` goes into provenance.
-    #[func]
-    fn begin_run(&mut self, nonce: i64, route_runs: i64, day: i64, backpack_w: i64, backpack_h: i64, carry_kg: f64) {
-        self.ensure_loot_tables();
-        let Some(m) = &self.map else { return };
-        let tables = self.tables.as_ref().unwrap();
-        self.loot = Some(run::LootState::new(m, tables, nonce as u64, route_runs.clamp(0, u16::MAX as i64) as u16, day.max(0) as u32));
-        self.rig = Some(inventory::Rig::new(backpack_w.clamp(1, 12) as u8, backpack_h.clamp(1, 8) as u8, 4, carry_kg.max(1.0) as f32));
-    }
-
-    /// [{index, x, y, kind, tier, locked, state: "closed"|"open"|"empty", count}]
+    /// [{index, x, y, kind, tier, locked, state, count}]
     #[func]
     fn sources(&self) -> VarArray {
         let mut out = VarArray::new();
-        if let Some(l) = &self.loot {
-            for (i, s) in l.sources.iter().enumerate() {
+        if let Some(s) = self.sim.as_ref() {
+            for (i, src) in s.loot.sources.iter().enumerate() {
                 let mut d = VarDictionary::new();
                 d.set("index", i as i64);
-                d.set("x", s.x as i64);
-                d.set("y", s.y as i64);
-                d.set("kind", s.kind.name());
-                d.set("tier", s.tier as i64);
-                d.set("locked", s.locked);
-                d.set("state", source_state(s.state));
-                d.set("count", s.items.len() as i64);
+                d.set("x", src.x as i64);
+                d.set("y", src.y as i64);
+                d.set("kind", src.kind.name());
+                d.set("tier", src.tier as i64);
+                d.set("locked", src.locked);
+                d.set("state", source_state(src.state));
+                d.set("count", src.items.len() as i64);
                 out.push(&d.to_variant());
             }
         }
         out
     }
 
-    /// Index of the loot source on a tile, -1 when none.
     #[func]
     fn source_at(&self, x: i64, y: i64) -> i64 {
-        self.loot.as_ref().and_then(|l| l.source_at(x.max(0) as usize, y.max(0) as usize)).map_or(-1, |i| i as i64)
+        self.sim.as_ref().and_then(|s| s.loot.source_at(x.max(0) as usize, y.max(0) as usize)).map_or(-1, |i| i as i64)
     }
 
-    /// Open a source. method: 0 hands, 1 pry bar, 2 key. Returns {ok, error, revealed, notable, damaged, noise,
-    /// generous, forced}. The noise is also stamped into the field at the source's tile.
-    #[func]
-    fn open_source(&mut self, index: i64, method: i64) -> VarDictionary {
-        let mut d = VarDictionary::new();
-        self.ensure_loot_tables();
-        let method = match method {
-            1 => run::OpenMethod::PryBar,
-            2 => run::OpenMethod::Key,
-            _ => run::OpenMethod::Hands,
-        };
-        let (Some(l), Some(tables), Some(table)) = (self.loot.as_mut(), self.tables.as_ref(), self.table.as_ref()) else {
-            d.set("ok", false);
-            d.set("error", "no run");
-            return d;
-        };
-        match l.open(tables, table, index.max(0) as usize, method) {
-            Ok(r) => {
-                d.set("ok", true);
-                d.set("revealed", r.revealed as i64);
-                d.set("notable", r.notable as i64);
-                d.set("damaged", r.damaged as i64);
-                d.set("noise", r.noise as i64);
-                d.set("generous", r.generous);
-                d.set("forced", r.forced);
-                let (sx, sy) = (l.sources[index as usize].x as usize, l.sources[index as usize].y as usize);
-                if let (Some(m), Some(s)) = (self.map.as_ref(), self.senses.as_mut()) {
-                    let tick = s.tick;
-                    s.noise.emit(m, sx, sy, r.noise, tick, 0);
-                }
-            }
-            Err(e) => {
-                d.set("ok", false);
-                d.set("error", format!("{e:?}").as_str());
-            }
-        }
-        d
-    }
-
-    /// The contents of an open source as the Runner sees them: unidentified items show tier, category, size and
-    /// weight, never the name. [{k, index, id, label, tier, category, w, h, weight, condition, ident, value_blind}]
+    /// The contents of a source as the Runner sees them (unidentified: tier, category, size, weight, no name).
     #[func]
     fn source_items(&self, index: i64) -> VarArray {
         let mut out = VarArray::new();
-        let (Some(l), Some(table)) = (self.loot.as_ref(), self.table.as_ref()) else { return out };
-        let Some(s) = l.sources.get(index.max(0) as usize) else { return out };
-        for (k, it) in s.items.iter().enumerate() {
-            out.push(&item_view(table, k, it).to_variant());
+        let Some(s) = self.sim.as_ref() else { return out };
+        let Some(src) = s.loot.sources.get(index.max(0) as usize) else { return out };
+        for (k, it) in src.items.iter().enumerate() {
+            out.push(&item_view(&s.table, k, it).to_variant());
         }
         out
-    }
-
-    /// Take item `k` of source `index` into the backpack. true when it fit.
-    #[func]
-    fn take(&mut self, index: i64, k: i64) -> bool {
-        let (Some(l), Some(table), Some(rig)) = (self.loot.as_mut(), self.table.as_ref(), self.rig.as_mut()) else { return false };
-        matches!(l.take(table, index.max(0) as usize, k.max(0) as usize, rig), Ok(true))
-    }
-
-    /// Take everything that fits, best first. Returns [taken, left].
-    #[func]
-    fn take_all(&mut self, index: i64) -> PackedInt32Array {
-        let (Some(l), Some(table), Some(rig)) = (self.loot.as_mut(), self.table.as_ref(), self.rig.as_mut()) else { return PackedInt32Array::new() };
-        let (taken, left) = l.take_all(table, index.max(0) as usize, rig);
-        PackedInt32Array::from(&[taken as i32, left as i32][..])
     }
 
     /// The backpack as placed items: [{k, index, id, label, tier, category, w, h, weight, condition, ident, x, y}]
     #[func]
     fn rig_items(&self) -> VarArray {
         let mut out = VarArray::new();
-        let (Some(rig), Some(table)) = (self.rig.as_ref(), self.table.as_ref()) else { return out };
-        for (k, (_, p)) in rig.backpack.iter().enumerate() {
-            let mut d = item_view(table, k, &p.item);
+        let Some(s) = self.sim.as_ref() else { return out };
+        for (k, (_, p)) in s.runner.rig.backpack.iter().enumerate() {
+            let mut d = item_view(&s.table, k, &p.item);
             d.set("x", p.x as i64);
             d.set("y", p.y as i64);
             out.push(&d.to_variant());
@@ -1010,55 +1073,26 @@ impl RoseRun {
         out
     }
 
-    /// [count, free cells, backpack w, backpack h]
+    /// Quick slots as item ids ("" when empty).
     #[func]
-    fn rig_stats(&self) -> PackedInt32Array {
-        self.rig.as_ref().map_or_else(PackedInt32Array::new, |r| PackedInt32Array::from(&[r.backpack.count() as i32, r.backpack.free_cells() as i32, r.backpack.w as i32, r.backpack.h as i32][..]))
-    }
-
-    #[func]
-    fn rig_weight(&self) -> f64 {
-        match (self.rig.as_ref(), self.table.as_ref()) {
-            (Some(r), Some(t)) => r.weight(t) as f64,
-            _ => 0.0,
-        }
-    }
-
-    #[func]
-    fn rig_carry_cap(&self) -> f64 {
-        self.rig.as_ref().map_or(0.0, |r| r.carry_cap as f64)
-    }
-
-    #[func]
-    fn rig_overweight(&self) -> bool {
-        matches!((self.rig.as_ref(), self.table.as_ref()), (Some(r), Some(t)) if r.overweight(t))
-    }
-
-    /// Blind value of the rig (unidentified items at 40 %), the number the Runner can count on.
-    #[func]
-    fn rig_value_blind(&self) -> i64 {
-        let (Some(r), Some(t)) = (self.rig.as_ref(), self.table.as_ref()) else { return 0 };
-        r.backpack.items().map(|it| items::price(t.def(it.def), it, PriceContext::default()) as i64).sum()
+    fn quick_slots(&self) -> PackedStringArray {
+        let Some(s) = self.sim.as_ref() else { return PackedStringArray::new() };
+        PackedStringArray::from(s.runner.rig.quick.iter().map(|q| GString::from(q.as_ref().map_or("", |it| s.table.def(it.def).id.as_str()))).collect::<Vec<_>>().as_slice())
     }
 
     /// The rig serialised (postcard) for the Stash to import on extraction.
     #[func]
     fn rig_export(&self) -> PackedByteArray {
-        self.rig.as_ref().map_or_else(PackedByteArray::new, |r| PackedByteArray::from(postcard::to_allocvec(r).unwrap_or_default().as_slice()))
+        self.sim.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(postcard::to_allocvec(&s.runner.rig).unwrap_or_default().as_slice()))
     }
 
-    /// Loot counters for the HUD and tests: [sources, open, empty, opened containers, pity counter, longest dry]
+    /// [sources, open, empty, opened containers, pity counter, longest dry, creatures alive]
     #[func]
-    fn loot_stats(&self) -> PackedInt32Array {
-        self.loot.as_ref().map_or_else(PackedInt32Array::new, |l| {
-            let open = l.sources.iter().filter(|s| s.state == run::SourceState::Open).count() as i32;
-            let empty = l.sources.iter().filter(|s| s.state == run::SourceState::Empty).count() as i32;
-            PackedInt32Array::from(&[l.sources.len() as i32, open, empty, l.opened as i32, l.pity_n as i32, l.longest_dry as i32][..])
+    fn run_stats(&self) -> PackedInt32Array {
+        self.sim.as_ref().map_or_else(PackedInt32Array::new, |s| {
+            let open = s.loot.sources.iter().filter(|x| x.state == run::SourceState::Open).count() as i32;
+            let empty = s.loot.sources.iter().filter(|x| x.state == run::SourceState::Empty).count() as i32;
+            PackedInt32Array::from(&[s.loot.sources.len() as i32, open, empty, s.loot.opened as i32, s.loot.pity_n as i32, s.loot.longest_dry as i32, s.creatures.len() as i32][..])
         })
-    }
-
-    #[func]
-    fn digest(&self) -> GString {
-        GString::from(self.map.as_ref().map_or_else(String::new, |m| m.digest()).as_str())
     }
 }

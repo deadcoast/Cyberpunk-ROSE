@@ -1,6 +1,6 @@
 # Cyberpunk: ROSE — Full Design
 
-Nov 7, 2026 · @heat
+Nov 7, 2026 · @heat · v3.1 Nov 8: Expedition mode written to the numbers Phase B fixed (PAC-020–023, research 07–09)
 
 ## The game
 
@@ -27,35 +27,52 @@ Steps 5–7 keep running while you are inside step 2. The run clock and the city
 
 ## Expedition mode
 
-A run is a real-time, side-on traversal of unlit sewer under direct control, with the Mat's edge as the only safe ground. Everything in it is built to make the player weigh weight.
+A run is a real-time, side-on traversal of unlit sewer under direct control, with the Mat's edge as the only safe ground. Everything in it is built to make the player weigh weight. The run is one Rust simulation (`run::sim`) stepped at 20 Hz from a logged input word; Godot draws it and never decides anything.
+
+**Traversal.** Slimos are ooze: they cling to and crawl along any surface, so a Runner moves in four directions through every passable tile of the cross-section (open floor and air, water, grates) and shafts need no ladders. Gravity is a rule for dropped items and bodies, not for slimos. Movement is continuous at a speed in tiles per second (sneak 2.5, walk 4.5, sprint 7.0; overweight halves sprint; legs at 0 halve everything and forbid sprint). Collapse and deposit tiles are solid until dug.
 
 **Entry.** From the Heart: choose a route card (a stratum and a region; unlocked by a Relay reaching it or by a key item), a Runner, up to two followers, and the rig. The card shows last-known danger, Flood timing, known containers and whether a corpse of yours lies there. Entry is at the Mat's farthest cord in that direction or at a grate you hold.
 
-**Map.** Assembled per run from authored 32 × 24-tile chunks (rooms, culverts, shafts, vaults, drains, collapses), 8–14 chunks per run, seeded with the save so a route can be re-run and learned. Fog of war at Street zoom; the map memory persists per route (what you have seen stays dim on the route card). Water level follows the city's Flood clock. Light is authored per chunk: dark by default, pools from broken fixtures, Night City leaks in the Undercroft.
+**Map.** Assembled per run from authored 32 × 24-tile chunks, 8–14 per run, seeded with the save so a route can be re-run and learned. Chunks are glyph grids in `data/chunks.toml` (19 shipped across S1–S3; 7 per stratum at launch) with exits in canonical windows — rows 11–13 on the west and east edges, columns 14–17 on the north and south — so any two facing exits join; unjoined exits compile to brick. A chunk's weight is both its pick weight and its cap per route (a vault once, a culvert up to three times); nothing is ever placed west of the entry column, which is where the Mat is. Validation rejects partial exit windows, open border cells, entries without an east exit, and any chunk whose exits do not all reach one another without digging; a route must reach ≥ 95 % of its passable tiles from the Mat edge without digging and 100 % with every collapse dug. Water level follows the city's Flood clock.
 
-**Light and noise**, the two stealth meters:
+**Light** is a 0–15 integer field per tile, dark by default. Static sources: broken fixtures emit 6, street grates 9 (Night City leaking down), Mat tiles 2 + Lume gene × 6. Dynamic sources: the Runner's lume, scouts' lamps (10, white), muzzle flashes (10 for a tick). Light spreads by an 8-connected integer Dijkstra (orthogonal 2, diagonal 3, water ×3); solids take the arriving level and stop it so lit wall faces read. Three bands: dark ≤ 2, dim 3–6, lit ≥ 7.
 
-- Your lume (vein glow, lamp, Lume gene of any Mat you stand on) sets the radius you see and the radius you are seen from. A Runner can dim their veins at a stamina cost.
-- Noise from footsteps, digging, gunfire and dropped items propagates along open tiles and pipes; ferals and patrols path to its source. Water tiles halve it; brick carries it.
+**Lume and sight.** A Runner's lume = veins (Mod-Depth 1–5) + gear light (lantern 6, lamp pole 8, visor −1) + the Mat under their feet, −3 while dimming veins (held, 6 stamina/s), halved while Soaked, never below 1 for any slimo. A tile is visible when it is in the Runner's symmetric field of view and either lit ≥ dim or within the see-radius 2 + lume + Eye/2: dark rooms are seen as far as your own glow, a lit pool from across the chunk. Symmetry means anything that can see the Runner can be seen by a Runner looking that way.
 
-**Loot sources**: lockers and crates (tiered by chunk), scrap deposits (dig, 4–10 s, loud), corpses (yours and others', with their inventory), Oathkeeper drops (after kills), newcomer bodies (carry out for a recruit; a body fills half the rig and slows you), caches hidden behind a Sever (your Mat can grow into a sealed room on a later run if you leave a Bait), and the Vault chunks in S5 behind locks.
+**Exposure**, the light gem: max(light at your tile, lume), one number on the HUD. It sets the **notice range**, the distance at which anything can notice you: 2 + exposure tiles (dark ≈ 3, dim ≈ 7, lit ≈ 14), standing still −1, sprinting +2, digging +1.
 
-**Threats**:
+**Noise** is a 0–15 footprint stamped over the tiles a sound reaches — open 2 per tile (diagonal 3), pipes 1 (a run carries footsteps far), brick 3 (through a one-tile wall), water 4 (halved reach), rubble and deposits 4, rock and concrete block — and it fades 2 per tick. Loudness: sneak step 2, walk 4, sprint 7, dig 8 per tick, container open 3, body pickup 4, dropped item 5, extraction channel 9, melee swing 3 + gear noise, gunshot 8 + gear noise; water adds 1, grates 2. Sewerats hear at 2, scouts at 4. The footprint is drawn as a brief cyan dither on the tiles it reached, pipes included, so nobody learns the rules through failure.
 
-| Threat | Behaviour | Counter |
-| --- | --- | --- |
-| Sewerats (3 kinds: Crawler, Burster, Maw) | Hunt noise and lume; Bursters explode in ooze that blinds; Maws hold a corridor | Darkness, melee from behind, salt, a tamed sewerat of your own |
-| Oathkeeper scouts | Two per patrol, lamps, map and leave unless they see you; 1–2 Blackline on death and +15 Attention | Break line of sight; kill only when the salvage is worth the gauge |
-| Lamp carriers | Sweep-tier; white light burns cords and slimo skin 1 HP/s | Gates, corners, sewerats |
-| Raiders (surface gangs down a drain) | Loot the same containers you want; fight each other | Let them thin out; loot their dead |
-| Water | Flood shift floods low chunks over 90 s; drowning in 15 s | Watch the clock on the route card |
-| Gas pockets, collapses | Authored hazards | Lantern shows gas; collapses block a route for the run |
+**Fog** has three states per tile — unseen, remembered, visible — drawn as a Void ordered dither at the art's own pixel grid (solid, heavy, by light). Remembered tiles persist per route in the save (`route_memory`), so a route is learned across runs and a death still pays in map. A creature outside visibility but inside hearing range is drawn as a one-pixel stir in its tile's dither for the tick it moved.
 
-**Combat** is deliberate: a stamina bar for sprint, swing and dodge; melee (pipe, chrome fist, shiv) with a wind-up; ranged scrap guns with small magazines and loud reports; status effects Bleeding, Blinded, Chrome Shock (from Blackline weapons, locks a slot), Soaked (lume halved). Damage is per body section (head, torso, arms, legs) so an arm hit slows digging and a leg hit slows extraction. Followers hold position, follow, or guard a container on three commands. Ooze-time is Ivan's and only on Mat tiles: 0.2× for 6 s.
+**Loot sources**: lockers and crates (tiered by chunk), scrap deposits (dig 4–10 s, loud, into a pile on the tile), newcomer corpses (what a person carries down here; the body itself carried out for a recruit, filling half the rig and slowing you), Oathkeeper drops after kills, sewerat salvage, caches hidden behind a Sever (your Mat can grow into a sealed room on a later run if you leave a Bait), and the Vault chunks in S5 behind locks. Tables are data (`data/loot.toml`): each source names its picks, a NoDrop chance, a condition band, a category pool with weights and one tier row per stratum; a pick resolves NoDrop, category, tier, then an item uniformly from that category and tier. Rows are steep and gate the top the way level does: Rare enters at tier 3, Blackline at 4, Relic only in caches; in S1–S2 a crate's +1 tier buys picks and condition, not a higher row, so S2 tops out at Uncommon. Notable picks (Rare and up) run on a pseudo-random distribution — the chance ramps by a constant each miss and resets on a hit — so dry streaks and hot streaks both stay short; the constant is solved per row so the average still lands on the listed share. The first three container opens of a route's first run roll one row up. Contents roll from (route seed, run nonce, source index): where a locker is can be learned from the route card, what is in it cannot. Measured: mean value per container doubles per stratum (S1 9 → S2 19 → S3 37 eddies).
 
-**Extraction.** Reach your own Mat's edge, or a grate you hold, or a neutral grate for a toll (eddies or an item). Channel 10 s; noise spikes; followers must be within 4 tiles or they stay. The run clock is one shift (8–15 min real time by route); past it, Flood and patrol density rise every minute.
+**Tools buy certainty.** Crates are sealed corporate shipping: prying one with a Pry Bar is quiet (noise 3) and adds a pick, forcing it by hand is loud (6) with no bonus. Lockers are 30 % locked at tier 1, +5 % per tier; a Pry Bar opens one at noise 4, forcing by hand is noise 8 and half the contents lose 30 condition. The bar costs a 1 × 3 slot and 2 kg carried in before anyone knows if it will be needed.
 
-**Death and recovery.** A Runner at 0 HP is down; a follower can carry them 20 tiles. Dead Runners leave a corpse with their inventory at that chunk; the route card marks it; a later run can recover it unless raiders got there first (rolled per day). Items dropped on Mat tiles come home by themselves next shift (the Mat hauls them). Gear flagged **Spored** at the Bench (a craft using Spore Sac tissue) regrows at the Heart on loss, once. Everything else is gone.
+**Opening and taking.** A source under the Runner shows its prompt; opening unrolls the manifest one item per 0.22 s, common first, the notable last on a longer beat, each line in its tier colour. Found items are unidentified: tier colour, category, size and weight show, never the name, and they sell blind at 40 % until appraised. Taking is into the rig by auto-place; what does not fit stays, so weight and grid are the limits, not a count. On extraction the rig is handed to the Stash and the intake is reported.
+
+**Threats.** Every creature carries one awareness value 0–1: sight raises it by distance inside the Runner's notice range and only inside the creature's own field of view (the same symmetric shadowcast, so a creature sees the Runner only where the Runner could see it); sound at or above its hearing threshold sets a floor of 0.5 and a remembered position; it decays slowly and passes through every state on the way down. Four phases with visible tells: Calm (patrol or prowl), Suspicious ≥ 0.4 (walk to the last stimulus and look), Alert ≥ 0.8 (hunt the last known position, attack in reach), Search (Alert with no stimulus for 12 s: circle the last known position, then Calm). Ferals skip Suspicious.
+
+| Threat | Body | Behaviour | Counter |
+| --- | --- | --- | --- |
+| Crawler (sewerat) | HP 18, prowl 2.5 / hunt 5.0 tiles/s, hears 2 | Hunts noise and lume in packs of 1–3 from a burrow; bites 6 (legs or torso) after a 0.5 s wind-up; flees to the burrow under 30 % HP | Darkness, melee from behind (×1.5), salt lines (never crossed) |
+| Burster (sewerat) | HP 12, 3.5 tiles/s, hears 3 | Walks straight at you; 0.6 s fuse when adjacent, then bursts: 10 damage within 1 tile, Blinded 4 s, Soaked, Fungal Fever; killing it bursts it smaller (5, radius 1) | Range, salt, a thrown item to set it off |
+| Maw (sewerat) | HP 60, 1.5 tiles/s, hears 1 | Holds a corridor and never leaves its chunk; bite 14 after 0.8 s; grabs and holds 1 s unless dodged | Go around; a tamed sewerat; two Runners |
+| Oathkeeper scout | HP 30, 4.0 tiles/s, hears 4, lamp emits 10 | Two per patrol walking their chalk marks; map and leave after the last mark or 90 s unless Alert; shoot (9, one shot per 1.2 s, magazine 6, reload 3 s, noise 12) or strike with the pole (7); 1–2 Blackline and +15 Attention on death | Break line of sight; kill only when the salvage is worth the gauge |
+| Lamp carrier | Sweep-tier | White light burns cords and slimo skin 1 HP/s inside its pool | Gates, corners, sewerats |
+| Raiders | Surface gangs down a drain | Loot the same containers you want; fight each other | Let them thin out; loot their dead |
+| Water | Flood shift floods low chunks over 90 s; drowning in 15 s | | Watch the clock on the route card |
+| Gas pockets, collapses | Authored hazards | Lantern shows gas; collapses block a route for the run | Dig, or go around |
+
+Creatures path by a distance field over passable tiles to their target and move continuously at their speed; a kill leaves a salvage source on the tile (scout drops from the `scout_drop` table, sewerats from `rat_salvage`).
+
+**Combat** is deliberate. Stamina 100: sprint 12/s, swing 15, dodge 20, dimming veins 6/s; regen 10/s after a second without spending; overweight halves regen and sprint. Melee (pipe, chrome fist, shiv, sword) has a wind-up (0.3 s for a pipe) then an active window on the tile ahead (sword reach 2); damage is the gear's; from behind the target's facing ×1.5. Dodge is 0.35 s of invulnerability across two tiles in the facing direction. Ranged scrap guns are a line of sight up to 12 tiles with small magazines, a reload, and the loudest sound a Runner makes. Salt from a bag lays a line sewerats will not cross. Followers hold position, follow, or guard a container on three commands. Ooze-time is Ivan's and only on Mat tiles: 0.2× for 6 s.
+
+**The Runner's body** is four sections — head 20, torso 50, arms 30, legs 30, scaled by Body — and every attack type lands on a section by its own odds (a bite: legs 40 / torso 40 / arms 15 / head 5; a shot: torso 50 / arms 20 / legs 20 / head 10). Armour on the matching slot subtracts. A section at 0 transfers further damage to the torso; head or torso at 0 is Down; arms at 0 double dig and reload time and halve melee; legs at 0 halve speed, forbid sprint and double the extraction channel. Statuses: Bleeding (bites and blades; 1 HP per 4 s to the torso for 60 s or until antiseptic), Blinded (sight radius 1 for 4 s), Chrome Shock (Blackline weapons; locks one quick slot until a Bench clears it), Soaked (20 s after leaving water; lume halved), Fungal Fever (from a Burster; persists into the colony).
+
+**Extraction.** Reach your own Mat's edge, or a grate you hold, or a neutral grate for a toll (eddies or an item). Channel 10 s; noise spikes (9 per tick); followers must be within 4 tiles or they stay. The run clock is one shift (8–15 min real time by route); past it, Flood and patrol density rise every minute.
+
+**Death and recovery.** Down lasts 60 s untreated, then Dead; a follower can carry a downed Runner 20 tiles. Dead Runners leave a corpse with their inventory at that chunk; the route card marks it; a later run can recover it unless raiders got there first (rolled per day). Items dropped on Mat tiles come home by themselves next shift (the Mat hauls them). Gear flagged **Spored** at the Bench (a craft using Spore Sac tissue) regrows at the Heart on loss, once. Everything else is gone.
 
 **What a run pays**: loot, newcomers, route memory, Runner XP, chunk intel (Corpo contacts buy maps), and salvage of the things that tried to kill you.
 
@@ -97,7 +114,7 @@ Every item has the same eleven fields, so every item can be sold, fed, crafted o
 
 ## Stash, inventory and the Bench
 
-**Rig.** Each Runner carries a backpack grid (6×4 to 10×6 by backpack tier), a chest rig with 4–8 quick slots (1×1 items, usable in combat), two hands, a head, a body and a feet slot, and four implant sockets. Weight above the Runner's carry stat halves sprint and doubles noise.
+**Rig.** Each Runner carries a backpack grid (6×4 to 10×6 by backpack tier; 8×5 until backpacks are gear), a chest rig with 4–8 quick slots (1×1 items, usable in combat), two hands, a head, a body and a feet slot, and four implant sockets. Weight above the Runner's carry stat (18 kg at Body 5) halves sprint and doubles noise. The rig is the run's inventory: loot is taken into it by auto-place and it is handed to the Stash whole on extraction.
 
 **Stash.** The city's inventory lives at the Heart as a grid that grows with Heart tier: 12×10, 16×14, 20×18, 24×22. Containers (crates, lockers, a Vault) are items that hold items: they sort, filter and protect (a Vault hides Blackline from Attention). Sort by category, tier, value, weight, condition; filter to unidentified; a search box. Hovering an item shows the three numbers and its codex line.
 
@@ -368,7 +385,7 @@ rose/
     crates/inventory         grids, containers, rigs, Stash tiers
     crates/people            slimo records, stats, skills, traits, injuries, needs, jobs, bonds
     crates/colony            zones, structures, tiers, districts, foremen, Charter, unrest, events, Attention
-    crates/run               chunk assembly, fog, light/noise, loot tables, threats AI, combat, extraction, corpses
+    crates/run               chunk · assemble · map · fov · light · noise · fog · senses · loot · creature · combat · sim (the 20 Hz run)
     crates/economy           vendors, stock tiers, contracts, chains, glut, Downer chain
     crates/progress          tech tree, strain classes, Authority, city tiers, collections, endings
     crates/save              seed + input log + snapshots, replay, strain codes
@@ -387,16 +404,16 @@ rose/
     placeholders/            generated; never edited by hand
     art/                     PixelLab output after validation; same ids as placeholders
   tools/                     placeholder generator · palette-lock validator · manifest -> prompt sheets · importer/cutter · contact-sheet differ
-  data/                      items, recipes, structures, laws, traits, barks, chunks, vendors, tech, as TOML/CSV; hot-reloaded in debug
+  data/                      items, chunks, loot, creatures, recipes, structures, laws, traits, barks, vendors, tech, as TOML; the file beside the project wins in debug, the compiled copy ships
   docs/                      design bible (this doc, exported) · art bible · module specs · todo.PACER.csv
   tests/                     Rust scenario tests · Godot headless smoke · contact-sheet regression per commit
 ```
 
 **Asset slots.** A drawable in Godot references `AssetSlot("slimo.d2.walk")`. The loader resolves `assets/art/<id>.png` if present and validated, else `assets/placeholders/<id>.png`. The manifest entry carries size, frame count, state tiers, the anchor to match and the PixelLab prompt, so the prompt sheet for the artist is generated from the same file the engine reads. A slot cannot be referenced that is not in the manifest (build fails), and a manifest entry cannot lack a placeholder (tool regenerates them).
 
-**Data over code.** Items, recipes, structures, laws, traits, barks, vendors, tech and chunks are data files with schema validation; balancing never recompiles. Chunks are authored in Godot's tile editor and exported to the data format the `run` crate consumes.
+**Data over code.** Items, chunks, loot tables, creatures, recipes, structures, laws, traits, barks, vendors and tech are data files with schema validation; balancing never recompiles. Chunks are authored as glyph grids (`tools/gen/gen_chunks.py` writes `data/chunks.toml`); a Godot tile-editor export to the same format lands with Phase F tooling.
 
-**Determinism.** One PCG32 stream per sim; UI and VFX draw from a second; a save replays from seed and input log. The run mode's real-time input is logged per tick at 20 Hz.
+**Determinism.** One PCG32 stream per sim; UI and VFX draw from a second; a save replays from seed and input log. The run is `run::sim::RunSim`: every rule of a run — movement, senses, loot, creatures, combat, digging, extraction — advances in `step(input)` at 20 Hz on integer and fixed-point state, the input word is logged (`Input::RunInput`), and Godot's Run screen is a view that gathers input and draws state and events. Save format v2 adds `route_memory` per (seed, stratum); v1 saves migrate on load.
 
 **Tests.** Every crate has scenario tests (seeded, asserting regimes); the `render` crate emits a contact sheet per module that the differ compares per commit; the Godot smoke test exercises every mode shell headless. A pull request that changes a contact sheet carries the diff image.
 
@@ -407,10 +424,10 @@ One thread, six phases, each ending with the whole repo green and a contact shee
 | Phase | Builds | Proves |
 | --- | --- | --- |
 | A Foundations | Repo restructure; SEEPAGE v2 and the art bible as `docs/art-bible.md`; manifest schema and the first 60 slots; placeholder generator and validator; item and inventory crates with the 164-item table as data; save/replay; the 12 mode shells in Godot drawn entirely from placeholders at 32 px | A contact sheet of every placeholder in one style; a headless pass through all 12 screens; items round-trip through save |
-| B The run | `run` crate: chunk assembly from 14 authored chunks, fog, light and noise, loot tables, three sewerat types, scouts, combat, extraction, corpses; Route Board and Run HUD; Stash and the four verbs; Bench tier 1 | Seeded runs with assertions on loot value distribution and death rate; a recorded run replays bit-exact |
+| B The run | `run` crate: chunk assembly from the authored chunks (19 shipped), fog, light and noise, loot tables, three sewerat types, scouts, combat, extraction, corpses, the 20 Hz run sim; Route Board and Run HUD; Stash and the four verbs; Bench tier 1 | Seeded runs with assertions on loot value distribution and death rate; a recorded run replays bit-exact |
 | C The city | `people`, `colony`, `logistics` to spec: jobs, needs, schedules, zones, districts, foremen, Charter, unrest, quotas, cargo jams, 24 structures with three tiers of placeholders; Colony HUD, Build menu, Job grid, Charter | 20-shift headless city with assertions; the reward-cadence log shows an event every 10–30 s |
 | D Pressure | Attention, Patrol / Sweep / Cleansing, Blooms, Floods, raiders, scrap turrets, militia; economy: vendors, stock tiers, contracts, Downer chain; Market screen | A seeded Cleansing with and without gates shows the designed survival spread; price drift stays within bands over 30 shifts |
 | E Progression and content | Tech tree, strain classes and organs, Authority and laws, city tiers, collections, chapters 1–7 with panel slots, barks, endings, Endless and Daily, difficulty tiers | A scripted 20-hour campaign runs headless at 100× and reaches each ending by its genome |
 | F Art and feel | PixelLab generation against the manifest, validation, animation, visual tiers, parallax, water, lighting, audio, accessibility palettes | Contact-sheet regression against anchors; the acceptance screenshots in the Pass 2 Visual section |
 
-Research is written into `docs/` during A and before each later phase's design freeze: extraction-genre loot economies and loss design, survivors-genre unlock cadence, colony-builder job and need systems, pixel-art craft (clusters, hue shift, selective outline, sub-pixel animation), PixelLab constraints, and Ivan Ooze's canon look and voice. Each research note ends with the decisions it changed in this document.
+Research is written into `docs/research/` before each stage's design freeze: extraction-genre loot economies and loss design (01), survivors-genre cadence (02), colony-builder job and need systems (03), pixel-art craft (04), PixelLab constraints (05), Ivan Ooze's canon (06), light, noise and fog as stealth systems (07), loot tables and streak control (08), threat awareness and per-section bodies (09). Each research note ends with the decisions it changed, and those decisions are written into this document in the same pass — this document is the plan; a stage that leaves its numbers only in a research note or a verification log has not finished.

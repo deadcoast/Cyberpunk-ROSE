@@ -250,6 +250,34 @@ people.toml
 - prompt: a feral sewerat: a lost symbiote collapsed into a purple-grey ooze animal with chrome teeth, 1 px black selective outline; a Maw that fills a corridor, a wide ooze mouth with rows of chrome teeth, breathing 4 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
+### slimo.d1.crawl
+
+- kind sprite · one frame 48x32 · 8 frames · states single
+- anchor `anchor.slimo` · ramp flesh · status placeholder
+- prompt: side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle
+- negative: upright pose, green glow, outline on every edge
+
+### slimo.d2.crawl
+
+- kind sprite · one frame 48x32 · 8 frames · states single
+- anchor `anchor.slimo` · ramp flesh · status placeholder
+- prompt: side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle
+- negative: upright pose, green glow, outline on every edge
+
+### slimo.d3.crawl
+
+- kind sprite · one frame 48x32 · 8 frames · states single
+- anchor `anchor.slimo` · ramp flesh · status placeholder
+- prompt: side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle
+- negative: upright pose, green glow, outline on every edge
+
+### slimo.d4.crawl
+
+- kind sprite · one frame 48x32 · 8 frames · states single
+- anchor `anchor.slimo` · ramp flesh · status placeholder
+- prompt: side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle
+- negative: upright pose, green glow, outline on every edge
+
 props.toml
 ----------
 

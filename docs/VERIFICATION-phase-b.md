@@ -156,3 +156,25 @@ tier colour, "unidentified common chrome 1x1 0.6kg c75", F take all.
 screen); quick-slot use, dropping and the body pickup are PAC-024/026; the manifest has no stinger sound or tier
 colour wash yet (PAC-025/028); the loot panel is a label list, the grid-to-grid panel of the design lands with the
 Run HUD; scout and carrier drop tables wait for kills (PAC-023); caches wait for Sever rooms and S5 vaults.
+
+## PAC-023 — sewerats and scouts AI, combat, body sections (2026-11-08)
+
+Full Design v3.1 came first: Expedition mode now carries every number Phase B fixed, PAC-023's included. Research
+09 (Thief's awareness capacitor, Metal Gear's phases, Tarkov's limbs) is short and its decisions are in the design.
+
+The run is now one Rust simulation, `run::sim::RunSim`, stepped at 20 Hz from the input word the save logs; the
+Godot Run screen is a controller and view. Creatures (`run::creature`, `data/creatures.toml`): awareness with
+sight by distance in the creature's own FOV and sound as a floor, phases Calm / Suspicious / Alert / Search / Flee /
+Leaving, distance-field pathing (scouts over floors only, ferals over everything), bites with wind-ups, bursts,
+rifle shots with magazines, patrols that map and leave, salt lines ferals will not cross. The Runner
+(`run::runner`): four sections with Tarkov's transfer rule, statuses, stamina, actions with wind-ups and buffered
+presses, poses — walk on a floor, crawl the back wall or ceiling at ×0.7 (no sprint), wade shallow water at ×0.75,
+swim deep water at sneak speed and Soaked. 47 tests in the crate; smoke plays open → take → fight → extract →
+Stash through the input word; `game/tests/play.gd` plays a scripted run under a display and saves
+`docs/shots/play_*.png`, which were reviewed by eye and fixed from: a Runner floating mid-corridor (poses), a fleeing
+crawler regenerating beside the Runner (flee away, recover out of notice), presses dropped between ticks and during
+actions (latching and buffering), the extraction hold refused mid-swing (hold, not press).
+
+Known gaps, by design of the PAC: followers, the corpse record, raider rolls and Spored regrowth (PAC-024); the HUD
+is text and the rig is a kit (PAC-025/026); lamp carriers and raiders (Phase D); the `[runner]` numbers are the
+first tuning and the loot/creature sweeps will be read together when the shift clock lands.

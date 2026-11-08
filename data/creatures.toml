@@ -1,0 +1,133 @@
+# Cyberpunk: ROSE — creatures of the run (Full Design v3.1, Threats; research 09). Speeds in tiles per second,
+# times in seconds, hearing on the noise scale 0-15, damage in HP. section_odds = [head, torso, arms, legs] weights.
+# feral: hears you -> hunts you (no Suspicious phase). hold_chunk: never leaves the chunk it spawned in.
+
+[creature.crawler]
+sprite = "rat.crawler"
+hp = 18
+speed = 5.0
+prowl_speed = 2.5
+hear = 2
+sees = true
+damage = 6
+windup = 0.5
+cooldown = 1.2
+reach = 1
+section_odds = [5, 40, 15, 40]
+bleed_chance = 0.5
+flee_below = 0.3
+feral = true
+salvage = "rat_salvage"
+
+[creature.burster]
+sprite = "rat.burster"
+hp = 12
+speed = 3.5
+prowl_speed = 2.0
+hear = 3
+sees = true
+damage = 0
+windup = 0.0
+cooldown = 0.0
+reach = 1
+section_odds = [10, 50, 20, 20]
+fuse = 0.6
+burst_damage = 10
+burst_radius = 1
+death_burst = 5
+feral = true
+salvage = "rat_salvage"
+
+[creature.maw]
+sprite = "rat.maw"
+hp = 60
+speed = 1.5
+prowl_speed = 1.0
+hear = 1
+sees = true
+damage = 14
+windup = 0.8
+cooldown = 1.5
+reach = 1
+section_odds = [10, 45, 25, 20]
+grab = 1.0
+hold_chunk = true
+feral = true
+salvage = "rat_salvage"
+
+[creature.scout]
+sprite = "oath.scout"
+hp = 30
+speed = 4.0
+prowl_speed = 2.5
+hear = 4
+sees = true
+lamp = 10
+damage = 7
+windup = 0.4
+cooldown = 1.0
+reach = 1
+section_odds = [10, 50, 20, 20]
+ranged_damage = 9
+shot_interval = 1.2
+mag = 6
+reload = 3.0
+shot_noise = 12
+range = 12
+leave_after = 90
+feral = false
+salvage = "scout_drop"
+
+[spawn]
+# what comes out of a burrow, per stratum, as weights [crawler, burster, maw]; maws only in nest chunks
+burrow_s1 = [80, 20, 0]
+burrow_s2 = [60, 30, 10]
+burrow_s3 = [50, 30, 20]
+burrow_s4 = [40, 30, 30]
+burrow_s5 = [35, 30, 35]
+burrow_s6 = [30, 30, 40]
+pack = [1, 3]
+# chance a chunk with chalk marks has a patrol of two scouts on it, per stratum
+patrol_s1 = 0.0
+patrol_s2 = 0.35
+patrol_s3 = 0.5
+patrol_s4 = 0.6
+patrol_s5 = 0.7
+patrol_s6 = 0.8
+
+[awareness]
+suspicious = 0.4
+alert = 0.8
+sound_floor = 0.5
+decay_per_s = 0.08
+sight_gain_min_per_s = 0.15
+sight_gain_max_per_s = 0.75
+search_s = 12.0
+look_s = 2.0
+
+[runner]
+sections = [20, 50, 30, 30]
+stamina = 100
+sprint_per_s = 12
+swing = 15
+dodge = 20
+dim_per_s = 6
+regen_per_s = 10
+regen_delay_s = 1.0
+walk = 4.5
+sneak = 2.5
+sprint = 7.0
+dodge_s = 0.35
+dodge_tiles = 2
+bleed_per_4s = 1
+bleed_s = 60
+blind_s = 4
+soaked_s = 20
+down_s = 60
+dig_s = 4.0
+extract_s = 10.0
+melee_windup = 0.3
+melee_active = 0.15
+behind_mult = 1.5
+# a shot: [head, torso, arms, legs]; a bite: see creatures
+shot_odds = [10, 50, 20, 20]

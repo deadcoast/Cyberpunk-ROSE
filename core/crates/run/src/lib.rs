@@ -11,21 +11,27 @@
 
 pub mod assemble;
 pub mod chunk;
+pub mod creature;
 pub mod fog;
 pub mod fov;
 pub mod light;
 pub mod loot;
 pub mod map;
 pub mod noise;
+pub mod runner;
 pub mod senses;
+pub mod sim;
 
 pub use assemble::{assemble, route, Layout, Placed, MAX_CHUNKS, MIN_CHUNKS};
 pub use chunk::{Chunk, ChunkLib, Dir, CHUNK_H, CHUNK_W};
+pub use creature::{Creature, CreatureFile, Kind, Phase};
 pub use fog::Fog;
 pub use light::{LightField, Source};
 pub use loot::{LootState, LootTables, OpenMethod, OpenResult, SourceKind, SourceState};
 pub use map::{Container, ContainerKind, Hazard, HazardKind, Light, RouteMap, Spawn, SpawnKind};
 pub use noise::{NoiseEvent, NoiseField, Sound};
+pub use runner::{Action, Life, Runner, StatusKind};
+pub use sim::{Event, RunInput, RunResult, RunSetup, RunSim};
 pub use senses::{notice_range, Lume, Motion, Senses};
 
 /// The authored chunk library shipped with the game (data/chunks.toml). Tools and tests use it; the game may

@@ -157,6 +157,10 @@ pub enum SourceKind {
     Pile,
     Corpse,
     Cache,
+    /// a dead Oathkeeper scout
+    ScoutBody,
+    /// a dead sewerat
+    RatCorpse,
 }
 
 impl SourceKind {
@@ -167,6 +171,8 @@ impl SourceKind {
             SourceKind::Pile => "deposit",
             SourceKind::Corpse => "corpse_newcomer",
             SourceKind::Cache => "cache",
+            SourceKind::ScoutBody => "scout_drop",
+            SourceKind::RatCorpse => "rat_salvage",
         }
     }
     pub fn name(self) -> &'static str {
@@ -176,6 +182,8 @@ impl SourceKind {
             SourceKind::Pile => "pile",
             SourceKind::Corpse => "corpse",
             SourceKind::Cache => "cache",
+            SourceKind::ScoutBody => "scout body",
+            SourceKind::RatCorpse => "rat corpse",
         }
     }
 }
@@ -272,12 +280,16 @@ impl LootState {
 
     /// A dug deposit becomes a pile on its tile, already open with its contents.
     pub fn add_pile(&mut self, tables: &LootTables, table: &ItemTable, x: usize, y: usize, chunk: u16) -> usize {
+        self.add_open_source(tables, table, SourceKind::Pile, x, y, chunk)
+    }
+
+    /// A source that appears during the run, already open: a dug pile, a dead scout, a dead sewerat.
+    pub fn add_open_source(&mut self, tables: &LootTables, table: &ItemTable, kind: SourceKind, x: usize, y: usize, chunk: u16) -> usize {
         let idx = self.sources.len();
-        let mut src = LootSource { x: x as u16, y: y as u16, kind: SourceKind::Pile, tier: self.stratum, chunk, locked: false, state: SourceState::Open, items: Vec::new() };
+        let mut src = LootSource { x: x as u16, y: y as u16, kind, tier: self.stratum, chunk, locked: false, state: SourceState::Open, items: Vec::new() };
         let mut rng = Pcg32::new(mix(self.seed, self.run_nonce, idx as u64 + 10_000, 0x917E));
-        let generous = self.generous();
-        let (items, notable) = self.roll(tables, table, "deposit", self.stratum, generous, 0, &mut rng, chunk);
-        let _ = notable;
+        let generous = kind == SourceKind::Pile && self.generous();
+        let (items, _) = self.roll(tables, table, kind.table(), self.stratum, generous, 0, &mut rng, chunk);
         src.items = items;
         if src.items.is_empty() {
             src.state = SourceState::Empty;
@@ -310,7 +322,7 @@ impl LootState {
             (SourceKind::Locker, _) => (r.noise_locker_pry, 0, false),
             (SourceKind::Crate, OpenMethod::PryBar) | (SourceKind::Cache, OpenMethod::PryBar) => (r.noise_crate_pry, 1, false),
             (SourceKind::Crate, _) | (SourceKind::Cache, _) => (r.noise_crate_force, 0, false),
-            (SourceKind::Corpse, _) => (r.noise_corpse, 0, false),
+            (SourceKind::Corpse, _) | (SourceKind::ScoutBody, _) | (SourceKind::RatCorpse, _) => (r.noise_corpse, 0, false),
             (SourceKind::Pile, _) => (r.noise_pile, 0, false),
         };
         let generous = self.generous() && matches!(kind, SourceKind::Locker | SourceKind::Crate | SourceKind::Cache);

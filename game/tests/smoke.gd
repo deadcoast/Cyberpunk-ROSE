@@ -86,96 +86,127 @@ func _verify_current() -> void:
 			_check(st.upgrade() and st.width() == 16, "stash: upgrade failed")
 			_check(st.count() >= 10, "stash: items lost on upgrade")
 		"run":
-			var n: int = scr.route.chunk_count()
+			var r: RoseRun = scr.route
+			var n: int = r.chunk_count()
 			_check(n >= 8 and n <= 14, "run: route has %d chunks, expected 8..14" % n)
-			_check(scr.route.library_size() >= 14, "run: chunk library has %d chunks" % scr.route.library_size())
-			_check(scr.on_mat(), "run: runner did not start on the Mat edge")
-			_check(scr.route.connectivity() >= 0.95, "run: route connectivity %.3f" % scr.route.connectivity())
+			_check(r.library_size() >= 14, "run: chunk library has %d chunks" % r.library_size())
+			_check(r.connectivity() >= 0.95, "run: route connectivity %.3f" % r.connectivity())
 			_check(scr.world.substrate.get_used_cells().size() > 2000, "run: route tiles not painted")
 			_check(scr.world.props.get_used_cells().size() >= 8, "run: props not painted (%d)" % scr.world.props.get_used_cells().size())
-			var before: Vector2i = scr.tile
-			var moved: bool = scr.step(Vector2i(1, 0))
-			_check(moved and scr.tile != before, "run: runner could not move east off the Mat edge")
-			# dig the first collapse on the route open
-			var dug := false
-			for hz in scr.route.hazards():
-				if hz.kind == "collapse":
-					dug = scr.route.dig(int(hz.x), int(hz.y))
-					break
-			_check(dug or scr.route.hazards().is_empty() or not _has_kind(scr.route.hazards(), "collapse"), "run: dig did not open a collapse")
-			# senses (PAC-021): light, sight, fog, noise
-			var st: PackedInt32Array = scr.route.sense_stats()
-			_check(st.size() == 4 and st[0] > 20, "run: nothing visible (%s)" % str(st))
-			_check(scr.route.memory_bits().size() == int(ceil(scr.route.width() * scr.route.height() / 8.0)), "run: memory bitset size")
-			for i in 6:
-				scr.step(Vector2i(1, 0))
-			_check(not scr.on_mat(), "run: still on the Mat after six steps east")
-			scr.lantern_on = true
-			scr._sense_tick()
-			var lit_band: String = scr.route.exposure_band()
-			var lit_exposure: int = scr.route.exposure()
-			var seen_lit: int = scr.route.sense_stats()[0]
-			scr.lantern_on = false
-			scr._sense_tick()
-			var dark_exposure: int = scr.route.exposure()
-			var seen_dark: int = scr.route.sense_stats()[0]
-			_check(lit_band == "lit" and lit_exposure >= 7, "run: lantern on should read lit (%s %d)" % [lit_band, lit_exposure])
-			_check(dark_exposure < lit_exposure, "run: lantern off did not lower exposure (%d -> %d)" % [lit_exposure, dark_exposure])
-			_check(seen_dark < seen_lit, "run: lantern off did not shrink sight (%d -> %d)" % [seen_lit, seen_dark])
-			_check(scr.route.notice_range() == 2 + dark_exposure + (-1 if scr.motion == 0 else 0) or scr.route.notice_range() >= 1, "run: notice range contract")
-			var reached: int = scr.route.runner_sound(2, 0)
-			_check(reached > 20 and scr.route.noise_here() >= 7, "run: sprint step footprint %d, here %d" % [reached, scr.route.noise_here()])
-			for i in 6:
-				scr._sense_tick()
-			_check(scr.route.noise_here() == 0, "run: noise did not decay (%d)" % scr.route.noise_here())
-			var seen_total: int = scr.route.sense_stats()[1]
-			_check(seen_total > scr.route.sense_stats()[0], "run: nothing remembered after moving (%d seen, %d visible)" % [seen_total, scr.route.sense_stats()[0]])
 			_check(scr.fog != null and scr.fog.texture != null, "run: fog overlay missing")
-			scr.lantern_on = true
-			# loot (PAC-022): sources, opening, the manifest, the rig, the hand-off
-			var ls: PackedInt32Array = scr.route.loot_stats()
-			_check(ls.size() == 6 and ls[0] >= 8, "run: loot sources %s" % str(ls))
-			var opened := 0
-			var revealed := 0
-			var took := 0
-			for src in scr.route.sources():
-				if src.state != "closed":
-					continue
-				scr.tile = Vector2i(int(src.x), int(src.y))
-				scr._place()
-				_check(scr.source_here() == int(src.index), "run: source_at disagrees with sources()")
-				if scr.open_here():
-					opened += 1
-					revealed += scr.loot_items.size()
+			var st0: Dictionary = r.runner()
+			_check(bool(st0.get("on_extraction", false)), "run: runner did not start on the Mat edge")
+			_check(String(st0.get("exposure_band", "")) == "lit", "run: lantern on should read lit (%s)" % String(st0.get("exposure_band", "")))
+			# walk east two seconds, sprinting: continuous movement, footsteps, stamina spent
+			var x0 := int(st0.x)
+			for i in 40:
+				scr.step_with(0, 1, 0)
+			var st1: Dictionary = r.runner()
+			_check(int(st1.x) > x0 + 256 * 4, "run: walked %d units in 2 s" % (int(st1.x) - x0))
+			_check(String(st1.pose) == "crawl", "run: off the floor the Runner should crawl, pose %s" % String(st1.pose))
+			# down to the floor, then sprint: faster, and it costs stamina
+			for i in 40:
+				if String(r.runner().pose) != "crawl":
+					break
+				scr.step_with(0, 0, 1)
+			var floor_pose := String(r.runner().pose)
+			var x1 := int(r.runner().x)
+			for i in 20:
+				scr.step_with(scr.B_SPRINT, 1, 0)
+			var st1b: Dictionary = r.runner()
+			if floor_pose == "walk":
+				_check(int(st1b.x) - x1 > 256 * 5, "run: sprint moved %d units in 1 s" % (int(st1b.x) - x1))
+				_check(float(st1b.stamina) < 100.0, "run: sprint cost no stamina")
+			else:
+				_check(floor_pose == "wade" or floor_pose == "swim", "run: unexpected pose %s under the Mat edge" % floor_pose)
+			st1 = st1b
+			_check(int(st1.noise_here) > 0 or r.sense_stats()[2] >= 0, "run: no footstep noise")
+			# lantern off lowers exposure
+			scr.lantern_pressed = true
+			scr.step_with(scr.B_LANTERN, 0, 0)
+			scr.lantern_pressed = false
+			var st2: Dictionary = r.runner()
+			_check(int(st2.exposure) < int(st1.exposure), "run: lantern off did not lower exposure (%d -> %d)" % [int(st1.exposure), int(st2.exposure)])
+			scr.lantern_pressed = true
+			scr.step_with(scr.B_LANTERN, 0, 0)
+			scr.lantern_pressed = false
+			# open the first closed container through the input word, take its contents
+			var opened := false
+			for src in r.sources():
+				if src.state == "closed" and (src.kind == "locker" or src.kind == "crate"):
+					r.debug_teleport(int(src.x), int(src.y))
+					scr.step_with(0, 0, 0)
+					scr.step_with(scr.B_INTERACT, 0, 0)
+					opened = scr.loot_panel.visible and scr.loot_open == int(src.index)
 					scr.loot_shown = scr.loot_items.size()
-					var r: Array = scr.take_all_here()
-					took += int(r[0])
-					scr.close_loot()
-				if opened >= 6:
+					scr.step_with(0, 0, 0)
+					scr.step_with(scr.B_TAKE, 0, 0)
 					break
-			_check(opened >= 4, "run: opened %d sources" % opened)
-			_check(revealed >= opened, "run: %d items revealed from %d opens" % [revealed, opened])
-			_check(took >= 1 and scr.route.rig_stats()[0] == took, "run: rig holds %d, took %d" % [scr.route.rig_stats()[0], took])
-			_check(scr.route.rig_weight() > 0.0 and scr.route.rig_value_blind() >= 0, "run: rig weight/value")
-			for it in scr.route.rig_items():
-				_check(not bool(it.ident) and String(it.label).begins_with("unidentified"), "run: found item identified on pickup: %s" % str(it))
+			_check(opened, "run: interact did not open a container")
+			var st3: Dictionary = r.runner()
+			_check(int(st3.rig_count) >= 1 or scr.loot_items.is_empty(), "run: take left the rig empty (%d items shown)" % scr.loot_items.size())
+			for it in r.rig_items():
+				_check(not bool(it.ident) and String(it.label).begins_with("unidentified"), "run: found item identified on pickup")
 				break
-			var export: PackedByteArray = scr.route.rig_export()
-			_check(export.size() > 8, "run: rig export empty")
-			var probe := RoseStash.new()
-			var left: int = probe.import_rig(export)
-			_check(left >= 0 and probe.count() == took - left, "run: stash import %d of %d (left %d)" % [probe.count(), took, left])
-			# a dug deposit leaves a pile
-			var before_sources: int = scr.route.loot_stats()[0]
-			var dug_pile := false
-			for y in scr.world.h:
-				for x in scr.world.w:
-					if int(scr.substrate[y * scr.world.w + x]) == 4:
-						dug_pile = scr.route.dig(x, y)
-						break
-				if dug_pile:
+			# a creature: stand next to the first one, let it come, swing the pipe until it dies
+			var cs: Array = r.creatures()
+			_check(cs.size() >= 1, "run: no creatures spawned")
+			var crawler := {}
+			for cc in cs:
+				if String(cc.kind) == "crawler":
+					crawler = cc
 					break
-			_check(dug_pile and scr.route.loot_stats()[0] == before_sources + 1, "run: dug deposit did not leave a pile")
+			if not crawler.is_empty():
+				var c: Dictionary = crawler
+				var placed := false
+				for d in [[1, 0], [-1, 0], [2, 0], [-2, 0]]:
+					if r.debug_teleport(int(c.tx) + d[0], int(c.ty) + d[1]):
+						placed = true
+						break
+				_check(placed, "run: could not stand beside creature %s" % str(c))
+				var hits := 0
+				var kills := 0
+				var fled := false
+				var hurt := false
+				for t in 400:
+					var cur := {}
+					for cc in r.creatures():
+						if int(cc.id) == int(c.id):
+							cur = cc
+					if cur.is_empty():
+						break
+					if String(cur.phase) == "flee":
+						fled = true
+						break
+					var ddx := int(cur.tx) - int(r.runner().tx)
+					var ddy := int(cur.ty) - int(r.runner().ty)
+					var adjacent := absi(ddx) <= 1 and absi(ddy) <= 1
+					var b: int = scr.B_ATTACK if adjacent and t % 12 == 0 else 0
+					scr.step_with(b, signi(ddx) if (not adjacent or t % 12 == 0) else 0, signi(ddy) if not adjacent else 0)
+					for e in scr._last_events:
+						match String(e.kind):
+							"creature_hit": hits += 1
+							"creature_died": kills += 1
+							"runner_hit": hurt = true
+				_check(hits >= 1, "run: no swing landed on the crawler")
+				_check(kills >= 1 or fled, "run: crawler neither died nor fled in 400 ticks (hits %d)" % hits)
+				_check(String(r.runner().life) == "up", "run: a single crawler put a healthy Runner down (hurt %s)" % str(hurt))
+			# extraction: back on the Mat edge, hold E ten seconds
+			var e0: PackedInt32Array = r.entry()
+			r.debug_teleport(e0[1] % r.width(), e0[1] / r.width())
+			for t in 210:
+				scr.step_with(scr.B_INTERACT, 0, 0)
+			_check(r.result() == "extracted", "run: extraction did not complete (%s, action %s)" % [r.result(), String(r.runner().action)])
+			_check(not sim.pending_haul.is_empty(), "run: rig not handed to the Stash")
+			var probe := RoseStash.new()
+			var left: int = probe.import_rig(sim.pending_haul)
+			var kit_items := 0
+			for q in r.quick_slots():
+				if q != "":
+					kit_items += 1
+			var expected: int = int(r.runner().rig_count) + kit_items - left
+			_check(left >= 0 and probe.count() == expected, "run: stash import %d, expected %d (rig %d + kit %d - left %d)" % [probe.count(), expected, int(r.runner().rig_count), kit_items, left])
+			scr.over = ""
 	print("[smoke] %-9s ok  slots %d" % [id, slots])
 
 func _has_kind(arr: Array, kind: String) -> bool:

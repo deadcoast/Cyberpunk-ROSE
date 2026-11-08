@@ -133,3 +133,18 @@ noise_crate_pry = 3
 noise_crate_force = 6
 noise_corpse = 4
 noise_pile = 2
+
+[source.rat_salvage]
+count = [1, 1]
+nodrop = 0.55
+condition = [30, 70]
+categories = { organic = 70, part = 30 }
+rows = [
+  [95, 5, 0, 0, 0],
+  [85, 15, 0, 0, 0],
+  [75, 22, 3, 0, 0],
+  [65, 28, 7, 0, 0],
+  [55, 32, 13, 0, 0],
+  [45, 35, 20, 0, 0],
+]
+notable = 2
