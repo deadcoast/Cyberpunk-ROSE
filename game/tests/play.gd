@@ -1,6 +1,6 @@
 extends SceneTree
-## Scripted play of the Run under a display, for review: drives the input word frame by frame and saves frames at
-## the moments that matter into docs/shots/play_*.png.
+## Scripted play under a display, for review: the Route Board packs a rig and departs, then the Run is driven frame
+## by frame through the input word; frames at the moments that matter land in docs/shots/play_*.png.
 ##   xvfb-run -s "-screen 0 1920x1080x24" godot --path game --rendering-driver opengl3 --script res://tests/play.gd
 
 var assets: Node
@@ -35,37 +35,54 @@ func _shot(name: String) -> void:
 	img.save_png(out_dir + "/play_" + name + ".png")
 	shots += 1
 
+var t0 := 0
+
 func _process(_delta: float) -> bool:
 	t += 1
 	if t == 1:
-		screens.show_screen("run")
+		# the Route Board first: pack a rig from the Stash, pick the S1 card, depart
+		screens.show_screen("route")
 		scr = screens.current
+		return false
+	if t == 6:
+		for it in sim.ensure_stash().items():
+			if String(it.id) in ["ger_pipe", "ger_lantern", "prt_salt", "org_antiseptic", "ger_pry_bar"]:
+				scr._pack(int(it.handle))
+		scr._select(0)
+		return false
+	if t == 12:
+		_shot("00_board")
+		scr._depart()
+		scr = screens.current
+		t0 = t
+		return false
+	if t < 12:
 		return false
 	match phase:
 		0:
 			# stand on the Mat edge, lantern on
 			scr.scripted = [0, 0, 0]
-			if t == 10:
+			if t == t0 + 10:
 				_shot("01_start")
 				phase = 1
 		1:
 			# walk east with the lantern for three seconds
 			scr.scripted = [0, 1, 0]
-			if t == 10 + 180:
+			if t == t0 + 10 + 180:
 				_shot("02_walked")
 				phase = 2
 		2:
 			# sprint on: louder, faster
 			scr.scripted = [scr.B_SPRINT, 1, 0]
-			if t == 10 + 180 + 60:
+			if t == t0 + 10 + 180 + 60:
 				_shot("03_sprint")
 				phase = 3
 		3:
 			# lantern off and dim veins: the dark
-			if t == 10 + 180 + 61:
+			if t == t0 + 10 + 180 + 61:
 				scr.lantern_pressed = true
 			scr.scripted = [scr.B_DIM, 0, 0]
-			if t == 10 + 180 + 120:
+			if t == t0 + 10 + 180 + 120:
 				_shot("04_dark")
 				phase = 4
 		4:
@@ -102,7 +119,7 @@ func _process(_delta: float) -> bool:
 					scr.scripted = [scr.B_ATTACK if t % 14 == 0 else 0, signi(ddx) if t % 14 == 0 else 0, 0]
 				else:
 					scr.scripted = [0, signi(ddx), signi(ddy)]
-				if shots == 4 and adjacent and t % 14 == 7:
+				if shots == 5 and adjacent and t % 14 == 7:
 					_shot("05_fight")
 				if t % 100 == 0:
 					var cinfo := {}

@@ -1,6 +1,7 @@
 extends SceneTree
-## Phase A smoke: the extension loads, every screen instantiates, every asset slot resolves, the Colony runs the sim,
-## the Stash round-trips through the save crate, the Run assembles a route and moves a Runner. Headless.
+## Smoke: the extension loads, every screen instantiates, every asset slot resolves, the Colony runs the sim, the
+## Stash round-trips through the save crate, the Route Board packs a rig from it, the Run plays through the input
+## word to extraction and the Stash takes the haul. Headless.
 ## Run:  godot --headless --path game --script res://tests/smoke.gd
 
 var main: Node
@@ -85,8 +86,35 @@ func _verify_current() -> void:
 			_check(st.save_round_trip(), "stash: save round trip failed")
 			_check(st.upgrade() and st.width() == 16, "stash: upgrade failed")
 			_check(st.count() >= 10, "stash: items lost on upgrade")
+		"route":
+			_check(scr.routes.size() == sim.strata_open, "route: %d cards, expected %d" % [scr.routes.size(), sim.strata_open])
+			for rt in scr.routes:
+				var cd: Dictionary = rt.card
+				_check(int(cd.chunks) >= 8 and int(cd.chunks) <= 14, "route: card S%d has %d chunks" % [int(rt.stratum), int(cd.chunks)])
+				_check(int(cd.shift_s) == 480 + 70 * maxi(0, int(cd.chunks) - 8), "route: S%d shift %d s for %d chunks" % [int(rt.stratum), int(cd.shift_s), int(cd.chunks)])
+				_check(float(cd.known) == 0.0 and int(cd.known_lockers) + int(cd.known_crates) == 0, "route: an unrun route claims knowledge")
+			_check(scr.strip_tex.texture != null and scr.strip_tex.texture.get_width() == scr.routes[0].run.width(), "route: memory strip not drawn at one pixel per tile")
+			# pack from the Stash: the pipe to the hand, the lantern and salt to quick slots, the pry bar to the pack
+			var st: RoseStash = sim.ensure_stash()
+			var before: int = st.count()
+			for it in st.items():
+				if String(it.id) in ["ger_pipe", "ger_lantern", "prt_salt", "ger_pry_bar", "org_antiseptic"]:
+					scr._pack(int(it.handle))
+			_check(scr.hand_handle >= 0, "route: the pipe did not go to the hand")
+			_check(scr.quick_handles.count(-1) == 1, "route: quick slots %s" % str(scr.quick_handles))
+			_check(scr.pack_handles.size() == 1, "route: the pry bar (1x3) should ride in the pack, pack %s" % str(scr.pack_handles))
+			scr._select(0)
+			# depart: the rig leaves the Stash and the launch carries it; the harness opens the run itself
+			var rig: PackedByteArray = st.pack_rig(scr.hand_handle, PackedInt32Array(scr.quick_handles), PackedInt32Array(scr.pack_handles))
+			_check(not rig.is_empty() and st.count() == before - 5, "route: pack_rig left the Stash at %d of %d" % [st.count(), before])
+			sim.launch = {"stratum": 1, "seed": sim.route_seed(1), "name": sim.region_name(1), "rig": rig, "followers": [{"id": 101, "name": "Pell", "body": 5, "damage": 4}, {"id": 102, "name": "Rook", "body": 4, "damage": 4}], "body": 5, "runner": "Sable"}
 		"run":
 			var r: RoseRun = scr.route
+			_check(scr.seed_value == sim.route_seed(1) and String(r.runner().hand) == "ger_pipe", "run: the launch did not carry the route and the rig (seed %d, hand %s)" % [scr.seed_value, String(r.runner().hand)])
+			_check(int(r.runner().rig_count) == 1, "run: the packed pry bar is not in the backpack (%d items)" % int(r.runner().rig_count))
+			_check(int(r.shift().shift_ticks) >= 480 * 20 and scr.clock_label.text.begins_with("SHIFT"), "run: shift clock not live (%s)" % scr.clock_label.text)
+			_check(scr.strip_cells.size() == r.chunk_count(), "run: route strip has %d cells for %d chunks" % [scr.strip_cells.size(), r.chunk_count()])
+			_check(scr.hand_icon.texture != null and scr.quick_icons[0].texture != null, "run: hand or quick slot icon missing")
 			var n: int = r.chunk_count()
 			_check(n >= 8 and n <= 14, "run: route has %d chunks, expected 8..14" % n)
 			_check(r.library_size() >= 14, "run: chunk library has %d chunks" % r.library_size())
@@ -143,11 +171,14 @@ func _verify_current() -> void:
 					scr.step_with(scr.B_TAKE, 0, 0)
 					break
 			_check(opened, "run: interact did not open a container")
+			_check(scr.loot_panel.visible and scr.loot_rig.get_child_count() >= 40, "run: loot panel rig grid not drawn")
 			var st3: Dictionary = r.runner()
 			_check(int(st3.rig_count) >= 1 or scr.loot_items.is_empty(), "run: take left the rig empty (%d items shown)" % scr.loot_items.size())
 			for it in r.rig_items():
-				_check(not bool(it.ident) and String(it.label).begins_with("unidentified"), "run: found item identified on pickup")
-				break
+				if bool(it.found):
+					_check(not bool(it.ident) and String(it.label).begins_with("unidentified"), "run: found item identified on pickup")
+				else:
+					_check(bool(it.ident), "run: a packed item lost its identity (%s)" % String(it.label))
 			# a creature: stand next to the first one, let it come, swing the pipe until it dies
 			var cs: Array = r.creatures()
 			_check(cs.size() >= 1, "run: no creatures spawned")
@@ -217,8 +248,9 @@ func _verify_current() -> void:
 			for q in r.quick_slots():
 				if q != "":
 					kit_items += 1
-			var expected: int = int(r.runner().rig_count) + kit_items - left
-			_check(left >= 0 and probe.count() == expected, "run: stash import %d, expected %d (rig %d + kit %d - left %d)" % [probe.count(), expected, int(r.runner().rig_count), kit_items, left])
+			var hand_items := 1 if String(r.runner().hand) != "" else 0
+			var expected: int = int(r.runner().rig_count) + kit_items + hand_items - left
+			_check(left >= 0 and probe.count() == expected, "run: stash import %d, expected %d (rig %d + kit %d + hand %d - left %d)" % [probe.count(), expected, int(r.runner().rig_count), kit_items, hand_items, left])
 			scr.over = ""
 	print("[smoke] %-9s ok  slots %d" % [id, slots])
 

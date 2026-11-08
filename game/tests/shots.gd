@@ -46,12 +46,12 @@ func _process(_delta: float) -> bool:
 		var scr: Node = screens.current
 		for src in scr.route.sources():
 			if src.state == "closed" and (src.kind == "crate" or src.kind == "locker"):
-				scr.tile = Vector2i(int(src.x), int(src.y))
-				scr._place()
-				scr._sense_tick()
-				if scr.open_here():
+				if scr.route.debug_teleport(int(src.x), int(src.y)):
+					scr.step_with(0, 0, 0)
+					scr.step_with(scr.B_INTERACT, 0, 0)
+					scr.step_with(0, 0, 0)
 					scr.loot_shown = scr.loot_items.size()
-					scr._redraw_loot()
+					scr._redraw_found()
 				break
 	if frames_on_screen == 16 and screen_i >= 0 and screen_ids[screen_i] == "run":
 		var img: Image = root.get_viewport().get_texture().get_image()

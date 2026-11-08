@@ -90,6 +90,13 @@ pub struct SpawnRules {
     pub patrol_s4: f32,
     pub patrol_s5: f32,
     pub patrol_s6: f32,
+    /// trouble per creature for the route card: [crawler, burster, maw, scout]
+    #[serde(default = "default_threat")]
+    pub threat: [f32; 4],
+}
+
+fn default_threat() -> [f32; 4] {
+    [1.0, 1.5, 3.0, 3.0]
 }
 
 impl SpawnRules {
@@ -161,6 +168,33 @@ pub struct CreatureFile {
     pub spawn: SpawnRules,
     pub awareness: Awareness,
     pub runner: RunnerRules,
+    #[serde(default)]
+    pub shift: ShiftRules,
+}
+
+/// The run clock (`[shift]` in creatures.toml): one shift is `base_s` + `per_chunk_s` per chunk beyond
+/// `beyond_chunks`; every `overtime_every_s` past it the sewer sends more.
+#[derive(Clone, Debug, Deserialize)]
+pub struct ShiftRules {
+    pub base_s: f32,
+    pub per_chunk_s: f32,
+    pub beyond_chunks: u32,
+    pub overtime_every_s: f32,
+    pub patrol_from_stratum: u8,
+}
+
+impl Default for ShiftRules {
+    fn default() -> Self {
+        ShiftRules { base_s: 480.0, per_chunk_s: 70.0, beyond_chunks: 8, overtime_every_s: 60.0, patrol_from_stratum: 2 }
+    }
+}
+
+impl ShiftRules {
+    /// Ticks in a shift for a route of `chunks` chunks.
+    pub fn shift_ticks(&self, chunks: usize) -> u64 {
+        let extra = (chunks as u32).saturating_sub(self.beyond_chunks) as f32;
+        ticks(self.base_s + self.per_chunk_s * extra) as u64
+    }
 }
 
 pub const CREATURES_TOML: &str = include_str!("../../../../data/creatures.toml");
@@ -792,38 +826,11 @@ pub fn east_exit(map: &RouteMap) -> (i32, i32) {
 pub fn spawn_all(map: &RouteMap, defs: &CreatureFile, rng: &mut Pcg32) -> Vec<Creature> {
     let mut out = Vec::new();
     let mut next_id = 1u32;
-    let weights = defs.spawn.burrow(map.stratum);
     for s in map.spawns.iter().filter(|s| s.kind == SpawnKind::Sewerat) {
-        let nest = map.chunks.get(s.chunk as usize).is_some_and(|c| c.kind == "nest" || c.kind == "vault");
-        let n = rng.range(defs.spawn.pack[0] as i32, defs.spawn.pack[1] as i32);
-        for _ in 0..n {
-            let mut w = weights;
-            if !nest {
-                w[2] = 0;
-            }
-            let total: u32 = w.iter().sum();
-            if total == 0 {
-                continue;
-            }
-            let mut roll = rng.below(total);
-            let kind = if roll < w[0] {
-                Kind::Crawler
-            } else {
-                roll -= w[0];
-                if roll < w[1] { Kind::Burster } else { Kind::Maw }
-            };
-            let def = &defs.creature[kind.key()];
-            let mut c = Creature::new(next_id, kind, def, (s.x as i32, s.y as i32), s.chunk);
-            c.facing = if rng.below(2) == 0 { -1 } else { 1 };
-            next_id += 1;
-            out.push(c);
-        }
+        spawn_pack(map, defs, rng, s, &mut next_id, &mut out);
     }
     // patrols: group chalk marks by chunk
-    let mut marks: HashMap<u16, Vec<(i32, i32)>> = HashMap::new();
-    for s in map.spawns.iter().filter(|s| s.kind == SpawnKind::Patrol) {
-        marks.entry(s.chunk).or_default().push((s.x as i32, s.y as i32));
-    }
+    let marks = chalk_marks(map);
     let mut chunks: Vec<u16> = marks.keys().copied().collect();
     chunks.sort_unstable();
     let p = defs.spawn.patrol(map.stratum);
@@ -831,18 +838,60 @@ pub fn spawn_all(map: &RouteMap, defs: &CreatureFile, rng: &mut Pcg32) -> Vec<Cr
         if rng.f32() >= p {
             continue;
         }
-        let pts = &marks[&ch];
-        let def = &defs.creature["scout"];
-        for k in 0..2 {
-            let start = pts[k % pts.len()];
-            let mut c = Creature::new(next_id, Kind::Scout, def, start, ch);
-            c.patrol = pts.clone();
-            c.patrol_i = (k + 1) % pts.len();
-            next_id += 1;
-            out.push(c);
-        }
+        spawn_patrol(defs, &marks[&ch], ch, &mut next_id, &mut out);
     }
     out
+}
+
+/// Chalk marks by chunk: the patrol routes the scouts walk.
+pub fn chalk_marks(map: &RouteMap) -> HashMap<u16, Vec<(i32, i32)>> {
+    let mut marks: HashMap<u16, Vec<(i32, i32)>> = HashMap::new();
+    for s in map.spawns.iter().filter(|s| s.kind == SpawnKind::Patrol) {
+        marks.entry(s.chunk).or_default().push((s.x as i32, s.y as i32));
+    }
+    marks
+}
+
+/// One pack (1-3) out of a burrow, by the stratum's weights; maws only in nest and vault chunks.
+pub fn spawn_pack(map: &RouteMap, defs: &CreatureFile, rng: &mut Pcg32, s: &crate::map::Spawn, next_id: &mut u32, out: &mut Vec<Creature>) {
+    let weights = defs.spawn.burrow(map.stratum);
+    let nest = map.chunks.get(s.chunk as usize).is_some_and(|c| c.kind == "nest" || c.kind == "vault");
+    let n = rng.range(defs.spawn.pack[0] as i32, defs.spawn.pack[1] as i32);
+    for _ in 0..n {
+        let mut w = weights;
+        if !nest {
+            w[2] = 0;
+        }
+        let total: u32 = w.iter().sum();
+        if total == 0 {
+            continue;
+        }
+        let mut roll = rng.below(total);
+        let kind = if roll < w[0] {
+            Kind::Crawler
+        } else {
+            roll -= w[0];
+            if roll < w[1] { Kind::Burster } else { Kind::Maw }
+        };
+        let def = &defs.creature[kind.key()];
+        let mut c = Creature::new(*next_id, kind, def, (s.x as i32, s.y as i32), s.chunk);
+        c.facing = if rng.below(2) == 0 { -1 } else { 1 };
+        *next_id += 1;
+        out.push(c);
+    }
+}
+
+/// A patrol of two scouts on a chunk's chalk marks.
+pub fn spawn_patrol(defs: &CreatureFile, pts: &[(i32, i32)], ch: u16, next_id: &mut u32, out: &mut Vec<Creature>) {
+    let def = &defs.creature["scout"];
+    for k in 0..2 {
+        let start = pts[k % pts.len()];
+        let mut c = Creature::new(*next_id, Kind::Scout, def, start, ch);
+        c.patrol = pts.to_vec();
+        c.patrol_i = (k + 1) % pts.len();
+        *next_id += 1;
+        out.push(c);
+    }
 }
 
 #[cfg(test)]

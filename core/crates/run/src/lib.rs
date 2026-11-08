@@ -1,8 +1,8 @@
 //! The run. Phase B of the design: authored 32 x 24 chunks (`chunk`), seeded assembly of 8-14 of them into a
 //! route (`assemble`), the compiled tile map a run is played on (`map`), and the fields played against it:
 //! light (`light`), sight (`fov`), fog of war with route memory (`fog`), noise (`noise`), all ticked together by
-//! `senses`; and what a route gives (`loot`: tables, sources, the rig intake). Threats, combat and extraction land in
-//! their own modules as PAC-023..024 close.
+//! `senses`; what a route gives (`loot`: tables, sources, the rig intake); threats (`creature`), the Runner's body
+//! (`runner`), followers (`follower`), the route card (`board`) and the 20 Hz simulation that ticks them all (`sim`).
 //!
 //! Perspective and traversal. Every ROSE view is a side-on cross-section. Slimos are ooze: they cling to and
 //! crawl along any surface, so a Runner moves in four directions through every passable tile (open floor and air,
@@ -10,6 +10,7 @@
 //! Collapse and deposit tiles are solid until dug.
 
 pub mod assemble;
+pub mod board;
 pub mod chunk;
 pub mod creature;
 pub mod fog;
@@ -24,6 +25,7 @@ pub mod senses;
 pub mod sim;
 
 pub use assemble::{assemble, route, Layout, Placed, MAX_CHUNKS, MIN_CHUNKS};
+pub use board::{card, RouteCard};
 pub use chunk::{Chunk, ChunkLib, Dir, CHUNK_H, CHUNK_W};
 pub use creature::{Creature, CreatureFile, Kind, Phase};
 pub use fog::Fog;

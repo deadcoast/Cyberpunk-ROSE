@@ -106,6 +106,8 @@ pub enum Event {
     PickedUp { id: u32 },
     SetDown { id: u32 },
     Dropped { source: usize, id: String },
+    /// a minute of overtime passed: what the sewer sent (packs, patrols)
+    Overtime { minute: u32, packs: u32, patrols: u32 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,6 +172,11 @@ pub struct RunSim {
     pub followers: Vec<Follower>,
     pub salt: Vec<bool>,
     pub tick: u64,
+    /// the shift: ticks the route gives before overtime (ShiftRules)
+    pub shift_ticks: u64,
+    /// overtime minutes already answered
+    overtime_minutes: u32,
+    next_creature_id: u32,
     pub events: Vec<Event>,
     pub result: Option<RunResult>,
     pub outcome: Option<Outcome>,
@@ -252,6 +259,8 @@ impl RunSim {
             loot.sources.push(LootSource { x: c.x, y: c.y, kind: SourceKind::OwnCorpse, tier: map.stratum, chunk: if chunk == crate::map::NO_CHUNK { 0 } else { chunk }, locked: false, state: if items.is_empty() { SourceState::Empty } else { SourceState::Closed }, items });
         }
         let n = map.w * map.h;
+        let shift_ticks = defs.shift.shift_ticks(map.chunks.len());
+        let next_creature_id = creatures.iter().map(|c| c.id).max().unwrap_or(0) + 1;
         RunSim {
             map,
             table,
@@ -264,6 +273,9 @@ impl RunSim {
             followers,
             salt: vec![false; n],
             tick: 0,
+            shift_ticks,
+            overtime_minutes: 0,
+            next_creature_id,
             events: Vec::new(),
             result: None,
             outcome: None,
@@ -383,6 +395,63 @@ impl RunSim {
         self.loot.source_at(t.0 as usize, t.1 as usize)
     }
 
+    /// Ticks past the shift (0 while the shift runs).
+    pub fn overtime_ticks(&self) -> u64 {
+        self.tick.saturating_sub(self.shift_ticks)
+    }
+
+    /// Chunks with at least one seen or remembered tile, in placement order.
+    pub fn chunk_seen(&self) -> Vec<bool> {
+        let mut seen = vec![false; self.map.chunks.len()];
+        for (i, &st) in self.senses.fog.state.iter().enumerate() {
+            if st != crate::fog::UNSEEN {
+                let c = self.map.chunk_of[i];
+                if c != crate::map::NO_CHUNK {
+                    seen[c as usize] = true;
+                }
+            }
+        }
+        seen
+    }
+
+    /// The chunk the Runner stands in.
+    pub fn runner_chunk(&self) -> Option<usize> {
+        let (x, y) = self.runner.tile();
+        let c = self.map.chunk_of[self.idx(x, y)];
+        (c != crate::map::NO_CHUNK).then_some(c as usize)
+    }
+
+    /// Every minute of overtime: a pack out of a random burrow and, from the shift rules' stratum, a patrol onto a
+    /// chalk-marked chunk that has none.
+    fn overtime(&mut self) {
+        let every = creature::ticks(self.defs.shift.overtime_every_s).max(1) as u64;
+        let minute = (self.overtime_ticks() / every) as u32;
+        if minute <= self.overtime_minutes {
+            return;
+        }
+        self.overtime_minutes = minute;
+        let burrows: Vec<crate::map::Spawn> = self.map.spawns.iter().filter(|s| s.kind == crate::map::SpawnKind::Sewerat).copied().collect();
+        let mut spawned = Vec::new();
+        if !burrows.is_empty() {
+            let s = burrows[self.rng.below(burrows.len() as u32) as usize];
+            creature::spawn_pack(&self.map, &self.defs, &mut self.rng, &s, &mut self.next_creature_id, &mut spawned);
+        }
+        let packs = spawned.len() as u32;
+        let mut patrols = 0;
+        if self.map.stratum >= self.defs.shift.patrol_from_stratum {
+            let marks = creature::chalk_marks(&self.map);
+            let mut empty: Vec<u16> = marks.keys().copied().filter(|ch| !self.creatures.iter().any(|c| c.kind == Kind::Scout && !c.dead && c.chunk == *ch)).collect();
+            empty.sort_unstable();
+            if !empty.is_empty() {
+                let ch = empty[self.rng.below(empty.len() as u32) as usize];
+                creature::spawn_patrol(&self.defs, &marks[&ch], ch, &mut self.next_creature_id, &mut spawned);
+                patrols = 1;
+            }
+        }
+        self.creatures.extend(spawned);
+        self.events.push(Event::Overtime { minute, packs, patrols });
+    }
+
     fn runner_sound(&mut self, sound: Sound) {
         self.senses.runner_sound(&self.map, sound);
     }
@@ -450,6 +519,7 @@ impl RunSim {
         // ---- creatures and followers
         self.creatures_act(&rules);
         self.followers_act(&rules);
+        self.overtime();
         // ---- life
         if let Life::Down { left } = self.runner.life {
             if left == creature::ticks(rules.down_s) - 1 {
@@ -673,7 +743,9 @@ impl RunSim {
     }
 
     fn open(&mut self, i: usize) {
-        let has_pry = self.runner.has_quick(&self.table, "ger_pry_bar").is_some() || self.runner.rig.gear.hands.iter().flatten().any(|h| self.table.def(h.def).id == "ger_pry_bar");
+        let has_pry = self.runner.has_quick(&self.table, "ger_pry_bar").is_some()
+            || self.runner.rig.gear.hands.iter().flatten().any(|h| self.table.def(h.def).id == "ger_pry_bar")
+            || self.runner.rig.backpack.items().any(|it| self.table.def(it.def).id == "ger_pry_bar");
         let method = if has_pry { OpenMethod::PryBar } else { OpenMethod::Hands };
         if let Ok(r) = self.loot.open(&self.tables, &self.table, i, method) {
             let (sx, sy) = (self.loot.sources[i].x as usize, self.loot.sources[i].y as usize);
@@ -1595,5 +1667,27 @@ mod tests {
         let own = s3.loot.sources.iter().find(|src| src.kind == SourceKind::OwnCorpse).unwrap();
         assert!(own.items.is_empty() && own.state == SourceState::Empty, "a forty-day-old body was not stripped");
         s3.step(RunInput::default());
+    }
+
+    #[test]
+    fn the_shift_clock_runs_by_route_length_and_overtime_sends_more() {
+        let mut s = sim(11, 3);
+        let chunks = s.map.chunks.len() as u64;
+        assert_eq!(s.shift_ticks, (480 + 70 * chunks.saturating_sub(8)) * TICK_HZ as u64);
+        // jump to the end of the shift and tick two overtime minutes on the Mat edge; each minute brings a pack
+        // and, in S3, a patrol if any chalk chunk is empty
+        s.tick = s.shift_ticks;
+        let before = s.creatures.len();
+        for _ in 0..(2 * 60 * TICK_HZ as u64 + 2) {
+            s.step(RunInput::default());
+            if s.result.is_some() {
+                break;
+            }
+        }
+        let minutes: Vec<u32> = s.events.iter().filter_map(|e| if let Event::Overtime { minute, .. } = e { Some(*minute) } else { None }).collect();
+        assert_eq!(minutes, vec![1, 2], "overtime minutes {:?}", minutes);
+        assert!(s.creatures.len() > before, "overtime spawned nothing ({} -> {})", before, s.creatures.len());
+        assert_eq!(s.overtime_ticks(), s.tick - s.shift_ticks);
+        assert!(s.chunk_seen().iter().filter(|&&b| b).count() >= 1);
     }
 }

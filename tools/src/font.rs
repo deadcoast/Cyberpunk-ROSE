@@ -89,10 +89,10 @@ pub fn draw_scaled(img: &mut Image, x: usize, y: usize, text: &str, fg: Rgb, bg:
     }
 }
 
-/// The full glyph sheet, 96 cells of 4x6, ASCII 32..127, as the ui.font.mono placeholder.
-pub fn sheet(fg: Rgb, bg: Rgb) -> Image {
+/// The full glyph sheet, 96 cells of 4x6, ASCII 32..127, as the ui.font.mono placeholder. Transparent between
+/// the strokes: a glyph cell drawn over a panel must not paint the panel (a space is nothing, not a block).
+pub fn sheet(fg: Rgb, _bg: Rgb) -> Image {
     let mut img = Image::new(96 * 4, 6);
-    img.rect(0, 0, img.w, img.h, bg);
     for code in 32u8..128 {
         let g = glyph(code as char);
         let x0 = (code as usize - 32) * 4;

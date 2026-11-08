@@ -1,6 +1,6 @@
 extends ScreenBase
-## The Stash: a Rust-backed grid (inventory crate through RoseStash), item card with the four verbs.
-## Phase A: add loot, place, pin, upgrade, sell/feed numbers live; Sell/Feed/Craft actions land with their systems.
+## The Stash: a view of the city's one grid (Sim.stash, inventory crate through RoseStash), item card with the four
+## verbs. Add loot, place, pin, upgrade, sell/feed numbers live; Sell/Feed/Craft actions land with PAC-026.
 
 const CELL := 32
 var stash: RoseStash
@@ -17,7 +17,7 @@ func _ready() -> void:
 	super._ready()
 
 func _build_content(c: Control) -> void:
-	stash = RoseStash.new()
+	stash = Sim.ensure_stash()
 	items = RoseItems.new()
 	grid_frame = make_frame(c, Vector2(0, 0), Vector2(12 * CELL + 8, 10 * CELL + 8))
 	cells = Control.new()
@@ -32,9 +32,6 @@ func _build_content(c: Control) -> void:
 			_redraw())
 	make_button(c, "SAVE TEST", Vector2(410, 280), func():
 		status.text = "save round trip: " + ("ok" if stash.save_round_trip() else "FAILED"))
-	# a starting haul so the screen is never empty
-	for id in ["chr_street_eye", "prt_pipe", "ger_nail_rifle", "org_paste", "cur_ooze_toy", "chr_lamp_core", "prt_plate", "tec_shard_corpo"]:
-		stash.add(items.find(id), 60 + (hash(id) % 40), true)
 	# a Runner's rig handed over by the Run on extraction
 	if not Sim.pending_haul.is_empty():
 		var before: int = stash.count()

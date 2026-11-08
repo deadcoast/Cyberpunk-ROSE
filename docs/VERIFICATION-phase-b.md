@@ -195,3 +195,31 @@ now buffer two seconds).
 Known gaps: followers are a fixed pair with fists until the colony hands over real slimos and their gear (Phase C);
 stranded followers are recorded, not yet placed on the next run; a body on the route is not yet shown on the route
 card (PAC-025).
+
+## PAC-025 — the Route Board and the Run HUD on the run crate (2026-11-08)
+
+Full Design v3.3 first (The Route Board, The shift clock, The Run HUD, quick-slot sizes); research 11 is four
+sources and five decisions. `run::board::card` computes a route card from the compiled map, the creature file and
+the route's memory bits — chunks, shift seconds, the danger index and band, remembered share, known lockers and
+crates, water share, grates as groups; the Board draws it and counts nothing. The danger band was set from data:
+sixty seeds per launch stratum gave S1 ≈ 1.2 trouble per chunk, S3 ≈ 2.1, S2 ≈ 2.4 (the culvert chunks carry the
+most chalk), so the bands are LOW < 1.5, MEDIUM < 2.5, HIGH ≥ 2.5 per chunk and those numbers are in the design.
+`RunSim` carries the shift clock (`[shift]` in creatures.toml: 480 s + 70 s per chunk beyond eight); every overtime
+minute spawns a pack from a random burrow and, from S2, a patrol onto an empty chalk chunk. The Stash is one
+`RoseStash` on the `Sim` autoload for the session; the Board packs the rig out of it (`pack_rig`: hand, four quick
+slots of one or two cells, backpack items by handle) and `begin_run_rig` starts the run on it; `import_rig` now
+brings the hand weapon home as well. The Run HUD is the designed one: exposure and noise arcs, the notice ring at
+its true radius and the channel ring drawn on the Runner; shift clock over the route strip; body silhouette,
+stamina and status tags; hand and quick slots with their keys; follower chips; one prompt line; the grid-to-grid
+loot panel with the camera easing east. 54 tests in the crate; smoke packs a rig on the Board, launches with it,
+and finds the pry bar in the backpack and the pipe in hand; `play.gd` now opens on the Board and departs from it.
+
+Reviewed and fixed from the frames: the placeholder font sheet was opaque, so every space painted a Void block over
+its panel (visible since Phase A) — the sheet is transparent between strokes now; the first danger bands put every
+card at HIGH, so they were measured and reset per chunk; HUD text floated unreadably over lit walls, so each HUD
+group sits in a small frame; the notice ring's dashes were 25 px long and read as a wall, now 6 px dots; the hint
+line overlapped the quick slots; grates were counted as tiles.
+
+Known gaps: the crew is the three named Phase B slimos until Phase C hands over records; stranded followers are
+shown on the card but not yet placed on the next run; the Flood clock joins the shift clock in Phase D; the map on
+hold and the kinetic label animations are Phase F.

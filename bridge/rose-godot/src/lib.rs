@@ -256,6 +256,15 @@ fn def_dict(t: &ItemTable, idx: usize) -> VarDictionary {
     out.set("codex", d.codex.as_str());
     let tags = PackedStringArray::from(d.tags.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice());
     out.set("tags", &tags);
+    // gear: slot ("hand", "rig", "head", ...), kind ("melee", "ranged", "armour", "tool", "implant"), the numbers
+    if let Some(g) = &d.gear {
+        out.set("gear_slot", g.slot.as_str());
+        out.set("gear_kind", g.kind.as_str());
+        out.set("dmg", g.dmg as i64);
+        out.set("armour", g.armour as i64);
+        out.set("light", g.light as i64);
+        out.set("gear_noise", g.noise as i64);
+    }
     out
 }
 
@@ -436,6 +445,9 @@ impl RoseStash {
         let t = self.table.as_ref().unwrap();
         let mut items: Vec<ItemInstance> = rig.backpack.items().cloned().collect();
         items.extend(rig.quick.iter().flatten().cloned());
+        let g = &rig.gear;
+        items.extend([&g.head, &g.body, &g.feet, &g.back].into_iter().flatten().cloned());
+        items.extend(g.hands.iter().flatten().cloned());
         items.sort_by_key(|it| std::cmp::Reverse(t.def(it.def).value));
         let stash = self.stash.as_mut().unwrap();
         let mut left = 0i64;
@@ -463,6 +475,54 @@ impl RoseStash {
             }
         }
         left
+    }
+
+    /// Pack a Runner's rig from the Stash: the hand weapon by handle (-1 for none), up to four quick slots and any
+    /// number of backpack items by handle. Packed items leave the Stash; a handle that is missing or does not fit is
+    /// skipped. Returns the rig serialised (postcard) for `RoseRun.begin_run_rig`, or empty when nothing packed.
+    #[func]
+    fn pack_rig(&mut self, hand: i64, quick: PackedInt32Array, pack: PackedInt32Array) -> PackedByteArray {
+        self.ensure();
+        let t = self.table.as_ref().unwrap().clone();
+        let stash = self.stash.as_mut().unwrap();
+        let mut rig = inventory::Rig::new(8, 5, 4, 18.0);
+        let mut any = false;
+        if hand >= 0 {
+            if let Some(it) = stash.grid.remove(hand as u32) {
+                rig.gear.hands[0] = Some(it);
+                any = true;
+            }
+        }
+        for (i, h) in quick.as_slice().iter().take(4).enumerate() {
+            if *h < 0 {
+                continue;
+            }
+            let Some(p) = stash.grid.get(*h as u32) else { continue };
+            // quick slots take items of one or two cells
+            if (p.w as u32) * (p.h as u32) > 2 {
+                continue;
+            }
+            if let Some(it) = stash.grid.remove(*h as u32) {
+                rig.quick[i] = Some(it);
+                any = true;
+            }
+        }
+        for h in pack.as_slice() {
+            if *h < 0 {
+                continue;
+            }
+            let Some(it) = stash.grid.remove(*h as u32) else { continue };
+            if let Err(_) = rig.backpack.auto_place(t.def(it.def), it.clone()) {
+                // no room: back into the Stash
+                let _ = stash.grid.auto_place(t.def(it.def), it);
+            } else {
+                any = true;
+            }
+        }
+        if !any {
+            return PackedByteArray::new();
+        }
+        PackedByteArray::from(postcard::to_allocvec(&rig).unwrap_or_default().as_slice())
     }
 
     /// Serialise through the save crate and back; returns true when the round trip reproduces the Stash.
@@ -527,6 +587,7 @@ fn item_view(table: &ItemTable, k: usize, it: &ItemInstance) -> VarDictionary {
     out.set("weight", d.weight as f64);
     out.set("condition", it.condition as i64);
     out.set("ident", it.ident == items::Ident::Full);
+    out.set("found", it.found_in_run);
     out.set("value_blind", items::price(d, it, PriceContext::default()) as i64);
     out
 }
@@ -607,6 +668,23 @@ impl RoseRun {
         if let Some((_, inst)) = inventory::instance(&table, &weapon.to_string()) {
             rig.gear.hands[0] = Some(inst);
         }
+        let fs = Self::followers_from(&followers);
+        let cs = Self::corpses_from(&corpses);
+        self.start(m, table, nonce, route_runs, day, rig, body, fs, cs);
+    }
+
+    /// Start the run with a rig packed on the Route Board (`RoseStash.pack_rig` bytes); otherwise as `begin_run`.
+    #[func]
+    fn begin_run_rig(&mut self, nonce: i64, route_runs: i64, day: i64, rig: PackedByteArray, body: i64, followers: VarArray, corpses: VarArray) {
+        let Some(m) = self.map.clone() else { return };
+        let table = table();
+        let rig = postcard::from_bytes::<inventory::Rig>(rig.to_vec().as_slice()).unwrap_or_else(|_| inventory::Rig::new(8, 5, 4, 18.0));
+        let fs = Self::followers_from(&followers);
+        let cs = Self::corpses_from(&corpses);
+        self.start(m, table, nonce, route_runs, day, rig, body, fs, cs);
+    }
+
+    fn followers_from(followers: &VarArray) -> Vec<run::FollowerSetup> {
         let mut fs = Vec::new();
         for v in followers.iter_shared() {
             let Ok(d) = v.try_to::<VarDictionary>() else { continue };
@@ -617,6 +695,10 @@ impl RoseRun {
                 damage: d.get("damage").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(4) as i32,
             });
         }
+        fs
+    }
+
+    fn corpses_from(corpses: &VarArray) -> Vec<run::Corpse> {
         let mut cs = Vec::new();
         for v in corpses.iter_shared() {
             let Ok(d) = v.try_to::<VarDictionary>() else { continue };
@@ -631,6 +713,11 @@ impl RoseRun {
                 raided: d.get("raided").and_then(|v| v.try_to::<bool>().ok()).unwrap_or(false),
             });
         }
+        cs
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn start(&mut self, m: run::RouteMap, table: ItemTable, nonce: i64, route_runs: i64, day: i64, rig: inventory::Rig, body: i64, fs: Vec<run::FollowerSetup>, cs: Vec<run::Corpse>) {
         let setup = run::RunSetup {
             mat_lume_gene: self.mat_lume_gene,
             memory: self.memory.as_deref(),
@@ -643,6 +730,66 @@ impl RoseRun {
             corpses: cs,
         };
         self.sim = Some(run::RunSim::new(m, table, loot_tables(), creature_defs(), setup));
+    }
+
+    /// The route card for the assembled route (before or during a run): {chunks, shift_s, danger, danger_band,
+    /// burrows, patrol_chunks, known (0-1), known_lockers, known_crates, water (0-1), grates}. `memory` is the
+    /// route's memory bits from the save (empty before any run).
+    #[func]
+    fn card(&self, memory: PackedByteArray) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        let Some(m) = self.map_ref() else { return d };
+        let bits = memory.to_vec();
+        let c = run::card(m, &creature_defs(), if bits.is_empty() { None } else { Some(bits.as_slice()) });
+        d.set("chunks", c.chunks as i64);
+        d.set("shift_s", c.shift_seconds() as i64);
+        d.set("danger", c.danger as f64);
+        d.set("density", c.density as f64);
+        d.set("danger_band", c.danger_band());
+        d.set("burrows", c.burrows as i64);
+        d.set("patrol_chunks", c.patrol_chunks as i64);
+        d.set("known", c.known as f64);
+        d.set("known_lockers", c.known_lockers as i64);
+        d.set("known_crates", c.known_crates as i64);
+        d.set("water", c.water as f64);
+        d.set("grates", c.grates as i64);
+        d
+    }
+
+    /// The shift clock: {shift_ticks, tick, left_ticks, overtime_ticks}.
+    #[func]
+    fn shift(&self) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        let Some(s) = self.sim.as_ref() else { return d };
+        d.set("shift_ticks", s.shift_ticks as i64);
+        d.set("tick", s.tick as i64);
+        d.set("left_ticks", s.shift_ticks.saturating_sub(s.tick) as i64);
+        d.set("overtime_ticks", s.overtime_ticks() as i64);
+        d
+    }
+
+    /// One byte per chunk in placement order: 1 where any tile has been seen or remembered.
+    #[func]
+    fn chunk_seen(&self) -> PackedByteArray {
+        self.sim.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.chunk_seen().iter().map(|&b| b as u8).collect::<Vec<u8>>().as_slice()))
+    }
+
+    /// Container tiles of the route: [{x, y, kind: "locker"|"crate", tier, chunk}] (the Board draws the known ones).
+    #[func]
+    fn containers(&self) -> VarArray {
+        let mut out = VarArray::new();
+        if let Some(m) = self.map_ref() {
+            for c in &m.containers {
+                let mut d = VarDictionary::new();
+                d.set("x", c.x as i64);
+                d.set("y", c.y as i64);
+                d.set("kind", if c.kind == run::ContainerKind::Locker { "locker" } else { "crate" });
+                d.set("tier", c.tier as i64);
+                d.set("chunk", c.chunk as i64);
+                out.push(&d.to_variant());
+            }
+        }
+        out
     }
 
     /// Followers: [{id, name, x, y, tx, ty, facing, hp, max_hp, order, life, carrying, windup}]
@@ -951,6 +1098,8 @@ impl RoseRun {
             let (dmg, _, reach) = r.melee(&s.table);
             format!("{dmg} dmg reach {reach}").as_str()
         });
+        d.set("hand", r.rig.gear.hands[0].as_ref().map_or("", |h| s.table.def(h.def).id.as_str()));
+        d.set("chunk", s.runner_chunk().map_or(-1, |c| c as i64));
         d
     }
 
@@ -1114,6 +1263,12 @@ impl RoseRun {
                     d.set("kind", "dropped");
                     d.set("source", source as i64);
                     d.set("id", id.as_str());
+                }
+                run::Event::Overtime { minute, packs, patrols } => {
+                    d.set("kind", "overtime");
+                    d.set("minute", minute as i64);
+                    d.set("packs", packs as i64);
+                    d.set("patrols", patrols as i64);
                 }
             }
             out.push(&d.to_variant());

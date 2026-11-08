@@ -56,6 +56,41 @@ var corpses: Array = []
 var stranded := {}
 ## The last run's outcome, for the Route Board and the Heart.
 var last_outcome := {}
+## Route memory bits per route key, from each run's outcome (save v3 route_memory).
+var route_memory := {}
+## The city's one Stash (inventory crate through RoseStash); every screen is a view of it.
+var stash: RoseStash
+## Strata whose route cards are open; Phase E's Relay sets this, the three launch cards are open until then.
+var strata_open := 3
+## Region names per stratum at launch (Full Design, The Route Board).
+const REGIONS := {1: "SUMP EAST", 2: "CULVERT NORTH", 3: "STORM DRAIN"}
+## The crew the Phase B sim carries until Phase C brings slimo records: the Runner first, then who can follow.
+const CREW := [
+	{"id": 100, "name": "Sable", "body": 5, "damage": 4, "role": "runner", "sprite": "slimo.d2.idle"},
+	{"id": 101, "name": "Pell", "body": 5, "damage": 4, "role": "follower", "sprite": "slimo.d3.idle"},
+	{"id": 102, "name": "Rook", "body": 4, "damage": 4, "role": "follower", "sprite": "slimo.d2.idle"},
+]
+## What the Route Board hands the Run: {stratum, seed, name, rig: PackedByteArray, followers: [...], body}. Empty: the Run's own defaults.
+var launch := {}
+
+## The Stash, created once for the session with its starting haul.
+func ensure_stash() -> RoseStash:
+	if stash == null:
+		stash = RoseStash.new()
+		var items := RoseItems.new()
+		for id in ["chr_street_eye", "prt_pipe", "ger_nail_rifle", "org_paste", "cur_ooze_toy", "chr_lamp_core", "prt_plate", "tec_shard_corpo", "ger_pipe", "ger_lantern", "ger_pry_bar", "org_antiseptic", "prt_salt", "org_stim"]:
+			stash.add(items.find(id), 60 + (hash(id) % 40), false)
+	return stash
+
+## A route's seed is fixed by the save and the stratum, so a route can be re-run and learned.
+func route_seed(stratum: int) -> int:
+	return seed_value * 7 + stratum
+
+func region_name(stratum: int) -> String:
+	return String(REGIONS.get(stratum, "S%d DRAIN" % stratum))
+
+func memory_of(stratum: int, seed_v: int) -> PackedByteArray:
+	return route_memory.get(route_key(stratum, seed_v), PackedByteArray())
 
 func corpses_on(stratum: int, seed_value: int) -> Array:
 	var out := []
@@ -82,7 +117,11 @@ func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Diction
 	var stranded_ids: PackedInt32Array = o.get("followers_stranded", PackedInt32Array())
 	if stranded_ids.size() > 0:
 		stranded[route_key(stratum, seed_value)] = Array(stranded_ids)
+	var mem: PackedByteArray = o.get("route_memory", PackedByteArray())
+	if not mem.is_empty():
+		route_memory[route_key(stratum, seed_value)] = mem
 	note_run(stratum, seed_value)
+	launch = {}
 	day += 1
 
 func route_key(stratum: int, seed_value: int) -> String:
