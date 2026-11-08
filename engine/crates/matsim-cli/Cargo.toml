@@ -1,0 +1,14 @@
+[package]
+name = "matsim-cli"
+description = "Headless runner for the ROSE core: grow, evidence, scale, bench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "matsim"
+path = "src/main.rs"
+
+[dependencies]
+matsim = { path = "../matsim" }
+clap = { version = "4", features = ["derive"] }
