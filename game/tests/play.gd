@@ -176,6 +176,28 @@ func _process(_delta: float) -> bool:
 			scr.scripted = [scr.B_INTERACT, 0, 0]
 			if scr.over == "extracted":
 				_shot("09_extracted")
+				# home: the Stash takes the haul and the shift report; sell a curio and feed the Heart
+				screens.show_screen("stash")
+				scr = screens.current
+				phase = 14
+		14:
+			if t % 10 == 0:
+				var st: RoseStash = scr.stash
+				var curio := -1
+				var chrome := -1
+				for it in st.items():
+					if String(it.category) == "curio" and curio < 0:
+						curio = int(it.handle)
+					if String(it.category) == "chrome" and chrome < 0:
+						chrome = int(it.handle)
+				if curio >= 0:
+					st.queue_sell(curio, 0, sim.day)
+				scr.filter_cat = 1
+				scr._select(chrome)
+				phase = 15
+		15:
+			if t % 10 == 5:
+				_shot("10_stash")
 				print("[play] %d frames, %d shots -> %s" % [t, shots, out_dir])
 				quit(0)
 				return true

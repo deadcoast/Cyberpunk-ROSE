@@ -5,6 +5,9 @@ use items::{ItemDef, ItemId, ItemInstance, ItemTable};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+pub mod ledger;
+pub use ledger::{Delivery, Ledger, Queued, ShiftReport, Verb};
+
 pub type Handle = u32;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -118,6 +121,12 @@ impl Grid {
     pub fn iter(&self) -> impl Iterator<Item = (&Handle, &Placed)> {
         self.items.iter()
     }
+    /// Placements in reading order (row, then column), so a grid lists the same way every time.
+    pub fn placed(&self) -> Vec<(Handle, &Placed)> {
+        let mut v: Vec<(Handle, &Placed)> = self.items.iter().map(|(h, p)| (*h, p)).collect();
+        v.sort_by_key(|(_, p)| (p.y, p.x));
+        v
+    }
     pub fn items(&self) -> impl Iterator<Item = &ItemInstance> {
         self.items.values().map(|p| &p.item)
     }
@@ -130,6 +139,63 @@ impl Grid {
     pub fn weight(&self, table: &ItemTable) -> f32 {
         self.items.values().map(|p| table.def(p.item.def).weight).sum()
     }
+    /// Re-pack every item first-fit in the given order, keeping each item's handle (anything not named keeps its
+    /// relative order after them). A grid that held the items before holds them after.
+    pub fn repack(&mut self, order: &[Handle]) -> bool {
+        let snapshot = (self.cells.clone(), self.items.clone());
+        let mut placed: Vec<(Handle, Placed)> = order.iter().filter_map(|h| self.items.remove(h).map(|p| (*h, p))).collect();
+        let mut rest: Vec<Handle> = self.items.keys().copied().collect();
+        rest.sort_unstable();
+        for h in rest {
+            if let Some(p) = self.items.remove(&h) {
+                placed.push((h, p));
+            }
+        }
+        self.cells.fill(None);
+        let mut leftover = Vec::new();
+        for (h, mut p) in placed {
+            let mut done = false;
+            'outer: for flip in [false, true] {
+                let (w, hh) = if flip { (p.h, p.w) } else { (p.w, p.h) };
+                if flip && w == hh {
+                    break;
+                }
+                for y in 0..self.h {
+                    for x in 0..self.w {
+                        if self.fits(x, y, w, hh).is_ok() {
+                            p.x = x;
+                            p.y = y;
+                            if flip {
+                                p.rotated = !p.rotated;
+                                p.w = w;
+                                p.h = hh;
+                            }
+                            for yy in y..y + hh {
+                                for xx in x..x + w {
+                                    let i = self.idx(xx, yy);
+                                    self.cells[i] = Some(h);
+                                }
+                            }
+                            self.items.insert(h, p.clone());
+                            done = true;
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+            if !done {
+                leftover.push((h, p));
+            }
+        }
+        // first-fit can fail where the old packing succeeded; then the grid goes back exactly as it was
+        if !leftover.is_empty() {
+            self.cells = snapshot.0;
+            self.items = snapshot.1;
+            return false;
+        }
+        true
+    }
+
     /// Grow the grid, keeping every placement (new cells to the right and below).
     pub fn resize(&mut self, w: u8, h: u8) {
         assert!(w >= self.w && h >= self.h, "grids only grow");
@@ -237,6 +303,26 @@ impl Stash {
     pub fn count(&self) -> usize {
         self.all_items().count()
     }
+
+    /// Re-pack the main grid in an order: "tier" (best first), "value", "weight", "condition", "category"; ties by
+    /// name so the result is the same every time. Every item keeps its instance; only placement changes.
+    pub fn sort_by(&mut self, table: &ItemTable, key: &str) {
+        let mut order: Vec<(Handle, &Placed)> = self.grid.placed();
+        order.sort_by(|(_, a), (_, b)| {
+            let (da, db) = (table.def(a.item.def), table.def(b.item.def));
+            let primary = match key {
+                "value" => db.value.cmp(&da.value),
+                "weight" => db.weight.partial_cmp(&da.weight).unwrap_or(std::cmp::Ordering::Equal),
+                "condition" => b.item.condition.cmp(&a.item.condition),
+                "category" => da.category.cmp(&db.category),
+                _ => db.tier.cmp(&da.tier),
+            };
+            primary.then_with(|| da.name.cmp(&db.name))
+        });
+        let handles: Vec<Handle> = order.into_iter().map(|(h, _)| h).collect();
+        self.grid.repack(&handles);
+    }
+
 }
 
 impl Default for Stash {
@@ -255,6 +341,27 @@ mod tests {
     use super::*;
 
     const DATA: &str = include_str!("../../../../data/items.toml");
+
+    #[test]
+    fn sorting_the_stash_keeps_every_item_and_its_handle() {
+        let t = table();
+        let mut st = Stash::new();
+        let mut hs = Vec::new();
+        for id in ["prt_pipe", "chr_street_eye", "ger_nail_rifle", "cur_ooze_toy", "org_paste", "prt_plate"] {
+            let (_, it) = instance(&t, id).unwrap();
+            hs.push(st.grid.auto_place(t.def(it.def), it).unwrap());
+        }
+        let before: std::collections::HashMap<Handle, items::ItemId> = st.grid.iter().map(|(h, p)| (*h, p.item.def)).collect();
+        st.sort_by(&t, "value");
+        assert_eq!(st.count(), 6);
+        for (h, def) in before {
+            assert_eq!(st.grid.get(h).map(|p| p.item.def), Some(def), "handle {h} changed identity");
+        }
+        // the most valuable item sits first in reading order
+        let first = st.grid.placed()[0].1.item.def;
+        let max = st.grid.items().map(|i| t.def(i.def).value).max().unwrap();
+        assert_eq!(t.def(first).value, max);
+    }
 
     fn table() -> ItemTable {
         ItemTable::from_toml(DATA).unwrap()

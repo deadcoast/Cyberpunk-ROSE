@@ -72,6 +72,34 @@ const CREW := [
 ]
 ## What the Route Board hands the Run: {stratum, seed, name, rig: PackedByteArray, followers: [...], body}. Empty: the Run's own defaults.
 var launch := {}
+## The last shift's report from the ledger ({sold, earned, fed, eddies, deliveries}), shown once on the Stash.
+var shift_report := {}
+## The item the Stash sent to the Bench with Craft (a RoseStash.items() entry), consumed by the Bench screen.
+var bench_slot := {}
+
+## Market sites the Mat has reached (grates), as tile indices; selling needs one.
+func markets() -> PackedInt32Array:
+	return ensure().sites().get("markets", PackedInt32Array())
+
+## Pits: the Heart first, then every Relay.
+func pits() -> PackedInt32Array:
+	return ensure().sites().get("pits", PackedInt32Array())
+
+func market_name(i: int) -> String:
+	return "GRATE %d" % (i + 1)
+
+func pit_name(i: int) -> String:
+	return "HEART" if i == 0 else "RELAY %d" % i
+
+## Shift end: the queues resolve, the ledger takes the eddies, the Pits take the nutrient, the genome drifts.
+func end_shift() -> void:
+	var st := ensure_stash()
+	var r: Dictionary = st.resolve_shift()
+	var city := ensure()
+	for d in r.get("deliveries", []):
+		city.feed_pit(int(d.pit), float(d.nutrient))
+		city.drift_genome(d.drift)
+	shift_report = r
 
 ## The Stash, created once for the session with its starting haul.
 func ensure_stash() -> RoseStash:
@@ -122,6 +150,7 @@ func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Diction
 		route_memory[route_key(stratum, seed_value)] = mem
 	note_run(stratum, seed_value)
 	launch = {}
+	end_shift()
 	day += 1
 
 func route_key(stratum: int, seed_value: int) -> String:

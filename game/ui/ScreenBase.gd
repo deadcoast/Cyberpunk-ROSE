@@ -115,3 +115,32 @@ func make_gauge(parent: Control, slot_id: String, pos: Vector2, fill: float, lab
 
 func icon_for(item_id: String) -> String:
 	return "icon.item." + item_id
+
+const TIER_COLOR := {"common": UiTheme.DUST, "uncommon": UiTheme.CYAN, "rare": UiTheme.HOT_PINK, "blackline": UiTheme.OOZE_GLOW, "relic": UiTheme.VESTMENT}
+
+## An item as a tile: w x h cells of `cell` px in its tier colour, the icon centred and never stretched.
+## `tint` overrides the tier colour (Hot Pink for "no room"); unidentified items draw their icon dimmed.
+func make_item_tile(parent: Control, pos: Vector2, w: int, h: int, tier: String, item_id: String, identified: bool, cell: int = 32, tint: Color = Color.TRANSPARENT) -> Control:
+	var holder := Control.new()
+	holder.position = pos
+	holder.size = Vector2(w * cell, h * cell)
+	parent.add_child(holder)
+	var pw := w * cell
+	var ph := h * cell
+	var tc: Color = tint
+	if tint == Color.TRANSPARENT:
+		tc = TIER_COLOR.get(tier, UiTheme.DUST)
+	var fill := ColorRect.new()
+	fill.size = Vector2(pw - 1, ph - 1)
+	fill.color = Color(tc, 0.18)
+	holder.add_child(fill)
+	for edge in [[0, 0, pw - 1, 1], [0, ph - 2, pw - 1, 1], [0, 0, 1, ph - 1], [pw - 2, 0, 1, ph - 1]]:
+		var line := ColorRect.new()
+		line.position = Vector2(edge[0], edge[1])
+		line.size = Vector2(edge[2], edge[3])
+		line.color = tc
+		holder.add_child(line)
+	var icon := make_slot(holder, icon_for(item_id), Vector2((pw - 32) / 2.0, (ph - 32) / 2.0))
+	if not identified:
+		icon.modulate = Color(0.55, 0.55, 0.6)
+	return holder

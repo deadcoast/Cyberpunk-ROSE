@@ -30,6 +30,26 @@ func _initialize() -> void:
 
 func _process(_delta: float) -> bool:
 	frames_on_screen += 1
+	if frames_on_screen == 6 and screen_i >= 0 and screen_ids[screen_i] == "stash":
+		# the Stash with a card open and a sale and a feed queued
+		var scr: Node = screens.current
+		var st: RoseStash = scr.stash
+		var first_chrome := -1
+		for it in st.items():
+			if String(it.category) == "curio":
+				st.queue_sell(int(it.handle), 0, sim.day)
+				break
+		for it in st.items():
+			if String(it.category) == "chrome" and first_chrome < 0:
+				first_chrome = int(it.handle)
+			elif String(it.category) == "chrome":
+				st.queue_feed(int(it.handle), 0, sim.day)
+				break
+		scr._select(first_chrome)
+	if frames_on_screen == 6 and screen_i >= 0 and screen_ids[screen_i] == "bench":
+		# the Bench with a Stash item slotted
+		sim.bench_slot = {"id": "chr_street_eye", "name": "Street Eye", "tier": "common", "category": "chrome", "identified": true, "condition": 80, "tags": PackedStringArray(["optic", "conductor"])}
+		screens.show_screen("bench")
 	if frames_on_screen == 12 and screen_i >= 0:
 		var id: String = screen_ids[screen_i]
 		if id == "colony":

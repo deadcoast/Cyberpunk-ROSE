@@ -223,3 +223,32 @@ line overlapped the quick slots; grates were counted as tiles.
 Known gaps: the crew is the three named Phase B slimos until Phase C hands over records; stranded followers are
 shown on the card but not yet placed on the next run; the Flood clock joins the shift clock in Phase D; the map on
 hold and the kinetic label animations are Phase F.
+
+## PAC-026 — the Stash's four verbs live (2026-11-08)
+
+Full Design v3.4 first (Stash: The four verbs, Bulk actions, Shift end); research 12 is two sources and five
+decisions. `inventory::ledger` holds the sell and feed queues, the eddies and per-market glut and resolves a shift:
+sell pays base × condition × demand × glut × blind with glut −5 % per unit at that market (floor 25 %, recovering
+20 % per shift), feed hands each Pit a delivery of nutrient and summed bias × tier drift; the colony applies the
+deliveries (`MatSim::feed`, the new `drift_genome`) and nothing in GDScript computes a price or a drift. Markets
+are the colony's market sites (where the Mat reached a grate), Pits are the Heart and the Relays; Feed is closed for
+items the Mat does not eat (feed value 0: everything but Chrome and Relics in the shipped table), Sell for items
+nobody buys. `Stash::sort_by` re-packs the grid by tier, value, weight, condition or category through
+`Grid::repack`, which keeps every handle (a selection survives a sort) and reverts if first-fit would lose
+anything. `Grid::placed` lists in reading order; `rig_items` and `items()` use it, so the Run's rig and the Stash
+never reorder between frames. Save v4 carries the ledger. The Stash screen is the designed one: filter and sort bar,
+the grid as real-size tiles in a scrolling frame (the Phase A screen stretched 32 px icons over 1 × 3 and 2 × 2
+footprints and ran its 10 rows under the nav bar), the card with the three numbers and the verbs, the bulk bar with
+its totals before the click, the ledger panel with the queue, pull-back and the shift report; Craft hands the item to
+the Bench, which slots it by tag. Smoke queues a sale and a feed, pulls one back, bulk-filters around a pinned item,
+sorts without losing a handle, ends the shift and sees the Heart's stock rise, the genome drift and the eddies
+land; `play.gd` closes its run on the Stash with the haul in and a sale queued. 84 Rust tests.
+
+Reviewed and fixed from the frames: the card's "~2 cells" read as "82 cells" in the 3 × 5 font (the tilde is gone);
+"cells of growth" first divided by θ_grow, which is the threshold to sprout, not the cost — it is now nutrient /
+(grow cost 0.04 + tip starter 0.12), about six cells per unit, and the design says so; the haul note vanished behind
+a selected card, so it lives in the ledger panel.
+
+Known gaps: Craft slots the item but the recipe table is PAC-027; haulers carrying feeds to the Pit are Phase C's
+job system (feeds arrive at shift end until then); market demand stays 1.0 until Phase D's factions; containers
+as Stash tabs and drag/split are Phase F polish.

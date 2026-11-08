@@ -218,6 +218,21 @@ impl MatSim {
         *self.pits.entry((x, y)).or_insert(0.0) += amount;
     }
 
+    /// Fed Chrome drifts the genome: each gene moves by the delivered bias × tier drift, clamped to 0..1, and the
+    /// CA parameters follow the new genome at once.
+    pub fn drift_genome(&mut self, drift: [f32; 10]) {
+        for g in 0..10 {
+            self.genome.0[g] = (self.genome.0[g] + drift[g]).clamp(0.0, 1.0);
+        }
+        self.p = self.genome.params();
+    }
+
+    /// Cells of growth one unit of nutrient buys (the Stash's "feed now"): a sprout spends grow_cost + tip_starter
+    /// (0.16) from the parent cell, so one nutrient is about six cells; θ_grow is the threshold to start, not a cost.
+    pub fn cells_per_nutrient(&self) -> f32 {
+        1.0 / (self.grow_cost + self.tip_starter).max(0.01)
+    }
+
     /// Bait Smear: paint nutrient straight onto the ground.
     pub fn bait(&mut self, x: usize, y: usize, amount: f32) {
         self.splash(x, y, amount, false);

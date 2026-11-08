@@ -195,6 +195,49 @@ impl RoseSim {
         self.city.as_ref().map_or(0.5, |c| c.sim.genome.0.get(index as usize).copied().unwrap_or(0.5) as f64)
     }
 
+    /// All ten genes, 0..1.
+    #[func]
+    fn genes(&self) -> PackedFloat32Array {
+        self.city.as_ref().map_or_else(PackedFloat32Array::new, |c| PackedFloat32Array::from(c.sim.genome.0.as_slice()))
+    }
+
+    /// Fed Chrome: drift every gene by the delivered amount (bias × tier drift), clamped.
+    #[func]
+    fn drift_genome(&mut self, drift: PackedFloat32Array) {
+        if let Some(c) = self.city.as_mut() {
+            let mut d = [0.0f32; 10];
+            for (i, v) in drift.as_slice().iter().take(10).enumerate() {
+                d[i] = *v;
+            }
+            c.sim.drift_genome(d);
+        }
+    }
+
+    /// Drop nutrient into the Pit with this index among the city's Pits (0 is the Heart).
+    #[func]
+    fn feed_pit(&mut self, pit: i64, amount: f64) -> bool {
+        let Some(c) = self.city.as_mut() else { return false };
+        let Some(&i) = c.pits.get(pit.max(0) as usize) else { return false };
+        let w = c.sim.w;
+        c.sim.feed(i % w, i / w, amount as f32);
+        true
+    }
+
+    /// Stock sitting in a Pit (nutrient units).
+    #[func]
+    fn pit_stock(&self, pit: i64) -> f64 {
+        let Some(c) = self.city.as_ref() else { return 0.0 };
+        let Some(&i) = c.pits.get(pit.max(0) as usize) else { return 0.0 };
+        let w = c.sim.w;
+        c.sim.pits.get(&(i % w, i / w)).copied().unwrap_or(0.0) as f64
+    }
+
+    /// Cells of growth one unit of nutrient buys at the current genome (the Stash's "feed now").
+    #[func]
+    fn cells_per_nutrient(&self) -> f64 {
+        self.city.as_ref().map_or(4.0, |c| c.sim.cells_per_nutrient() as f64)
+    }
+
     #[func]
     fn stats(&self) -> VarDictionary {
         let mut d = VarDictionary::new();
@@ -321,6 +364,7 @@ pub struct RoseStash {
     base: Base<RefCounted>,
     table: Option<ItemTable>,
     stash: Option<Stash>,
+    ledger: inventory::Ledger,
 }
 
 #[godot_api]
@@ -332,6 +376,154 @@ impl RoseStash {
         if self.stash.is_none() {
             self.stash = Some(Stash::new());
         }
+    }
+
+    // ------------------------------------------------------------ the four verbs and the ledger
+
+    /// Queue an item to sell at a market (index among the colony's market sites). It leaves the grid.
+    #[func]
+    fn queue_sell(&mut self, handle: i64, market: i64, day: i64) -> bool {
+        self.ensure();
+        let stash = self.stash.as_mut().unwrap();
+        self.ledger.queue(stash, handle as u32, inventory::Verb::Sell { market: market.clamp(0, 255) as u8 }, day.max(0) as u32)
+    }
+
+    /// Queue an item to feed a Pit (0 is the Heart). Only items with a feed value go; returns false otherwise.
+    #[func]
+    fn queue_feed(&mut self, handle: i64, pit: i64, day: i64) -> bool {
+        self.ensure();
+        let t = self.table.as_ref().unwrap();
+        let stash = self.stash.as_mut().unwrap();
+        let Some(p) = stash.grid.get(handle as u32) else { return false };
+        if t.def(p.item.def).feed <= 0.0 {
+            return false;
+        }
+        self.ledger.queue(stash, handle as u32, inventory::Verb::Feed { pit: pit.clamp(0, 255) as u8 }, day.max(0) as u32)
+    }
+
+    /// Pull a queued item back into the grid; -1 when it is missing or there is no room.
+    #[func]
+    fn unqueue(&mut self, index: i64) -> i64 {
+        self.ensure();
+        let t = self.table.as_ref().unwrap().clone();
+        let stash = self.stash.as_mut().unwrap();
+        self.ledger.unqueue(stash, &t, index.max(0) as usize).map_or(-1, |h| h as i64)
+    }
+
+    /// The queue: [{index, id, name, tier, identified, verb: "sell"|"feed", target, quote, nutrient, day}]
+    #[func]
+    fn queued(&mut self) -> VarArray {
+        self.ensure();
+        let t = self.table.as_ref().unwrap();
+        let mut out = VarArray::new();
+        for (i, q) in self.ledger.queue.iter().enumerate() {
+            let d = t.def(q.item.def);
+            let mut e = VarDictionary::new();
+            e.set("index", i as i64);
+            e.set("id", d.id.as_str());
+            e.set("name", d.name.as_str());
+            e.set("tier", format!("{:?}", d.tier).to_lowercase().as_str());
+            e.set("identified", q.item.ident == items::Ident::Full);
+            e.set("w", d.size[0] as i64);
+            e.set("h", d.size[1] as i64);
+            match q.verb {
+                inventory::Verb::Sell { market } => {
+                    e.set("verb", "sell");
+                    e.set("target", market as i64);
+                    // the price it will fetch given what is queued ahead of it at that market
+                    let ahead = self.ledger.queue[..i].iter().filter(|p| p.verb == q.verb).count() as u32;
+                    let base_glut = self.ledger.glut.get(market as usize).copied().unwrap_or(0.0).round() as u32;
+                    e.set("quote", items::price(d, &q.item, PriceContext { glut_units: base_glut + ahead, ..PriceContext::default() }) as i64);
+                    e.set("nutrient", 0.0);
+                }
+                inventory::Verb::Feed { pit } => {
+                    e.set("verb", "feed");
+                    e.set("target", pit as i64);
+                    e.set("quote", 0i64);
+                    e.set("nutrient", items::feed_value(d, &q.item).0 as f64);
+                }
+            }
+            e.set("day", q.day as i64);
+            out.push(&e.to_variant());
+        }
+        out
+    }
+
+    /// What an item in the grid would fetch at a market now (glut and the queue ahead included).
+    #[func]
+    fn quote(&mut self, handle: i64, market: i64) -> i64 {
+        self.ensure();
+        let t = self.table.as_ref().unwrap();
+        let stash = self.stash.as_ref().unwrap();
+        stash.grid.get(handle as u32).map_or(0, |p| self.ledger.quote(t, &p.item, market.clamp(0, 255) as u8) as i64)
+    }
+
+    #[func]
+    fn eddies(&self) -> i64 {
+        self.ledger.eddies as i64
+    }
+
+    /// Re-pack the grid by "tier", "value", "weight", "condition" or "category".
+    #[func]
+    fn sort_by(&mut self, key: GString) {
+        self.ensure();
+        let t = self.table.as_ref().unwrap().clone();
+        self.stash.as_mut().unwrap().sort_by(&t, &key.to_string());
+    }
+
+    #[func]
+    fn queue_count(&self) -> i64 {
+        self.ledger.queue.len() as i64
+    }
+
+    /// Unpinned items in the grid that match the filters: category ("" any), tier ("" any), condition below
+    /// `max_condition` (101 any), unidentified only. Pinned items never match.
+    #[func]
+    fn bulk_handles(&mut self, category: GString, tier: GString, max_condition: i64, unidentified: bool) -> PackedInt32Array {
+        self.ensure();
+        let t = self.table.as_ref().unwrap();
+        let stash = self.stash.as_ref().unwrap();
+        let (cat, tr) = (category.to_string(), tier.to_string());
+        let mut v: Vec<i32> = stash
+            .grid
+            .placed()
+            .into_iter()
+            .filter(|(_, p)| !p.item.pinned)
+            .filter(|(_, p)| {
+                let d = t.def(p.item.def);
+                (cat.is_empty() || format!("{:?}", d.category).to_lowercase() == cat)
+                    && (tr.is_empty() || format!("{:?}", d.tier).to_lowercase() == tr)
+                    && (p.item.condition as i64) < max_condition
+                    && (!unidentified || p.item.ident != items::Ident::Full)
+            })
+            .map(|(h, _)| h as i32)
+            .collect();
+        v.sort_unstable();
+        PackedInt32Array::from(v.as_slice())
+    }
+
+    /// Shift end: resolve the queues. Returns {sold, earned, fed, eddies, deliveries: [{pit, nutrient, drift: [10]}]}
+    /// for the colony to apply.
+    #[func]
+    fn resolve_shift(&mut self) -> VarDictionary {
+        self.ensure();
+        let t = self.table.as_ref().unwrap().clone();
+        let r = self.ledger.resolve(&t);
+        let mut d = VarDictionary::new();
+        d.set("sold", r.sold as i64);
+        d.set("earned", r.earned as i64);
+        d.set("fed", r.fed as i64);
+        d.set("eddies", self.ledger.eddies as i64);
+        let mut dl = VarArray::new();
+        for de in &r.deliveries {
+            let mut e = VarDictionary::new();
+            e.set("pit", de.pit as i64);
+            e.set("nutrient", de.nutrient as f64);
+            e.set("drift", &PackedFloat32Array::from(de.drift.as_slice()));
+            dl.push(&e.to_variant());
+        }
+        d.set("deliveries", &dl);
+        d
     }
 
     #[func]
@@ -400,12 +592,10 @@ impl RoseStash {
         let t = self.table.as_ref().unwrap();
         let s = self.stash.as_ref().unwrap();
         let mut out = VarArray::new();
-        let mut placed: Vec<_> = s.grid.iter().collect();
-        placed.sort_by_key(|(h, _)| **h);
-        for (h, p) in placed {
+        for (h, p) in s.grid.placed() {
             let d = t.def(p.item.def);
             let mut e = VarDictionary::new();
-            e.set("handle", *h as i64);
+            e.set("handle", h as i64);
             e.set("x", p.x as i64);
             e.set("y", p.y as i64);
             e.set("w", p.w as i64);
@@ -420,6 +610,10 @@ impl RoseStash {
             e.set("pinned", p.item.pinned);
             e.set("sell", items::price(d, &p.item, PriceContext::default()) as i64);
             e.set("feed", items::feed_value(d, &p.item).0 as f64);
+            e.set("category", format!("{:?}", d.category).to_lowercase().as_str());
+            e.set("weight", d.weight as f64);
+            e.set("found", p.item.found_in_run);
+            e.set("tags", &PackedStringArray::from(d.tags.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
             out.push(&e.to_variant());
         }
         out
@@ -531,9 +725,10 @@ impl RoseStash {
         self.ensure();
         let mut file = save::SaveFile::new(1, 1);
         file.stash = self.stash.as_ref().unwrap().clone();
+        file.ledger = self.ledger.clone();
         let bytes = file.encode();
         match save::SaveFile::decode(&bytes) {
-            Ok(back) => back.stash == file.stash,
+            Ok(back) => back.stash == file.stash && back.ledger == file.ledger,
             Err(_) => false,
         }
     }
@@ -1368,7 +1563,7 @@ impl RoseRun {
     fn rig_items(&self) -> VarArray {
         let mut out = VarArray::new();
         let Some(s) = self.sim.as_ref() else { return out };
-        for (k, (_, p)) in s.runner.rig.backpack.iter().enumerate() {
+        for (k, (_, p)) in s.runner.rig.backpack.placed().into_iter().enumerate() {
             let mut d = item_view(&s.table, k, &p.item);
             d.set("x", p.x as i64);
             d.set("y", p.y as i64);

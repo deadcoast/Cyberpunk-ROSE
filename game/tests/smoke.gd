@@ -79,13 +79,76 @@ func _verify_current() -> void:
 			scr.set_view(2)
 			scr.apply_tool(96, 24)
 		"stash":
-			var st = scr.stash
-			_check(st.count() >= 8, "stash: starting haul not placed (%d)" % st.count())
-			scr._add_loot()
-			_check(st.count() >= 10, "stash: add loot failed")
+			var st: RoseStash = scr.stash
+			_check(st.count() >= 14, "stash: starting haul not placed (%d)" % st.count())
 			_check(st.save_round_trip(), "stash: save round trip failed")
+			# the four verbs through the ledger
+			var chrome := -1
+			var chrome2 := -1
+			var part := -1
+			for it in st.items():
+				if String(it.category) == "chrome" and chrome < 0:
+					chrome = int(it.handle)
+				elif String(it.category) == "chrome" and chrome2 < 0:
+					chrome2 = int(it.handle)
+				elif String(it.category) == "part" and part < 0 and int(it.sell) > 0:
+					part = int(it.handle)
+			_check(chrome >= 0 and chrome2 >= 0 and part >= 0, "stash: starting haul lacks chrome and parts")
+			var markets: PackedInt32Array = sim.markets()
+			_check(markets.size() > 0, "stash: the Mat reached no grate, nothing can be sold (markets %d)" % markets.size())
+			var before: int = st.count()
+			var quote: int = st.quote(part, 0)
+			_check(quote > 0, "stash: a part quotes %d" % quote)
+			_check(st.queue_sell(part, 0, sim.day) and st.count() == before - 1 and st.queue_count() == 1, "stash: sell did not queue")
+			_check(not st.queue_feed(part, 0, sim.day), "stash: a part should not be feedable")
+			_check(st.queue_feed(chrome, 0, sim.day) and st.queue_count() == 2, "stash: feed did not queue chrome")
+			var back: int = st.unqueue(0)
+			_check(back >= 0 and st.queue_count() == 1 and st.count() == before - 1, "stash: pull back failed (%d)" % back)
+			# Keep pins; bulk skips pinned
+			st.pin(chrome2, true)
+			var extra: int = st.add(RoseItems.new().find("chr_optic_slag"), 80, true)
+			var bulk: PackedInt32Array = st.bulk_handles("chrome", "", 101, false)
+			_check(bulk.has(extra) and not bulk.has(chrome2), "stash: bulk view %s should hold %d and skip the pinned chrome %d" % [str(bulk), extra, chrome2])
+			var unid: PackedInt32Array = st.bulk_handles("", "", 101, true)
+			_check(unid.has(extra) and unid.size() == 1, "stash: unidentified filter %s" % str(unid))
+			scr._select(chrome2)
+			_check(scr.card.get_child_count() >= 8, "stash: item card not drawn")
+			# sort keeps every item
+			st.sort_by("value")
+			_check(st.count() == before and not scr._item(chrome2).is_empty(), "stash: sort lost items or handles (%d)" % st.count())
+			var vals := []
+			for it in st.items():
+				vals.append(int(it.sell))
+			# shift end: the ledger pays, the Pit eats, the genome drifts
+			var genes0: PackedFloat32Array = sim.ensure().genes()
+			var stock0: float = sim.ensure().pit_stock(0)
+			sim.end_shift()
+			var r: Dictionary = sim.shift_report
+			_check(int(r.get("fed", 0)) == 1 and st.queue_count() == 0, "stash: shift end did not resolve the feed (%s)" % str(r))
+			_check(sim.ensure().pit_stock(0) > stock0, "stash: the Heart took no nutrient (%.2f -> %.2f)" % [stock0, sim.ensure().pit_stock(0)])
+			var genes1: PackedFloat32Array = sim.ensure().genes()
+			var drifted := false
+			for g in 10:
+				if absf(genes1[g] - genes0[g]) > 1e-6:
+					drifted = true
+			_check(drifted, "stash: fed chrome did not drift the genome")
+			# sell resolves too, with glut: two curios (the Route Board packs the tools later)
+			var sold := 0
+			for it in st.items():
+				if String(it.category) in ["curio", "tech"] and not bool(it.pinned) and sold < 2:
+					if st.queue_sell(int(it.handle), 0, sim.day):
+						sold += 1
+			_check(sold == 2, "stash: could not queue two sales (%d)" % sold)
+			var e0: int = st.eddies()
+			sim.end_shift()
+			_check(st.eddies() > e0 and int(sim.shift_report.sold) == 2, "stash: selling earned nothing (%d -> %d)" % [e0, st.eddies()])
+			_check(st.save_round_trip(), "stash: save round trip with a ledger failed")
 			_check(st.upgrade() and st.width() == 16, "stash: upgrade failed")
-			_check(st.count() >= 10, "stash: items lost on upgrade")
+			# Craft hands the Bench an item
+			sim.bench_slot = scr._item(chrome2)
+			_check(not sim.bench_slot.is_empty(), "stash: craft hand-off empty")
+		"bench":
+			_check(not scr.slotted.is_empty() and _count_slots(scr) >= 12, "bench: the crafted item was not slotted (%s)" % str(scr.slotted.keys()))
 		"route":
 			_check(scr.routes.size() == sim.strata_open, "route: %d cards, expected %d" % [scr.routes.size(), sim.strata_open])
 			for rt in scr.routes:

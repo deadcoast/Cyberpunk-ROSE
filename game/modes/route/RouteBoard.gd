@@ -6,7 +6,6 @@ extends ScreenBase
 const CARD_W := 206
 const CARD_H := 96
 const SLOT := 36
-const TIER_COLOR := {"common": UiTheme.DUST, "uncommon": UiTheme.CYAN, "rare": UiTheme.HOT_PINK, "blackline": UiTheme.OOZE_GLOW, "relic": UiTheme.VESTMENT}
 const DANGER_COLOR := {"low": UiTheme.DUST, "medium": UiTheme.ACID, "high": UiTheme.HOT_PINK}
 const CARRY := 18.0
 

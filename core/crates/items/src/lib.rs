@@ -8,7 +8,7 @@ pub const GENES: [&str; 10] = [
     "vigor", "branching", "thrift", "appetite", "lume", "toxicity", "chrome", "feral", "conductance", "plasticity",
 ];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Category {
     Chrome,

@@ -9,7 +9,6 @@ extends ScreenBase
 
 const SIM_HZ := 20.0
 const UNROLL := 0.22
-const TIER_COLOR := {"common": UiTheme.DUST, "uncommon": UiTheme.CYAN, "rare": UiTheme.HOT_PINK, "blackline": UiTheme.OOZE_GLOW, "relic": UiTheme.VESTMENT}
 const KIT := ["ger_lantern", "org_antiseptic", "prt_salt", "org_stim"]
 const WEAPON := "ger_pipe"
 const BODY := 5
@@ -728,25 +727,9 @@ func _draw_rings() -> void:
 	if ring_channel >= 0.0:
 		rings.draw_arc(c, r + 5, -PI * 0.5, -PI * 0.5 + TAU * clampf(ring_channel, 0.0, 1.0), 32, ring_channel_color, 3.0)
 
-## An item as a tile: w x h cells in its tier colour, the icon centred; dim when it could not be taken.
+## An item as a tile at its real size; Hot Pink when it could not be taken.
 func _item_tile(parent: Control, pos: Vector2, it: Dictionary, no_room: bool) -> void:
-	var w := int(it.w) * CELL
-	var h := int(it.h) * CELL
-	var tc: Color = TIER_COLOR.get(String(it.tier), UiTheme.DUST)
-	var fill := ColorRect.new()
-	fill.position = pos
-	fill.size = Vector2(w - 1, h - 1)
-	fill.color = Color(UiTheme.HOT_PINK, 0.25) if no_room else Color(tc, 0.18)
-	parent.add_child(fill)
-	for edge in [[0, 0, w - 1, 1], [0, h - 2, w - 1, 1], [0, 0, 1, h - 1], [w - 2, 0, 1, h - 1]]:
-		var line := ColorRect.new()
-		line.position = pos + Vector2(edge[0], edge[1])
-		line.size = Vector2(edge[2], edge[3])
-		line.color = UiTheme.HOT_PINK if no_room else tc
-		parent.add_child(line)
-	var icon := make_slot(parent, icon_for(String(it.id)), pos + Vector2((w - CELL) / 2.0, (h - CELL) / 2.0))
-	if not bool(it.ident):
-		icon.modulate = Color(0.55, 0.55, 0.6)
+	make_item_tile(parent, pos, int(it.w), int(it.h), String(it.tier), String(it.id), bool(it.ident), CELL, UiTheme.HOT_PINK if no_room else Color.TRANSPARENT)
 
 ## The found side: the revealed items packed first-fit into a 3 x 5 cell grid.
 func _redraw_found() -> void:
