@@ -1,20 +1,22 @@
 class_name WorldView
 extends Node2D
 ## The sewer and the Mat as TileMapLayers built from placeholder slots, 32 px per tile, plus the crowd.
-## Shared by the Colony and Run screens.
+## Shared by the Colony (bound to the live Sim) and the Run (painted from a RoseRun route map).
 
 const TILE := 32
-const SUB := {0: "tile.concrete", 1: "", 2: "tile.pipe", 3: "tile.brick", 4: "tile.deposit", 5: "tile.water", 6: "tile.grate", 7: "tile.concrete"}
+const SUB := {0: "tile.concrete", 1: "", 2: "tile.pipe", 3: "tile.brick", 4: "tile.deposit", 5: "tile.water", 6: "tile.grate", 7: "tile.concrete", 8: "tile.collapse"}
 const HY := {1: ["mat.tip", ""], 2: ["mat.cord", "fed"], 3: ["mat.node", "fed"], 4: ["mat.necro", ""]}
 
 var tileset: TileSet
 var substrate: TileMapLayer
 var matlayer: TileMapLayer
+var props: TileMapLayer
 var crowd: Node2D
 var sources := {}      # slot key -> [source_id, frames]
 var w := 0
 var h := 0
 var draw_crowd := true
+var bind_sim := true   # false: a Run paints its own grid and nothing ticks
 
 func _ready() -> void:
 	tileset = TileSet.new()
@@ -25,14 +27,18 @@ func _ready() -> void:
 	matlayer = TileMapLayer.new()
 	matlayer.tile_set = tileset
 	add_child(matlayer)
+	props = TileMapLayer.new()
+	props.tile_set = tileset
+	add_child(props)
 	crowd = Node2D.new()
 	crowd.draw.connect(_draw_crowd)
 	add_child(crowd)
-	var sim: RoseSim = Sim.ensure()
-	w = sim.width()
-	h = sim.height()
-	full_paint()
-	Sim.ticked.connect(_on_tick)
+	if bind_sim:
+		var sim: RoseSim = Sim.ensure()
+		w = sim.width()
+		h = sim.height()
+		full_paint()
+		Sim.ticked.connect(_on_tick)
 
 func _source(slot_id: String, state: String) -> Array:
 	var key := slot_id + "|" + state
@@ -59,6 +65,30 @@ func _put_cell(layer: TileMapLayer, x: int, y: int, slot_id: String, state: Stri
 	if s[0] < 0:
 		return
 	layer.set_cell(Vector2i(x, y), s[0], Vector2i(variant % int(s[1]), 0))
+
+## Paint a substrate grid (mat::sim::sub codes) of width x height; clears the Mat and prop layers.
+func paint_substrate(sub: PackedByteArray, width: int, height: int) -> void:
+	w = width
+	h = height
+	substrate.clear()
+	matlayer.clear()
+	props.clear()
+	for y in h:
+		for x in w:
+			_put_cell(substrate, x, y, SUB.get(int(sub[y * w + x]), ""), "", (x * 7 + y * 13) % 4)
+
+## Repaint one substrate tile (after a dig).
+func repaint_tile(x: int, y: int, code: int) -> void:
+	_put_cell(substrate, x, y, SUB.get(code, ""), "", (x * 7 + y * 13) % 4)
+
+## A prop on a floor tile: lockers, crates, bodies, lamps, gas, burrows, waymarks.
+func put_prop(x: int, y: int, slot_id: String, state: String = "", variant: int = 0) -> void:
+	_put_cell(props, x, y, slot_id, state, variant)
+
+## Mat tiles painted by hand (the Run paints the Mat edge it starts from).
+func put_mat(x: int, y: int, hv: int, state: String) -> void:
+	var spec: Array = HY.get(hv, ["", ""])
+	_put_cell(matlayer, x, y, spec[0], state if hv == 2 or hv == 3 else "", (x + y) % 4)
 
 func full_paint() -> void:
 	var sim: RoseSim = Sim.ensure()
@@ -92,7 +122,7 @@ func _on_tick() -> void:
 	crowd.queue_redraw()
 
 func _draw_crowd() -> void:
-	if not draw_crowd:
+	if not draw_crowd or not bind_sim:
 		return
 	var cam := get_viewport().get_camera_2d()
 	if cam == null:

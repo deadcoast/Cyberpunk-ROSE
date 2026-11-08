@@ -250,6 +250,58 @@ people.toml
 - prompt: a feral sewerat: a lost symbiote collapsed into a purple-grey ooze animal with chrome teeth, 1 px black selective outline; a Maw that fills a corridor, a wide ooze mouth with rows of chrome teeth, breathing 4 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
+props.toml
+----------
+
+### prop.locker
+
+- kind prop · one frame 32x32 · 1 frame · states closed, open, empty
+- anchor `anchor.item` · ramp industrial · status placeholder
+- prompt: a dented steel utility locker against a sewer wall, side view, one door, rust streaks, 1 px Void selective outline; closed / door ajar with a purple glint inside / door open and empty
+- negative: gradient, text, clean paint
+
+### prop.crate
+
+- kind prop · one frame 32x32 · 1 frame · states closed, open, empty
+- anchor `anchor.item` · ramp mud · status placeholder
+- prompt: a corporate shipping crate dumped in a sewer, side view, stencilled corner marks, pink-cyan reflective tape strip, 1 px Void selective outline; sealed / lid pried / emptied
+- negative: gradient, readable text, wood
+
+### prop.corpse
+
+- kind prop · one frame 32x32 · 1 frame · states fresh, picked
+- anchor `anchor.slimo` · ramp flesh · status placeholder
+- prompt: a body lying face down on a sewer floor, side view, dark coat, one hand in the water, a faint purple vein glow on the skin; fresh / picked over with the coat open
+- negative: gore, blood pool, outline on every edge
+
+### prop.lamp
+
+- kind prop · one frame 32x32 · 2 frames · states lit, dark
+- anchor `anchor.tile` · ramp neon · status placeholder
+- prompt: a broken caged work light hanging from a sewer ceiling, side view, acid-yellow emitter pixel and a short cone, 2-frame flicker; lit / dark and swinging
+- negative: soft glow gradient, lens flare, white light
+
+### prop.gas
+
+- kind prop · one frame 32x32 · 4 frames · states single
+- anchor `anchor.tile` · ramp bile · status placeholder
+- prompt: a drifting pocket of sewer gas, side view, sickly yellow-green haze in 2-tone dither, 4-frame slow drift, transparent background
+- negative: solid fill, smoke plume, outline
+
+### prop.burrow
+
+- kind prop · one frame 32x32 · 1 frame · states quiet, stirring
+- anchor `anchor.tile` · ramp mud · status placeholder
+- prompt: a sewerat burrow: a ragged hole chewed through sewer brick, side view, dark inside with two flesh-pink eye pixels; quiet / stirring with claws at the lip
+- negative: cartoon mouse hole, outline, gradient
+
+### prop.patrol_mark
+
+- kind prop · one frame 32x32 · 1 frame · states single
+- anchor `anchor.tile` · ramp white · status placeholder
+- prompt: an Oathkeeper waymark chalked on a sewer wall: a small white circle with a bar through it, vestment-white chalk on dark brick, worn
+- negative: cross, religious symbol, outline, glow
+
 structures.toml
 ---------------
 

@@ -8,4 +8,5 @@ license.workspace = true
 [dependencies]
 mat = { path = "../mat" }
 logistics = { path = "../logistics" }
+run = { path = "../run" }
 png.workspace = true

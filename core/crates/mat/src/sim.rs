@@ -15,11 +15,13 @@ pub mod sub {
     pub const WATER: u8 = 5;
     pub const GRATE: u8 = 6;
     pub const CONCRETE: u8 = 7;
-    pub const COUNT: usize = 8;
+    /// rubble across a run chunk: dug to pass; the Mat cannot enter it until it is dug
+    pub const COLLAPSE: u8 = 8;
+    pub const COUNT: usize = 9;
     /// nutrient conductance per substrate
-    pub const COND: [f32; COUNT] = [0.0, 0.40, 0.60, 0.08, 0.40, 0.25, 0.40, 0.04];
+    pub const COND: [f32; COUNT] = [0.0, 0.40, 0.60, 0.08, 0.40, 0.25, 0.40, 0.04, 0.0];
     /// hyphae may enter
-    pub const GROWABLE: [bool; COUNT] = [false, true, true, true, true, true, true, true];
+    pub const GROWABLE: [bool; COUNT] = [false, true, true, true, true, true, true, true, false];
 }
 
 // ---------------------------------------------------------------- hyphal states

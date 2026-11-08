@@ -435,3 +435,212 @@ impl RoseStash {
         }
     }
 }
+
+// ---------------------------------------------------------------- the run
+
+const CHUNKS_TOML: &str = include_str!("../../../data/chunks.toml");
+
+fn chunk_lib() -> run::ChunkLib {
+    // like the item table: the file beside the project wins in debug, the compiled copy ships
+    let path = ProjectSettings::singleton().globalize_path("res://../data/chunks.toml").to_string();
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|_| CHUNKS_TOML.to_string());
+    run::ChunkLib::from_toml(&text).unwrap_or_else(|_| run::ChunkLib::from_toml(CHUNKS_TOML).expect("built-in chunk library"))
+}
+
+/// A run's route map: assembled from the authored chunks for (seed, stratum), exposed as the same substrate codes
+/// the colony uses plus the overlays the Run screen draws. One instance per run.
+#[derive(GodotClass)]
+#[class(base=RefCounted, init)]
+pub struct RoseRun {
+    base: Base<RefCounted>,
+    lib: Option<run::ChunkLib>,
+    map: Option<run::RouteMap>,
+}
+
+#[godot_api]
+impl RoseRun {
+    fn ensure_lib(&mut self) -> &run::ChunkLib {
+        if self.lib.is_none() {
+            self.lib = Some(chunk_lib());
+        }
+        self.lib.as_ref().unwrap()
+    }
+
+    /// Assemble a route. `chunks` 0 draws the count from the seed (8-14). Returns the chunk count, 0 on failure.
+    #[func]
+    fn assemble(&mut self, seed: i64, stratum: i64, chunks: i64) -> i64 {
+        let lib = self.ensure_lib().clone();
+        let lay = if chunks <= 0 { run::route(&lib, seed as u64, stratum as u8) } else { run::assemble(&lib, seed as u64, stratum as u8, chunks as usize) };
+        match lay {
+            Ok(lay) => {
+                let m = run::RouteMap::compile(&lib, &lay);
+                let n = m.chunks.len() as i64;
+                self.map = Some(m);
+                n
+            }
+            Err(e) => {
+                godot_error!("RoseRun.assemble: {e}");
+                0
+            }
+        }
+    }
+
+    #[func]
+    fn library_size(&mut self) -> i64 {
+        self.ensure_lib().chunks.len() as i64
+    }
+
+    #[func]
+    fn width(&self) -> i64 {
+        self.map.as_ref().map_or(0, |m| m.w as i64)
+    }
+
+    #[func]
+    fn height(&self) -> i64 {
+        self.map.as_ref().map_or(0, |m| m.h as i64)
+    }
+
+    #[func]
+    fn chunk_count(&self) -> i64 {
+        self.map.as_ref().map_or(0, |m| m.chunks.len() as i64)
+    }
+
+    #[func]
+    fn substrate(&self) -> PackedByteArray {
+        self.map.as_ref().map_or_else(PackedByteArray::new, |m| PackedByteArray::from(m.substrate.as_slice()))
+    }
+
+    /// 1 where a Runner can stand before anything is dug.
+    #[func]
+    fn passable(&self) -> PackedByteArray {
+        self.map.as_ref().map_or_else(PackedByteArray::new, |m| PackedByteArray::from(m.passable_mask().iter().map(|&p| p as u8).collect::<Vec<u8>>().as_slice()))
+    }
+
+    /// Tile indices of the Mat edge (entry and free extraction).
+    #[func]
+    fn entry(&self) -> PackedInt32Array {
+        self.map.as_ref().map_or_else(PackedInt32Array::new, |m| PackedInt32Array::from(m.entry.iter().map(|&(x, y)| (y as usize * m.w + x as usize) as i32).collect::<Vec<i32>>().as_slice()))
+    }
+
+    /// Tile indices of grates (extraction for a toll).
+    #[func]
+    fn grates(&self) -> PackedInt32Array {
+        self.map.as_ref().map_or_else(PackedInt32Array::new, |m| PackedInt32Array::from(m.grates.iter().map(|&(x, y)| (y as usize * m.w + x as usize) as i32).collect::<Vec<i32>>().as_slice()))
+    }
+
+    /// [{x, y, kind: "locker"|"crate", tier, chunk}]
+    #[func]
+    fn containers(&self) -> VarArray {
+        let mut out = VarArray::new();
+        if let Some(m) = &self.map {
+            for c in &m.containers {
+                let mut d = VarDictionary::new();
+                d.set("x", c.x as i64);
+                d.set("y", c.y as i64);
+                d.set("kind", if c.kind == run::ContainerKind::Crate { "crate" } else { "locker" });
+                d.set("tier", c.tier as i64);
+                d.set("chunk", c.chunk as i64);
+                out.push(&d.to_variant());
+            }
+        }
+        out
+    }
+
+    /// [{x, y, kind: "sewerat"|"patrol"|"corpse", chunk}]
+    #[func]
+    fn spawns(&self) -> VarArray {
+        let mut out = VarArray::new();
+        if let Some(m) = &self.map {
+            for s in &m.spawns {
+                let mut d = VarDictionary::new();
+                d.set("x", s.x as i64);
+                d.set("y", s.y as i64);
+                d.set(
+                    "kind",
+                    match s.kind {
+                        run::SpawnKind::Sewerat => "sewerat",
+                        run::SpawnKind::Patrol => "patrol",
+                        run::SpawnKind::Corpse => "corpse",
+                    },
+                );
+                d.set("chunk", s.chunk as i64);
+                out.push(&d.to_variant());
+            }
+        }
+        out
+    }
+
+    /// [{x, y, radius}]
+    #[func]
+    fn lights(&self) -> VarArray {
+        let mut out = VarArray::new();
+        if let Some(m) = &self.map {
+            for l in &m.lights {
+                let mut d = VarDictionary::new();
+                d.set("x", l.x as i64);
+                d.set("y", l.y as i64);
+                d.set("radius", l.radius as i64);
+                out.push(&d.to_variant());
+            }
+        }
+        out
+    }
+
+    /// [{x, y, kind: "gas"|"collapse"}]
+    #[func]
+    fn hazards(&self) -> VarArray {
+        let mut out = VarArray::new();
+        if let Some(m) = &self.map {
+            for h in &m.hazards {
+                let mut d = VarDictionary::new();
+                d.set("x", h.x as i64);
+                d.set("y", h.y as i64);
+                d.set("kind", if h.kind == run::HazardKind::Gas { "gas" } else { "collapse" });
+                out.push(&d.to_variant());
+            }
+        }
+        out
+    }
+
+    /// [{id, kind, stratum, x0, y0}] in placement order; 0 is the entry chunk.
+    #[func]
+    fn chunks(&self) -> VarArray {
+        let mut out = VarArray::new();
+        if let Some(m) = &self.map {
+            for c in &m.chunks {
+                let mut d = VarDictionary::new();
+                d.set("id", c.id.as_str());
+                d.set("kind", c.kind.as_str());
+                d.set("stratum", c.stratum as i64);
+                d.set("x0", c.x0 as i64);
+                d.set("y0", c.y0 as i64);
+                out.push(&d.to_variant());
+            }
+        }
+        out
+    }
+
+    /// Chunk index per tile, -1 outside every chunk.
+    #[func]
+    fn chunk_of(&self) -> PackedInt32Array {
+        self.map.as_ref().map_or_else(PackedInt32Array::new, |m| {
+            PackedInt32Array::from(m.chunk_of.iter().map(|&c| if c == run::map::NO_CHUNK { -1 } else { c as i32 }).collect::<Vec<i32>>().as_slice())
+        })
+    }
+
+    /// Open a collapse or deposit tile; true when something was dug.
+    #[func]
+    fn dig(&mut self, x: i64, y: i64) -> bool {
+        self.map.as_mut().is_some_and(|m| x >= 0 && y >= 0 && (x as usize) < m.w && (y as usize) < m.h && m.dig(x as usize, y as usize))
+    }
+
+    #[func]
+    fn connectivity(&self) -> f64 {
+        self.map.as_ref().map_or(0.0, |m| m.connectivity() as f64)
+    }
+
+    #[func]
+    fn digest(&self) -> GString {
+        GString::from(self.map.as_ref().map_or_else(String::new, |m| m.digest()).as_str())
+    }
+}

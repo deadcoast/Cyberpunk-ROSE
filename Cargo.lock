@@ -464,6 +464,7 @@ dependencies = [
  "logistics",
  "mat",
  "png",
+ "run",
 ]
 
 [[package]]
@@ -474,6 +475,7 @@ dependencies = [
  "logistics",
  "mat",
  "render",
+ "run",
 ]
 
 [[package]]
@@ -485,6 +487,7 @@ dependencies = [
  "items",
  "logistics",
  "mat",
+ "run",
  "save",
 ]
 
@@ -494,6 +497,15 @@ version = "0.2.0"
 dependencies = [
  "clap",
  "png",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "run"
+version = "0.2.0"
+dependencies = [
+ "mat",
  "serde",
  "toml",
 ]

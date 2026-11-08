@@ -1,6 +1,6 @@
 extends SceneTree
 ## Phase A smoke: the extension loads, every screen instantiates, every asset slot resolves, the Colony runs the sim,
-## the Stash round-trips through the save crate, the Run moves a Runner. Headless.
+## the Stash round-trips through the save crate, the Run assembles a route and moves a Runner. Headless.
 ## Run:  godot --headless --path game --script res://tests/smoke.gd
 
 var main: Node
@@ -35,7 +35,7 @@ func _initialize() -> void:
 	root.add_child(main)
 	sim.ticks_per_frame = 2
 	screen_ids = screens.ids()
-	print("[smoke] extension RoseSim: %s  RoseItems: %s  RoseStash: %s" % [ClassDB.class_exists("RoseSim"), ClassDB.class_exists("RoseItems"), ClassDB.class_exists("RoseStash")])
+	print("[smoke] extension RoseSim: %s  RoseItems: %s  RoseStash: %s  RoseRun: %s" % [ClassDB.class_exists("RoseSim"), ClassDB.class_exists("RoseItems"), ClassDB.class_exists("RoseStash"), ClassDB.class_exists("RoseRun")])
 
 func _check(cond: bool, msg: String) -> void:
 	if not cond:
@@ -86,10 +86,30 @@ func _verify_current() -> void:
 			_check(st.upgrade() and st.width() == 16, "stash: upgrade failed")
 			_check(st.count() >= 10, "stash: items lost on upgrade")
 		"run":
+			var n: int = scr.route.chunk_count()
+			_check(n >= 8 and n <= 14, "run: route has %d chunks, expected 8..14" % n)
+			_check(scr.route.library_size() >= 14, "run: chunk library has %d chunks" % scr.route.library_size())
+			_check(scr.on_mat(), "run: runner did not start on the Mat edge")
+			_check(scr.route.connectivity() >= 0.95, "run: route connectivity %.3f" % scr.route.connectivity())
+			_check(scr.world.substrate.get_used_cells().size() > 2000, "run: route tiles not painted")
+			_check(scr.world.props.get_used_cells().size() >= 8, "run: props not painted (%d)" % scr.world.props.get_used_cells().size())
 			var before: Vector2i = scr.tile
-			var moved: bool = scr.step(Vector2i(1, 0)) or scr.step(Vector2i(-1, 0))
-			_check(moved and scr.tile != before, "run: runner could not move")
+			var moved: bool = scr.step(Vector2i(1, 0))
+			_check(moved and scr.tile != before, "run: runner could not move east off the Mat edge")
+			# dig the first collapse on the route open
+			var dug := false
+			for hz in scr.route.hazards():
+				if hz.kind == "collapse":
+					dug = scr.route.dig(int(hz.x), int(hz.y))
+					break
+			_check(dug or scr.route.hazards().is_empty() or not _has_kind(scr.route.hazards(), "collapse"), "run: dig did not open a collapse")
 	print("[smoke] %-9s ok  slots %d" % [id, slots])
+
+func _has_kind(arr: Array, kind: String) -> bool:
+	for e in arr:
+		if e.kind == kind:
+			return true
+	return false
 
 func _count_slots(n: Node) -> int:
 	var c := 0

@@ -1,7 +1,9 @@
-//! Headless renders in the SEEPAGE palette: the Stack view (circuit board) and a Street view crop.
+//! Headless renders in the SEEPAGE v2 palette: the Stack view (circuit board), a Street view crop, and the route
+//! map of a run.
 
 use logistics::city::{state, City};
 use mat::sim::{hy, is_hyphal, sub, MatSim};
+use run::{ContainerKind, HazardKind, RouteMap, SpawnKind};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -24,10 +26,20 @@ pub mod pal {
     pub const BRUISE: Rgb = [91, 58, 74];
     pub const FLESH_DIM: Rgb = [154, 96, 112];
     pub const FLESH: Rgb = [217, 154, 166];
-    pub const MAT_DARK: Rgb = [15, 46, 28];
-    pub const MAT: Rgb = [31, 110, 58];
-    pub const MAT_LIT: Rgb = [63, 214, 110];
-    pub const MAT_GLOW: Rgb = [182, 255, 200];
+    pub const CONCRETE_NIGHT: Rgb = [35, 39, 55];
+    pub const WET_CONCRETE: Rgb = [52, 58, 79];
+    pub const SEWER_BROWN: Rgb = [74, 53, 38];
+    pub const BILE: Rgb = [46, 58, 30];
+    pub const POND_SCUM: Rgb = [122, 138, 58];
+    pub const FLOOD_LIGHT: Rgb = [53, 103, 156];
+    // the Mat is Ivan's ooze: the SEEPAGE v2 Ooze ramp
+    pub const MAT_DARK: Rgb = [42, 17, 64];
+    pub const MAT: Rgb = [90, 30, 140];
+    pub const MAT_LIT: Rgb = [164, 75, 224];
+    pub const MAT_GLOW: Rgb = [240, 166, 255];
+    pub const MUZZLE_ORANGE: Rgb = [255, 106, 26];
+    pub const VESTMENT_WHITE: Rgb = [242, 239, 228];
+    pub const RELIQUARY_GOLD: Rgb = [212, 165, 42];
     pub const HOT_PINK: Rgb = [255, 46, 151];
     pub const CYAN: Rgb = [25, 230, 255];
     pub const ACID: Rgb = [246, 255, 46];
@@ -218,5 +230,78 @@ pub fn mat_view(sim: &MatSim, pits: &[(usize, usize)], scale: usize) -> Canvas {
         c.put(x, y, pal::ACID);
     }
     let _ = is_hyphal(0);
+    c.scaled(scale)
+}
+
+/// The route map of a run at `scale` px per tile: substrate in the noir ramps, the Mat edge in ooze, lights as
+/// pools, containers, bodies, spawns and hazards as marks; unreached tiles dimmed. Reads like the route card.
+pub fn route_view(m: &RouteMap, scale: usize) -> Canvas {
+    let mut c = Canvas::new(m.w, m.h, pal::SUMP);
+    let reach = m.reachable();
+    for y in 0..m.h {
+        for x in 0..m.w {
+            let i = m.idx(x, y);
+            let far = !reach[i] && run::chunk::substrate_passable(m.substrate[i]);
+            let col = match m.substrate[i] {
+                sub::ROCK => if m.chunk_of[i] == run::map::NO_CHUNK { pal::VOID } else { pal::CULVERT },
+                sub::CONCRETE => pal::CONCRETE_NIGHT,
+                sub::BRICK => pal::SEWER_BROWN,
+                sub::PIPE => pal::RUST_GRAY,
+                sub::WATER => if far { pal::DRAIN_BLUE } else { pal::CISTERN },
+                sub::DEPOSIT => pal::REBAR,
+                sub::GRATE => pal::CHALK,
+                sub::COLLAPSE => pal::OXIDE,
+                _ => if far { pal::CONCRETE_NIGHT } else { pal::WET_CONCRETE },
+            };
+            c.put(x, y, col);
+        }
+    }
+    // light pools: one ring in Flood Light over open tiles
+    for l in &m.lights {
+        let r = l.radius as i64;
+        for dy in -r..=r {
+            for dx in -r..=r {
+                if dx * dx + dy * dy > r * r {
+                    continue;
+                }
+                let (x, y) = (l.x as i64 + dx, l.y as i64 + dy);
+                if x < 0 || y < 0 || x >= m.w as i64 || y >= m.h as i64 {
+                    continue;
+                }
+                let i = m.idx(x as usize, y as usize);
+                if m.substrate[i] == sub::OPEN && (dx + dy).rem_euclid(2) == 0 {
+                    c.put(x as usize, y as usize, pal::FLOOD_LIGHT);
+                }
+            }
+        }
+        c.put(l.x as usize, l.y as usize, pal::ACID);
+    }
+    for hz in &m.hazards {
+        if hz.kind == HazardKind::Gas {
+            c.put(hz.x as usize, hz.y as usize, pal::POND_SCUM);
+        }
+    }
+    for s in &m.spawns {
+        let col = match s.kind {
+            SpawnKind::Sewerat => pal::FLESH_DIM,
+            SpawnKind::Patrol => pal::VESTMENT_WHITE,
+            SpawnKind::Corpse => pal::BRUISE,
+        };
+        c.put(s.x as usize, s.y as usize, col);
+    }
+    for k in &m.containers {
+        c.put(k.x as usize, k.y as usize, if k.kind == ContainerKind::Crate { pal::RELIQUARY_GOLD } else { pal::HOT_PINK });
+    }
+    // the Mat edge: ooze on the entry window and the cells beside it
+    for &(x, y) in &m.entry {
+        c.put(x as usize, y as usize, pal::MAT_GLOW);
+        if (x as usize) + 1 < m.w {
+            c.put(x as usize + 1, y as usize, pal::MAT_LIT);
+        }
+    }
+    // chunk seams: one Void pixel at each chunk corner so the assembly reads
+    for pc in &m.chunks {
+        c.put(pc.x0 as usize, pc.y0 as usize, pal::VOID);
+    }
     c.scaled(scale)
 }

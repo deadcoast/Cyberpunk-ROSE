@@ -57,6 +57,19 @@ enum Cmd {
         #[arg(long, default_value_t = 300)]
         ticks: u64,
     },
+    /// Assemble a run route from the authored chunks and render its map.
+    Route {
+        #[arg(long, default_value_t = 11)]
+        seed: u64,
+        #[arg(long, default_value_t = 1)]
+        stratum: u8,
+        /// chunk count; 0 = from the seed (8-14)
+        #[arg(long, default_value_t = 0)]
+        chunks: usize,
+        /// also sweep this many seeds and report the route statistics
+        #[arg(long, default_value_t = 0)]
+        sweep: u64,
+    },
 }
 
 // ---------------------------------------------------------------- terminal
@@ -279,6 +292,49 @@ fn cmd_bench(t: &Term, seed: u64, ticks: u64) {
     }
 }
 
+fn cmd_route(t: &Term, out: &Path, seed: u64, stratum: u8, chunks: usize, sweep: u64) {
+    let lib = run::ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
+    t.head("route", &format!("seed {seed}  stratum {stratum}  library {} chunks over strata {:?}", lib.chunks.len(), lib.strata()));
+    let lay = if chunks == 0 { run::route(&lib, seed, stratum) } else { run::assemble(&lib, seed, stratum, chunks) }.expect("assemble");
+    let m = run::RouteMap::compile(&lib, &lay);
+    t.hrow(&[("#", 3), ("chunk", 18), ("kind", 9), ("cell", 8), ("joined", 8)]);
+    for (i, p) in lay.placed.iter().enumerate() {
+        let c = lay.chunk(&lib, i);
+        let joined: String = run::Dir::ALL.iter().filter(|d| p.joined & d.bit() != 0).map(|d| d.glyph()).collect();
+        t.row(&[(&i.to_string(), 3), (&c.id, 18), (&c.kind, 9), (&format!("{},{}", p.cx, p.cy), 8), (&joined, 8)]);
+    }
+    t.row(&[(&m.digest(), 100)]);
+    let img = render::route_view(&m, 4);
+    let p = out.join(format!("route_s{stratum}_seed{seed}.png"));
+    img.save_png(&p).expect("png");
+    t.wrote(&p, img.w, img.h);
+    if sweep > 0 {
+        t.hrow(&[("stratum", 8), ("routes", 7), ("chunks", 10), ("containers", 11), ("spawns", 8), ("reach min", 10), ("ms/route", 9)]);
+        for s in lib.strata() {
+            let t0 = Instant::now();
+            let (mut chunks_sum, mut cont_sum, mut spawn_sum, mut reach_min) = (0usize, 0usize, 0usize, 1.0f32);
+            for sd in 0..sweep {
+                let lay = run::route(&lib, sd, s).expect("assemble");
+                let m = run::RouteMap::compile(&lib, &lay);
+                chunks_sum += m.chunks.len();
+                cont_sum += m.containers.len();
+                spawn_sum += m.spawns.len();
+                reach_min = reach_min.min(m.connectivity());
+            }
+            let ms = t0.elapsed().as_secs_f64() * 1000.0 / sweep as f64;
+            t.row(&[
+                (&format!("S{s}"), 8),
+                (&sweep.to_string(), 7),
+                (&format!("{:.1} avg", chunks_sum as f64 / sweep as f64), 10),
+                (&format!("{:.1} avg", cont_sum as f64 / sweep as f64), 11),
+                (&format!("{:.1} avg", spawn_sum as f64 / sweep as f64), 8),
+                (&format!("{:.1}%", reach_min * 100.0), 10),
+                (&format!("{ms:.2}"), 9),
+            ]);
+        }
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
     std::fs::create_dir_all(&cli.out).expect("out dir");
@@ -290,6 +346,7 @@ fn main() {
         Cmd::Evidence { seed } => cmd_evidence(&t, &cli.out, seed),
         Cmd::Scale { seed, agents, grow, ticks } => cmd_scale(&t, &cli.out, seed, agents, grow, ticks),
         Cmd::Bench { seed, ticks } => cmd_bench(&t, seed, ticks),
+        Cmd::Route { seed, stratum, chunks, sweep } => cmd_route(&t, &cli.out, seed, stratum, chunks, sweep),
     }
     println!();
 }

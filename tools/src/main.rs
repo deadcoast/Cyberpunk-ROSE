@@ -310,7 +310,7 @@ fn validate(paths: &Paths, manifest: &Manifest, pal: &Palette) -> bool {
             if off > 0.02 {
                 problems.push(format!("{:.1}% off-palette", off * 100.0));
             }
-            if matches!(slot.kind.as_str(), "sprite" | "icon" | "vfx") {
+            if matches!(slot.kind.as_str(), "sprite" | "icon" | "vfx" | "prop") {
                 // outline rule (art bible): the darkest step of the object's ramp, stepping to Void on dark ground
                 let mut allowed = vec![pal.by_name("Void")];
                 allowed.push(pal.ramp(&slot.ramp)[0]);

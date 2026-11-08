@@ -1,6 +1,6 @@
 [package]
 name = "rose-cli"
-description = "Cyberpunk: ROSE - headless runner: grow, evidence, scale, bench"
+description = "Cyberpunk: ROSE - headless runner: grow, evidence, scale, bench, route"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,4 +13,5 @@ path = "src/main.rs"
 mat = { path = "../mat" }
 logistics = { path = "../logistics" }
 render = { path = "../render" }
+run = { path = "../run" }
 clap.workspace = true
