@@ -263,6 +263,8 @@ pub struct Creature {
     pub shot_cd: i32,
     pub look_left: i32,
     pub dead: bool,
+    /// index into Stimuli.targets of whoever this creature hunts
+    pub target: usize,
     /// cached distance field to the current target tile
     field_target: Option<(i32, i32)>,
     field: Vec<u16>,
@@ -308,6 +310,7 @@ impl Creature {
             shot_cd: 0,
             look_left: 0,
             dead: false,
+            target: 0,
             field_target: None,
             field: Vec::new(),
         }
@@ -487,10 +490,19 @@ pub fn can_see(map: &RouteMap, from: (i32, i32), to: (i32, i32), radius: i32, fa
 }
 
 /// What the senses tell a creature this tick.
-pub struct Stimuli<'a> {
-    pub runner_tile: (i32, i32),
-    pub runner_dodging: bool,
+/// Someone a creature could hunt: the Runner (index 0) or a follower.
+#[derive(Clone, Copy, Debug)]
+pub struct Target {
+    pub tile: (i32, i32),
+    pub dodging: bool,
+    /// how far anything can notice this target (research 07)
     pub notice_range: i32,
+    /// downed bodies draw no hunters
+    pub down: bool,
+}
+
+pub struct Stimuli<'a> {
+    pub targets: &'a [Target],
     pub noise: &'a [u8],
     /// most recent sound position this tick, if any
     pub last_sound: Option<(i32, i32)>,
@@ -500,7 +512,8 @@ pub struct Stimuli<'a> {
 /// Everything a creature did this tick that the sim must apply.
 #[derive(Default)]
 pub struct Outcome {
-    pub attack: Option<Attack>,
+    /// an attack and the index of the target it lands on
+    pub attack: Option<(Attack, usize)>,
     pub became: Option<Phase>,
     pub shot_from: Option<(i32, i32)>,
     pub left: bool,
@@ -516,26 +529,40 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
     let prev = c.phase;
     let me = c.tile();
     let w = map.w as i32;
-    let dist2 = {
-        let dx = st.runner_tile.0 - me.0;
-        let dy = st.runner_tile.1 - me.1;
-        dx * dx + dy * dy
-    };
+    // ---- target: the nearest one this creature can see, else the one it last tracked
+    let facing = if c.kind == Kind::Scout { Some(c.facing) } else { None };
+    let mut best: Option<(usize, i32)> = None;
+    if def.sees && c.phase != Phase::Flee {
+        for (i, t) in st.targets.iter().enumerate() {
+            if t.down {
+                continue;
+            }
+            let d2 = (t.tile.0 - me.0).pow(2) + (t.tile.1 - me.1).pow(2);
+            if best.is_none_or(|(_, bd)| d2 < bd) && can_see(map, me, t.tile, t.notice_range, facing) {
+                best = Some((i, d2));
+            }
+        }
+    }
+    if let Some((i, _)) = best {
+        c.target = i;
+    }
+    if c.target >= st.targets.len() {
+        c.target = 0;
+    }
+    let (tt, t_dodging, t_notice) = st.targets.get(c.target).map_or(((0, 0), false, 1), |t| (t.tile, t.dodging, t.notice_range));
+    let dist2 = (tt.0 - me.0).pow(2) + (tt.1 - me.1).pow(2);
     // ---- stimuli
     let mut stimulated = false;
-    if def.sees && c.phase != Phase::Flee {
-        let facing = if c.kind == Kind::Scout { Some(c.facing) } else { None };
-        if can_see(map, me, st.runner_tile, st.notice_range, facing) {
-            let d = (dist2 as f32).sqrt();
-            let t = 1.0 - (d / st.notice_range.max(1) as f32).clamp(0.0, 1.0);
-            let gain = (aw.sight_gain_min_per_s + (aw.sight_gain_max_per_s - aw.sight_gain_min_per_s) * t) / TICK_HZ as f32;
-            c.awareness = (c.awareness + gain).min(1.0);
-            c.last_known = Some(st.runner_tile);
-            c.saw_runner = true;
-            stimulated = true;
-        } else {
-            c.saw_runner = false;
-        }
+    if best.is_some() {
+        let d = (dist2 as f32).sqrt();
+        let t = 1.0 - (d / t_notice.max(1) as f32).clamp(0.0, 1.0);
+        let gain = (aw.sight_gain_min_per_s + (aw.sight_gain_max_per_s - aw.sight_gain_min_per_s) * t) / TICK_HZ as f32;
+        c.awareness = (c.awareness + gain).min(1.0);
+        c.last_known = Some(tt);
+        c.saw_runner = true;
+        stimulated = true;
+    } else {
+        c.saw_runner = false;
     }
     let heard = st.noise[(me.1 * w + me.0) as usize] >= def.hear;
     if heard && c.phase != Phase::Flee {
@@ -591,7 +618,7 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
     let adjacent = dist2 <= def.reach * def.reach * 2; // reach tiles, diagonals allowed
     match c.phase {
         Phase::Alert => {
-            let target = if c.saw_runner { st.runner_tile } else { c.last_known.unwrap_or(st.runner_tile) };
+            let target = if c.saw_runner { tt } else { c.last_known.unwrap_or(tt) };
             if c.kind == Kind::Burster {
                 if adjacent {
                     if c.fuse_left == 0 {
@@ -603,7 +630,7 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
                 if c.fuse_left > 0 {
                     c.fuse_left -= 1;
                     if c.fuse_left == 0 {
-                        out.attack = Some(Attack::Burst { damage: def.burst_damage, radius: def.burst_radius });
+                        out.attack = Some((Attack::Burst { damage: def.burst_damage, radius: def.burst_radius }, c.target));
                         c.dead = true;
                         c.hp = 0;
                     }
@@ -612,8 +639,8 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
                 }
             } else if c.kind == Kind::Scout && c.saw_runner && def.ranged_damage > 0 && dist2 <= def.range * def.range && !adjacent {
                 // hold and shoot
-                if st.runner_tile.0 != me.0 {
-                    c.facing = (st.runner_tile.0 - me.0).signum();
+                if tt.0 != me.0 {
+                    c.facing = (tt.0 - me.0).signum();
                 }
                 if c.mag == 0 && c.reload_left == 0 {
                     c.reload_left = ticks(def.reload);
@@ -621,8 +648,8 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
                     c.mag -= 1;
                     c.shot_cd = ticks(def.shot_interval);
                     out.shot_from = Some(me);
-                    if !st.runner_dodging {
-                        out.attack = Some(Attack::Shot { damage: def.ranged_damage });
+                    if !t_dodging {
+                        out.attack = Some((Attack::Shot { damage: def.ranged_damage }, c.target));
                     }
                 }
             } else if adjacent && def.damage > 0 {
@@ -633,14 +660,14 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
                     c.windup_left -= 1;
                     if c.windup_left == 0 {
                         c.cooldown_left = ticks(def.cooldown);
-                        if !st.runner_dodging {
+                        if !t_dodging {
                             let grab = if def.grab > 0.0 { ticks(def.grab) } else { 0 };
-                            out.attack = Some(Attack::Bite { damage: def.damage, grab_ticks: grab });
+                            out.attack = Some((Attack::Bite { damage: def.damage, grab_ticks: grab }, c.target));
                         }
                     }
                 }
-                if st.runner_tile.0 != me.0 {
-                    c.facing = (st.runner_tile.0 - me.0).signum();
+                if tt.0 != me.0 {
+                    c.facing = (tt.0 - me.0).signum();
                 }
             } else {
                 c.windup_left = 0;
@@ -705,14 +732,14 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
         Phase::Flee => {
             // run for the burrow; if the Runner is close to it, run for the tile of this chunk farthest from them
             let runner_near_home = {
-                let dx = st.runner_tile.0 - c.home.0;
-                let dy = st.runner_tile.1 - c.home.1;
+                let dx = tt.0 - c.home.0;
+                let dy = tt.1 - c.home.1;
                 dx * dx + dy * dy <= 9
             };
-            let goal = if runner_near_home { farthest_in_chunk(map, c.chunk, st.runner_tile) } else { c.home };
+            let goal = if runner_near_home { farthest_in_chunk(map, c.chunk, tt) } else { c.home };
             if me == goal || !c.step_toward(map, goal, hunt_speed, None) {
                 // hiding: recover only out of the Runner's notice, calm down at 60 %
-                if dist2 > st.notice_range * st.notice_range && c.age % TICK_HZ == 0 {
+                if dist2 > t_notice * t_notice && c.age % TICK_HZ == 0 {
                     c.hp = (c.hp + 1).min(c.max_hp);
                 }
                 if (c.hp as f32) >= 0.6 * c.max_hp as f32 {
@@ -868,13 +895,13 @@ mod tests {
         let mut rng = Pcg32::new(2);
         let salt = vec![false; m.w * m.h];
         // silent and dark: notice range 1 -> stays calm
-        let quiet = Stimuli { runner_tile: runner, runner_dodging: false, notice_range: 1, noise: &silence, last_sound: None, salt: &salt };
+        let quiet = Stimuli { targets: &[Target { tile: runner, dodging: false, notice_range: 1, down: false }], noise: &silence, last_sound: None, salt: &salt };
         for _ in 0..40 {
             update(&mut c, def, &defs.awareness, &m, &quiet, &mut rng);
         }
         assert_eq!(c.phase, Phase::Calm);
         // a sprint step's noise reaches it: feral -> Alert at once and it closes the distance
-        let loud = Stimuli { runner_tile: runner, runner_dodging: false, notice_range: 1, noise: &noise, last_sound: Some(runner), salt: &salt };
+        let loud = Stimuli { targets: &[Target { tile: runner, dodging: false, notice_range: 1, down: false }], noise: &noise, last_sound: Some(runner), salt: &salt };
         update(&mut c, def, &defs.awareness, &m, &loud, &mut rng);
         assert_eq!(c.phase, Phase::Alert, "awareness {}", c.awareness);
         let d0 = (runner.0 - c.tile().0).abs();
@@ -896,7 +923,7 @@ mod tests {
         let noise = vec![0u8; m.w * m.h];
         let salt = vec![false; m.w * m.h];
         let mut rng = Pcg32::new(3);
-        let lit = Stimuli { runner_tile: runner, runner_dodging: false, notice_range: 12, noise: &noise, last_sound: None, salt: &salt };
+        let lit = Stimuli { targets: &[Target { tile: runner, dodging: false, notice_range: 12, down: false }], noise: &noise, last_sound: None, salt: &salt };
         let mut t = 0;
         while c.phase != Phase::Alert && t < 200 {
             update(&mut c, def, &defs.awareness, &m, &lit, &mut rng);
@@ -905,7 +932,7 @@ mod tests {
         assert!(t < 40, "took {t} ticks to notice a lit runner 4 tiles away");
         // the runner vanishes: Alert -> Search -> Calm over the search window
         let far = (m.w as i32 - 2, 0);
-        let gone = Stimuli { runner_tile: far, runner_dodging: false, notice_range: 1, noise: &noise, last_sound: None, salt: &salt };
+        let gone = Stimuli { targets: &[Target { tile: far, dodging: false, notice_range: 1, down: false }], noise: &noise, last_sound: None, salt: &salt };
         let mut saw_search = false;
         for _ in 0..(ticks(defs.awareness.search_s) + 200) {
             update(&mut c, def, &defs.awareness, &m, &gone, &mut rng);
@@ -936,7 +963,7 @@ mod tests {
         let noise = vec![0u8; m.w * m.h];
         let salt = vec![false; m.w * m.h];
         let mut rng = Pcg32::new(9);
-        let nobody = Stimuli { runner_tile: (0, 0), runner_dodging: false, notice_range: 1, noise: &noise, last_sound: None, salt: &salt };
+        let nobody = Stimuli { targets: &[Target { tile: (0, 0), dodging: false, notice_range: 1, down: false }], noise: &noise, last_sound: None, salt: &salt };
         let mut left = false;
         let mut visited = std::collections::HashSet::new();
         for _ in 0..ticks(def.leave_after) + 20 * 60 {
@@ -963,11 +990,11 @@ mod tests {
         let noise = vec![0u8; m.w * m.h];
         let salt = vec![false; m.w * m.h];
         let mut rng = Pcg32::new(4);
-        let close = Stimuli { runner_tile: (start.0 + 1, start.1), runner_dodging: false, notice_range: 12, noise: &noise, last_sound: None, salt: &salt };
+        let close = Stimuli { targets: &[Target { tile: (start.0 + 1, start.1), dodging: false, notice_range: 12, down: false }], noise: &noise, last_sound: None, salt: &salt };
         let mut burst = None;
         for _ in 0..40 {
             let o = update(&mut b, bdef, &defs.awareness, &m, &close, &mut rng);
-            if let Some(Attack::Burst { damage, radius }) = o.attack {
+            if let Some((Attack::Burst { damage, radius }, _)) = o.attack {
                 burst = Some((damage, radius));
                 break;
             }
@@ -987,7 +1014,7 @@ mod tests {
                 salted[(y as usize) * m.w + (start.0 + 2) as usize] = true;
             }
         }
-        let behind_salt = Stimuli { runner_tile: (start.0 + 6, start.1), runner_dodging: false, notice_range: 12, noise: &noise, last_sound: None, salt: &salted };
+        let behind_salt = Stimuli { targets: &[Target { tile: (start.0 + 6, start.1), dodging: false, notice_range: 12, down: false }], noise: &noise, last_sound: None, salt: &salted };
         for _ in 0..60 {
             update(&mut c, cdef, &defs.awareness, &m, &behind_salt, &mut rng);
         }

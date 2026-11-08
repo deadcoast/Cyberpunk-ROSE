@@ -161,6 +161,10 @@ pub enum SourceKind {
     ScoutBody,
     /// a dead sewerat
     RatCorpse,
+    /// a Runner of ours who died here on an earlier run; holds that run's rig
+    OwnCorpse,
+    /// a pile the Runner dropped this run
+    Dropped,
 }
 
 impl SourceKind {
@@ -173,6 +177,7 @@ impl SourceKind {
             SourceKind::Cache => "cache",
             SourceKind::ScoutBody => "scout_drop",
             SourceKind::RatCorpse => "rat_salvage",
+            SourceKind::OwnCorpse | SourceKind::Dropped => "none",
         }
     }
     pub fn name(self) -> &'static str {
@@ -184,6 +189,8 @@ impl SourceKind {
             SourceKind::Cache => "cache",
             SourceKind::ScoutBody => "scout body",
             SourceKind::RatCorpse => "rat corpse",
+            SourceKind::OwnCorpse => "our dead",
+            SourceKind::Dropped => "dropped",
         }
     }
 }
@@ -316,13 +323,20 @@ impl LootState {
             (s.kind, s.tier, s.chunk, s.locked)
         };
         let r = &tables.rules;
+        if kind == SourceKind::OwnCorpse || kind == SourceKind::Dropped {
+            // the contents are what was left there, not a roll
+            let s = &mut self.sources[idx];
+            let revealed = s.items.len();
+            s.state = if revealed == 0 { SourceState::Empty } else { SourceState::Open };
+            return Ok(OpenResult { revealed, notable: 0, damaged: 0, noise: r.noise_corpse, generous: false, forced: false });
+        }
         let (noise, extra_picks, forced) = match (kind, method) {
             (SourceKind::Locker, _) if !locked => (r.noise_locker, 0, false),
             (SourceKind::Locker, OpenMethod::Hands) => (r.noise_locker_force, 0, true),
             (SourceKind::Locker, _) => (r.noise_locker_pry, 0, false),
             (SourceKind::Crate, OpenMethod::PryBar) | (SourceKind::Cache, OpenMethod::PryBar) => (r.noise_crate_pry, 1, false),
             (SourceKind::Crate, _) | (SourceKind::Cache, _) => (r.noise_crate_force, 0, false),
-            (SourceKind::Corpse, _) | (SourceKind::ScoutBody, _) | (SourceKind::RatCorpse, _) => (r.noise_corpse, 0, false),
+            (SourceKind::Corpse, _) | (SourceKind::ScoutBody, _) | (SourceKind::RatCorpse, _) | (SourceKind::OwnCorpse, _) | (SourceKind::Dropped, _) => (r.noise_corpse, 0, false),
             (SourceKind::Pile, _) => (r.noise_pile, 0, false),
         };
         let generous = self.generous() && matches!(kind, SourceKind::Locker | SourceKind::Crate | SourceKind::Cache);

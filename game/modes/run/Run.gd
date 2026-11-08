@@ -23,6 +23,10 @@ const B_INTERACT := 64
 const B_DIG := 128
 const B_TAKE := 256
 const B_LANTERN := 512
+const B_DROP := 32768
+const ORDER_SHIFT := 13
+const FOLLOWERS := [{"id": 101, "name": "Pell", "body": 5, "damage": 4}, {"id": 102, "name": "Rook", "body": 4, "damage": 4}]
+const RUNNER_NAME := "Sable"
 
 var world: WorldView
 var fog: FogOverlay
@@ -43,6 +47,9 @@ var status_line: Label
 var stamina_fill: Control
 var sources := []
 var creature_nodes := {}      # id -> Sprite2D
+var follower_nodes := {}      # id -> Sprite2D
+var follower_line: Label
+var order_pressed := 0
 var flashes := []             # [node, t]
 var labels: Node2D
 var loot_panel: Panel
@@ -73,7 +80,7 @@ func _ready() -> void:
 		push_error("Run: no route assembled")
 	if not memory_bits.is_empty():
 		route.restore_memory(memory_bits)
-	route.begin_run(Sim.run_nonce(), Sim.runs_of(stratum, seed_value), Sim.day, PackedStringArray(KIT), WEAPON, BODY)
+	route.begin_run(Sim.run_nonce(), Sim.runs_of(stratum, seed_value), Sim.day, PackedStringArray(KIT), WEAPON, BODY, FOLLOWERS, Sim.corpses_on(stratum, seed_value))
 	world = WorldView.new()
 	world.bind_sim = false
 	world.draw_crowd = false
@@ -151,7 +158,8 @@ func _build_content(c: Control) -> void:
 		body_lines.append(l)
 	stamina_fill = make_gauge(c, "ui.gauge.ooze", Vector2(0, 280), 1.0, "STAMINA")
 	status_line = make_label(c, "", Vector2(104, 280), UiTheme.HOT_PINK)
-	make_label(c, "WASD  SHIFT sprint  CTRL sneak  Q dim  SPACE dodge  J swing  K shoot  F dig  E open/extract  R take  1-4 kit  L lantern", Vector2(0, 298), UiTheme.DUST)
+	follower_line = make_label(c, "", Vector2(104, 268), UiTheme.CHALK)
+	make_label(c, "WASD  SHIFT sprint  CTRL sneak  Q dim  SPACE dodge  J swing  K shoot  F dig  E open/extract  R take  V drop  1-4 kit  L lantern  Z/X/C follow/hold/guard", Vector2(0, 298), UiTheme.DUST)
 	var quick := HBoxContainer.new()
 	quick.position = Vector2(480, 250)
 	quick.name = "Quick"
@@ -191,6 +199,11 @@ func _gather() -> Array:
 	if Input.is_key_pressed(KEY_F): b |= B_DIG
 	if Input.is_key_pressed(KEY_R): b |= B_TAKE
 	if lantern_pressed: b |= B_LANTERN
+	if Input.is_key_pressed(KEY_V): b |= B_DROP
+	if Input.is_key_pressed(KEY_Z): order_pressed = 1
+	elif Input.is_key_pressed(KEY_X): order_pressed = 2
+	elif Input.is_key_pressed(KEY_C): order_pressed = 3
+	b |= (order_pressed & 3) << ORDER_SHIFT
 	var quick := 0
 	for i in 4:
 		if Input.is_key_pressed(KEY_1 + i):
@@ -227,6 +240,7 @@ func _process(delta: float) -> void:
 		step_with(int(w[0]) | latched, w[1], w[2])
 		latched = 0
 		lantern_pressed = false
+		order_pressed = 0
 		steps += 1
 	# manifest unroll
 	if loot_panel.visible and loot_shown < loot_items.size():
@@ -333,13 +347,59 @@ func _handle_events() -> void:
 				over = "died"
 				over_t = 0.0
 				_flash(runner.position + Vector2(0, -28), "RUNNER DEAD", UiTheme.HOT_PINK)
+				_finish_run()
 			"extracted":
 				over = "extracted"
 				over_t = 0.0
-				Sim.pending_haul = route.rig_export()
-				Sim.pending_haul_from = "S%d route %d" % [stratum, seed_value]
-				Sim.note_run(stratum, seed_value)
 				_flash(runner.position + Vector2(0, -28), "EXTRACTED", UiTheme.OOZE_GLOW)
+				_finish_run()
+			"follower_hit":
+				var fn: Sprite2D = follower_nodes.get(int(e.id))
+				if fn != null:
+					_flash(fn.position + Vector2(0, -36), "-%d" % int(e.damage), UiTheme.HOT_PINK)
+					fn.modulate = Color(1.0, 0.5, 0.6)
+			"follower_down":
+				var fn2: Sprite2D = follower_nodes.get(int(e.id))
+				if fn2 != null:
+					_flash(fn2.position + Vector2(0, -36), "DOWN", UiTheme.HOT_PINK)
+			"follower_strike":
+				var fn3: Sprite2D = follower_nodes.get(int(e.id))
+				if fn3 != null:
+					_flash(fn3.position + Vector2(0, -36), "%d" % int(e.damage), UiTheme.ACID)
+			"ordered":
+				_flash(runner.position + Vector2(0, -28), String(e.order).to_upper(), UiTheme.CHALK)
+			"picked_up":
+				_flash(runner.position + Vector2(0, -28), "CARRIED", UiTheme.CHALK)
+			"set_down":
+				_flash(runner.position + Vector2(0, -28), "SET DOWN", UiTheme.DUST)
+			"dropped":
+				_refresh_sources()
+				_flash(runner.position + Vector2(0, -28), "dropped", UiTheme.DUST)
+
+## The run is over: hand its outcome to the colony and show the summary line.
+func _finish_run() -> void:
+	var o: Dictionary = route.outcome()
+	if o.is_empty():
+		return
+	Sim.take_outcome(stratum, seed_value, RUNNER_NAME, o)
+	var parts := []
+	parts.append(String(o.result).to_upper())
+	parts.append("%d kills" % int(o.kills))
+	parts.append("%d chunks seen" % int(o.chunks_seen))
+	if String(o.result) == "extracted":
+		parts.append("rig worth %d e blind" % int(o.blind_value))
+	elif o.has("corpse"):
+		parts.append("body in %s" % String(o.corpse.chunk))
+	if int(o.get("regrown_count", 0)) > 0:
+		parts.append("%d Spored regrew" % int(o.regrown_count))
+	if int(o.get("mat_haul_count", 0)) > 0:
+		parts.append("the Mat hauled %d" % int(o.mat_haul_count))
+	var fe: PackedInt32Array = o.get("followers_extracted", PackedInt32Array())
+	var fs: PackedInt32Array = o.get("followers_stranded", PackedInt32Array())
+	var fd: PackedInt32Array = o.get("followers_dead", PackedInt32Array())
+	if fe.size() + fs.size() + fd.size() > 0:
+		parts.append("followers: %d out, %d stranded, %d dead" % [fe.size(), fs.size(), fd.size()])
+	status_line.text = "   ".join(parts)
 
 func _flash(pos: Vector2, text: String, color: Color) -> void:
 	var l := Label.new()
@@ -415,6 +475,32 @@ func _sync_view() -> void:
 		if not seen.has(id):
 			creature_nodes[id].queue_free()
 			creature_nodes.erase(id)
+	# followers
+	var fparts := []
+	for f in route.followers():
+		var fid := int(f.id)
+		var n: Sprite2D = follower_nodes.get(fid)
+		if n == null:
+			n = Sprite2D.new()
+			n.texture = Assets.texture("slimo.d1.walk")
+			n.region_enabled = true
+			n.region_rect = Rect2(0, 0, 32, 48)
+			n.centered = false
+			n.offset = Vector2(-16, -40)
+			n.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			n.z_index = 4
+			add_child(n)
+			follower_nodes[fid] = n
+		n.position = Vector2(float(f.x) / 256.0 * WorldView.TILE, float(f.y) / 256.0 * WorldView.TILE)
+		n.flip_h = int(f.facing) < 0
+		n.region_rect = Rect2((int(clock * 8.0) % 8) * 32, 0, 32, 48)
+		n.rotation_degrees = 0 if String(f.life) == "up" else 90
+		n.modulate = n.modulate.lerp(Color.WHITE if String(f.life) == "up" else Color(0.5, 0.5, 0.55), 0.3)
+		if bool(f.windup):
+			n.modulate = Color(1.0, 0.8, 0.8)
+		fparts.append("%s %d/%d %s%s" % [String(f.name), int(f.hp), int(f.max_hp), String(f.order), " CARRYING" if bool(f.carrying) else (" " + String(f.life).to_upper() if String(f.life) != "up" else "")])
+	if follower_line != null:
+		follower_line.text = "  ".join(fparts)
 	# the loot panel closes when the Runner leaves the source
 	if loot_open >= 0 and int(state.get("source_here", -1)) != loot_open:
 		loot_panel.visible = false

@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 2;
+pub const SAVE_VERSION: u16 = 3;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -56,6 +56,22 @@ pub struct RouteMemory {
     pub bits: Vec<u8>,
 }
 
+/// A dead Runner's body on a route (Full Design, Death and recovery): where, when, and the rig it holds. The next run
+/// of that route places it as a loot source after the raider roll.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CorpseRecord {
+    pub seed: u64,
+    pub stratum: u8,
+    pub x: u16,
+    pub y: u16,
+    pub chunk: String,
+    pub day: u32,
+    pub runner: String,
+    /// the Rig, postcard-encoded (inventory::Rig), Spored gear already removed
+    pub rig: Vec<u8>,
+    pub raided: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SaveFile {
     pub version: u16,
@@ -67,40 +83,8 @@ pub struct SaveFile {
     pub snapshots: Vec<Snapshot>,
     pub stash: Stash,
     pub play_ticks: u64,
-    /// since save version 2
     pub route_memory: Vec<RouteMemory>,
-}
-
-/// The version-1 body, kept so old saves load: everything before `route_memory`.
-#[derive(Deserialize)]
-struct SaveFileV1 {
-    #[allow(dead_code)]
-    version: u16,
-    seed: u64,
-    strain_code: Option<String>,
-    difficulty: u8,
-    created_unix: u64,
-    inputs: Vec<TimedInput>,
-    snapshots: Vec<Snapshot>,
-    stash: Stash,
-    play_ticks: u64,
-}
-
-impl From<SaveFileV1> for SaveFile {
-    fn from(v: SaveFileV1) -> Self {
-        SaveFile {
-            version: SAVE_VERSION,
-            seed: v.seed,
-            strain_code: v.strain_code,
-            difficulty: v.difficulty,
-            created_unix: v.created_unix,
-            inputs: v.inputs,
-            snapshots: v.snapshots,
-            stash: v.stash,
-            play_ticks: v.play_ticks,
-            route_memory: Vec::new(),
-        }
-    }
+    pub corpses: Vec<CorpseRecord>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -116,7 +100,7 @@ impl std::fmt::Display for SaveError {
         match self {
             SaveError::BadMagic => write!(f, "not a ROSE save"),
             SaveError::BadChecksum => write!(f, "save is corrupt (checksum)"),
-            SaveError::Version(v) => write!(f, "save version {v} is newer than this build ({SAVE_VERSION})"),
+            SaveError::Version(v) => write!(f, "save version {v} does not match this build ({SAVE_VERSION})"),
             SaveError::Decode(e) => write!(f, "save decode: {e}"),
         }
     }
@@ -144,7 +128,19 @@ impl SaveFile {
             stash: Stash::new(),
             play_ticks: 0,
             route_memory: Vec::new(),
+            corpses: Vec::new(),
         }
+    }
+
+    pub fn corpses_on(&self, seed: u64, stratum: u8) -> Vec<&CorpseRecord> {
+        self.corpses.iter().filter(|c| c.seed == seed && c.stratum == stratum).collect()
+    }
+
+    /// Remove a recovered (or stripped and looted) corpse.
+    pub fn forget_corpse(&mut self, seed: u64, stratum: u8, x: u16, y: u16) -> bool {
+        let n = self.corpses.len();
+        self.corpses.retain(|c| !(c.seed == seed && c.stratum == stratum && c.x == x && c.y == y));
+        self.corpses.len() != n
     }
 
     /// Store a route's fog memory, replacing any earlier record of the same route.
@@ -203,10 +199,11 @@ impl SaveFile {
         if fnv1a(body) != sum {
             return Err(SaveError::BadChecksum);
         }
-        match version {
-            1 => postcard::from_bytes::<SaveFileV1>(body).map(SaveFile::from).map_err(|e| SaveError::Decode(e.to_string())),
-            _ => postcard::from_bytes(body).map_err(|e| SaveError::Decode(e.to_string())),
+        // migrations begin with the first shipped save format; development formats before it do not load
+        if version < SAVE_VERSION {
+            return Err(SaveError::Version(version));
         }
+        postcard::from_bytes(body).map_err(|e| SaveError::Decode(e.to_string()))
     }
 
     /// Strain code: genome as 10 two-hex-digit values plus a class letter and a checksum nibble.
@@ -278,40 +275,28 @@ mod tests {
     }
 
     #[test]
-    fn route_memory_round_trips_and_v1_saves_still_load() {
+    fn route_memory_and_corpses_round_trip_and_older_formats_are_refused() {
         let mut save = SaveFile::new(7, 1);
         save.remember_route(11, 1, 160, 72, vec![0xFF; 160 * 72 / 8]);
         save.remember_route(11, 1, 160, 72, vec![0x0F; 160 * 72 / 8]);
         save.remember_route(12, 2, 192, 48, vec![1; 192 * 48 / 8]);
         assert_eq!(save.route_memory.len(), 2);
+        save.corpses.push(CorpseRecord { seed: 11, stratum: 1, x: 40, y: 13, chunk: "sump_culvert".into(), day: 3, runner: "Pell".into(), rig: vec![1, 2, 3], raided: false });
         let back = SaveFile::decode(&save.encode()).unwrap();
         assert_eq!(back.route_memory(11, 1).unwrap().bits[0], 0x0F);
         assert!(back.route_memory(99, 1).is_none());
-        // a version-1 body: the same struct without route_memory, written with version 1 in the header
-        let v1 = SaveFileV1Out { version: 1, seed: 7, strain_code: None, difficulty: 1, created_unix: 0, inputs: vec![], snapshots: vec![], stash: Stash::new(), play_ticks: 5 };
-        let body = postcard::to_allocvec(&v1).unwrap();
+        assert_eq!(back.corpses_on(11, 1).len(), 1);
+        let mut back = back;
+        assert!(back.forget_corpse(11, 1, 40, 13));
+        assert!(back.corpses_on(11, 1).is_empty());
+        // an older development format is refused by version, not misread
+        let body = postcard::to_allocvec(&save).unwrap();
         let mut bytes = Vec::new();
         bytes.extend_from_slice(MAGIC);
-        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
         bytes.extend_from_slice(&fnv1a(&body).to_le_bytes());
         bytes.extend_from_slice(&body);
-        let migrated = SaveFile::decode(&bytes).unwrap();
-        assert_eq!(migrated.version, SAVE_VERSION);
-        assert_eq!(migrated.play_ticks, 5);
-        assert!(migrated.route_memory.is_empty());
-    }
-
-    #[derive(Serialize)]
-    struct SaveFileV1Out {
-        version: u16,
-        seed: u64,
-        strain_code: Option<String>,
-        difficulty: u8,
-        created_unix: u64,
-        inputs: Vec<TimedInput>,
-        snapshots: Vec<Snapshot>,
-        stash: Stash,
-        play_ticks: u64,
+        assert!(matches!(SaveFile::decode(&bytes), Err(SaveError::Version(2))));
     }
 
     #[test]

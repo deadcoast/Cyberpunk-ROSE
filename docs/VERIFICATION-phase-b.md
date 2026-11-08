@@ -178,3 +178,20 @@ actions (latching and buffering), the extraction hold refused mid-swing (hold, n
 Known gaps, by design of the PAC: followers, the corpse record, raider rolls and Spored regrowth (PAC-024); the HUD
 is text and the rig is a kit (PAC-025/026); lamp carriers and raiders (Phase D); the `[runner]` numbers are the
 first tuning and the loot/creature sweeps will be read together when the shift clock lands.
+
+## PAC-024 — extraction with followers, the corpse record, the raider roll, Mat recovery, Spored regrowth (2026-11-08)
+
+Full Design v3.2 first; research 10 is three sources and five decisions. Followers (`run::follower`) take Follow /
+Hold / Guard, fight on their own, pick up a downed Runner within six tiles and carry them toward the nearest
+extraction tile at 0.6× for twenty tiles; a carrier on an extraction tile holds the channel for both. Creatures hunt
+the nearest target they can see, Runner or follower. The run ends in an `Outcome` (rig or corpse, followers
+extracted / stranded / dead, Mat haul, regrown Spored gear, kills, chunks seen, route memory); the save is v3 with
+`corpses`, and a re-run of the route places each body after a per-day raider roll (10 % + 5 % per stratum). The
+Godot `Sim` autoload takes the outcome, advances the day and feeds the Stash intake. 51 tests in the crate; smoke
+checks followers, orders and the outcome; the play frames show the followers trailing and standing at the Mat edge
+during the channel. Reviewed and fixed from the frames: a press queued behind a swing used to expire (interactions
+now buffer two seconds).
+
+Known gaps: followers are a fixed pair with fists until the colony hands over real slimos and their gear (Phase C);
+stranded followers are recorded, not yet placed on the next run; a body on the route is not yet shown on the route
+card (PAC-025).

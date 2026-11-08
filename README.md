@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase B, the run (PAC-020–023 done).
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase B, the run (PAC-020–024 done).
 
     ./run.sh /path/to/godot4.5
 
@@ -35,8 +35,9 @@ Controls in the shell
 
 ESC menu · nav bar on every screen · Colony: LMB apply tool, TAB view (Street / District / Stack), SPACE pause,
 1/2/3 speed, WASD pan, wheel zoom · Run: WASD move, SHIFT sprint, CTRL sneak, Q (hold) dim veins, SPACE dodge, J swing, K shoot, F + direction dig,
-E open a source (pry bar when carried) or hold E on the Mat or under a grate to extract, R take all, 1–4 use a quick
-slot (antiseptic, stim, salt line), L lantern, TAB stash. The run is `run::sim::RunSim` in Rust at 20 Hz; the screen
+E open a source (pry bar when carried) or hold E on the Mat or under a grate to extract, R take all, V drop the last
+thing taken, 1–4 use a quick slot (antiseptic, stim, salt line), Z/X/C order followers (follow / hold / guard), L lantern,
+TAB stash. The run is `run::sim::RunSim` in Rust at 20 Hz; the screen
 is its view. `game/tests/play.gd` plays a scripted run under Xvfb and saves review frames to docs/shots/play_*.png.
 
 `rose route --seed N --stratum S [--sweep 200]` assembles a run route from `data/chunks.toml`, renders it and its

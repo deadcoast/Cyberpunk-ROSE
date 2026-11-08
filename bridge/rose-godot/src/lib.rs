@@ -448,6 +448,23 @@ impl RoseStash {
         left
     }
 
+    /// Take loose items (postcard Vec<ItemInstance>: a Mat haul, regrown gear) into the Stash. Returns how many did
+    /// not fit.
+    #[func]
+    fn import_items(&mut self, bytes: PackedByteArray) -> i64 {
+        self.ensure();
+        let Ok(items) = postcard::from_bytes::<Vec<ItemInstance>>(bytes.to_vec().as_slice()) else { return -1 };
+        let t = self.table.as_ref().unwrap();
+        let stash = self.stash.as_mut().unwrap();
+        let mut left = 0i64;
+        for it in items {
+            if stash.grid.auto_place(t.def(it.def), it).is_err() {
+                left += 1;
+            }
+        }
+        left
+    }
+
     /// Serialise through the save crate and back; returns true when the round trip reproduces the Stash.
     #[func]
     fn save_round_trip(&mut self) -> bool {
@@ -575,8 +592,10 @@ impl RoseRun {
     /// Start the run: creatures spawn, loot sources arm, the Runner stands on the Mat edge with the kit in the quick
     /// slots and the melee weapon in hand. `nonce` makes this run's contents, `route_runs` is how many runs this route
     /// has had before (0: first run), `day` goes into provenance; `kit` is up to four item ids for the quick slots.
+    /// `followers`: [{id, name, body, damage}] up to two. `corpses`: [{x, y, chunk, day, rig: PackedByteArray,
+    /// raided}] of our dead on this route (from the save); the raider roll runs here.
     #[func]
-    fn begin_run(&mut self, nonce: i64, route_runs: i64, day: i64, kit: PackedStringArray, weapon: GString, body: i64) {
+    fn begin_run(&mut self, nonce: i64, route_runs: i64, day: i64, kit: PackedStringArray, weapon: GString, body: i64, followers: VarArray, corpses: VarArray) {
         let Some(m) = self.map.clone() else { return };
         let table = table();
         let mut rig = inventory::Rig::new(8, 5, 4, 18.0);
@@ -588,6 +607,30 @@ impl RoseRun {
         if let Some((_, inst)) = inventory::instance(&table, &weapon.to_string()) {
             rig.gear.hands[0] = Some(inst);
         }
+        let mut fs = Vec::new();
+        for v in followers.iter_shared() {
+            let Ok(d) = v.try_to::<VarDictionary>() else { continue };
+            fs.push(run::FollowerSetup {
+                id: d.get("id").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(0) as u32,
+                name: d.get("name").map(|v| v.to_string()).unwrap_or_default(),
+                body: d.get("body").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(5) as u8,
+                damage: d.get("damage").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(4) as i32,
+            });
+        }
+        let mut cs = Vec::new();
+        for v in corpses.iter_shared() {
+            let Ok(d) = v.try_to::<VarDictionary>() else { continue };
+            let bytes = d.get("rig").and_then(|v| v.try_to::<PackedByteArray>().ok()).map(|b| b.to_vec()).unwrap_or_default();
+            let Ok(rig) = postcard::from_bytes::<inventory::Rig>(&bytes) else { continue };
+            cs.push(run::Corpse {
+                x: d.get("x").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(0) as u16,
+                y: d.get("y").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(0) as u16,
+                chunk: d.get("chunk").map(|v| v.to_string()).unwrap_or_default(),
+                day: d.get("day").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(0) as u32,
+                rig,
+                raided: d.get("raided").and_then(|v| v.try_to::<bool>().ok()).unwrap_or(false),
+            });
+        }
         let setup = run::RunSetup {
             mat_lume_gene: self.mat_lume_gene,
             memory: self.memory.as_deref(),
@@ -596,8 +639,78 @@ impl RoseRun {
             day: day.max(0) as u32,
             rig,
             body: body.clamp(1, 10) as u8,
+            followers: fs,
+            corpses: cs,
         };
         self.sim = Some(run::RunSim::new(m, table, loot_tables(), creature_defs(), setup));
+    }
+
+    /// Followers: [{id, name, x, y, tx, ty, facing, hp, max_hp, order, life, carrying, windup}]
+    #[func]
+    fn followers(&self) -> VarArray {
+        let mut out = VarArray::new();
+        let Some(s) = self.sim.as_ref() else { return out };
+        for f in &s.followers {
+            let mut d = VarDictionary::new();
+            d.set("id", f.id as i64);
+            d.set("name", f.name.as_str());
+            d.set("x", f.x as i64);
+            d.set("y", f.y as i64);
+            let (tx, ty) = f.tile();
+            d.set("tx", tx as i64);
+            d.set("ty", ty as i64);
+            d.set("facing", f.facing as i64);
+            d.set("hp", f.hp as i64);
+            d.set("max_hp", f.max_hp as i64);
+            d.set("order", f.order.name());
+            d.set("life", match f.life {
+                run::FollowerLife::Up => "up",
+                run::FollowerLife::Down { .. } => "down",
+                run::FollowerLife::Dead => "dead",
+            });
+            d.set("carrying", f.carrying.is_some());
+            d.set("windup", f.windup_left > 0);
+            out.push(&d.to_variant());
+        }
+        out
+    }
+
+    /// The run's outcome once it is over: {result, ticks, rig: bytes, corpse: {x, y, chunk, day, rig: bytes} or null,
+    /// followers_extracted, followers_stranded, followers_dead, mat_haul: bytes (Vec<ItemInstance>), regrown: bytes,
+    /// kills, chunks_seen, blind_value, route_memory: bytes}. Empty while running.
+    #[func]
+    fn outcome(&self) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        let Some(o) = self.sim.as_ref().and_then(|s| s.outcome.as_ref()) else { return d };
+        d.set("result", match o.result {
+            run::RunResult::Extracted { .. } => "extracted",
+            run::RunResult::Died { .. } => "died",
+        });
+        d.set("ticks", o.ticks as i64);
+        d.set("rig", &PackedByteArray::from(o.rig.as_ref().map(|r| postcard::to_allocvec(r).unwrap_or_default()).unwrap_or_default().as_slice()));
+        if let Some(c) = &o.corpse {
+            let mut cd = VarDictionary::new();
+            cd.set("x", c.x as i64);
+            cd.set("y", c.y as i64);
+            cd.set("chunk", c.chunk.as_str());
+            cd.set("day", c.day as i64);
+            cd.set("rig", &PackedByteArray::from(postcard::to_allocvec(&c.rig).unwrap_or_default().as_slice()));
+            cd.set("raided", c.raided);
+            d.set("corpse", &cd);
+        }
+        let ids = |v: &Vec<u32>| PackedInt32Array::from(v.iter().map(|&i| i as i32).collect::<Vec<i32>>().as_slice());
+        d.set("followers_extracted", &ids(&o.followers_extracted));
+        d.set("followers_stranded", &ids(&o.followers_stranded));
+        d.set("followers_dead", &ids(&o.followers_dead));
+        d.set("mat_haul", &PackedByteArray::from(postcard::to_allocvec(&o.mat_haul).unwrap_or_default().as_slice()));
+        d.set("mat_haul_count", o.mat_haul.len() as i64);
+        d.set("regrown", &PackedByteArray::from(postcard::to_allocvec(&o.regrown).unwrap_or_default().as_slice()));
+        d.set("regrown_count", o.regrown.len() as i64);
+        d.set("kills", o.kills as i64);
+        d.set("chunks_seen", o.chunks_seen as i64);
+        d.set("blind_value", o.blind_value as i64);
+        d.set("route_memory", &PackedByteArray::from(o.route_memory.as_slice()));
+        d
     }
 
     /// One tick from the input word (see run::sim::RunInput::pack). Returns false when the run is over.
@@ -966,6 +1079,42 @@ impl RoseRun {
                 run::Event::Dead => d.set("kind", "dead"),
                 run::Event::Extracted => d.set("kind", "extracted"),
                 run::Event::Grabbed => d.set("kind", "grabbed"),
+                run::Event::FollowerHit { id, damage } => {
+                    d.set("kind", "follower_hit");
+                    d.set("id", id as i64);
+                    d.set("damage", damage as i64);
+                }
+                run::Event::FollowerDown { id } => {
+                    d.set("kind", "follower_down");
+                    d.set("id", id as i64);
+                }
+                run::Event::FollowerDead { id } => {
+                    d.set("kind", "follower_dead");
+                    d.set("id", id as i64);
+                }
+                run::Event::FollowerStrike { id, creature, damage } => {
+                    d.set("kind", "follower_strike");
+                    d.set("id", id as i64);
+                    d.set("creature", creature as i64);
+                    d.set("damage", damage as i64);
+                }
+                run::Event::Ordered { order } => {
+                    d.set("kind", "ordered");
+                    d.set("order", order.name());
+                }
+                run::Event::PickedUp { id } => {
+                    d.set("kind", "picked_up");
+                    d.set("id", id as i64);
+                }
+                run::Event::SetDown { id } => {
+                    d.set("kind", "set_down");
+                    d.set("id", id as i64);
+                }
+                run::Event::Dropped { source, id } => {
+                    d.set("kind", "dropped");
+                    d.set("source", source as i64);
+                    d.set("id", id.as_str());
+                }
             }
             out.push(&d.to_variant());
         }

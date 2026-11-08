@@ -225,14 +225,16 @@ pub struct ItemInstance {
     pub found_in_run: bool,
     pub provenance: Option<Provenance>,
     pub pinned: bool,
+    /// Bench-crafted insurance: regrows at the Heart on the Runner's death, once (Full Design, Death and recovery)
+    pub spored: bool,
 }
 
 impl ItemInstance {
     pub fn new(def: ItemId) -> Self {
-        ItemInstance { def, condition: 100, ident: Ident::Full, found_in_run: false, provenance: None, pinned: false }
+        ItemInstance { def, condition: 100, ident: Ident::Full, found_in_run: false, provenance: None, pinned: false, spored: false }
     }
     pub fn found(def: ItemId, condition: u8, prov: Provenance) -> Self {
-        ItemInstance { def, condition, ident: Ident::Unknown, found_in_run: true, provenance: Some(prov), pinned: false }
+        ItemInstance { def, condition, ident: Ident::Unknown, found_in_run: true, provenance: Some(prov), pinned: false, spored: false }
     }
 }
 

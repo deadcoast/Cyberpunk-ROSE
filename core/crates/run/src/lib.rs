@@ -13,6 +13,7 @@ pub mod assemble;
 pub mod chunk;
 pub mod creature;
 pub mod fog;
+pub mod follower;
 pub mod fov;
 pub mod light;
 pub mod loot;
@@ -31,7 +32,8 @@ pub use loot::{LootState, LootTables, OpenMethod, OpenResult, SourceKind, Source
 pub use map::{Container, ContainerKind, Hazard, HazardKind, Light, RouteMap, Spawn, SpawnKind};
 pub use noise::{NoiseEvent, NoiseField, Sound};
 pub use runner::{Action, Life, Runner, StatusKind};
-pub use sim::{Event, RunInput, RunResult, RunSetup, RunSim};
+pub use follower::{Follower, FollowerLife, Order};
+pub use sim::{Corpse, Event, FollowerSetup, Outcome, RunInput, RunResult, RunSetup, RunSim};
 pub use senses::{notice_range, Lume, Motion, Senses};
 
 /// The authored chunk library shipped with the game (data/chunks.toml). Tools and tests use it; the game may

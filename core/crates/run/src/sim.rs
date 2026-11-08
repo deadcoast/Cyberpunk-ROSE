@@ -3,15 +3,16 @@
 //! (Full Design v3.1, Technical architecture: Determinism). Godot gathers input and draws state and events.
 
 use crate::chunk::substrate_passable;
-use crate::creature::{self, Attack, Creature, CreatureFile, Kind, Phase, Stimuli, FP, HALF, TICK_HZ};
+use crate::creature::{self, Attack, Creature, CreatureFile, Kind, Phase, Stimuli, Target, FP, HALF, TICK_HZ};
+use crate::follower::{self, Follower, FollowerContext, FollowerLife, Order};
 use crate::light::Source;
-use crate::loot::{LootState, LootTables, OpenMethod, SourceKind, SourceState};
+use crate::loot::{LootSource, LootState, LootTables, OpenMethod, SourceKind, SourceState};
 use crate::map::RouteMap;
 use crate::noise::Sound;
 use crate::runner::{Action, Life, Pose, Runner, StatusKind, ARMS, LEGS, TORSO};
 use crate::senses::{Motion, Senses};
 use inventory::Rig;
-use items::ItemTable;
+use items::{ItemInstance, ItemTable};
 use mat::rng::Pcg32;
 use mat::sim::sub;
 
@@ -32,6 +33,10 @@ pub struct RunInput {
     pub lantern: bool,
     /// 1-4 uses a quick slot this tick; 0 none
     pub quick: u8,
+    /// 1 follow, 2 hold, 3 guard: an order to every follower; 0 none
+    pub order: u8,
+    /// drop the last thing taken onto the tile
+    pub drop: bool,
 }
 
 impl RunInput {
@@ -43,6 +48,10 @@ impl RunInput {
             }
         }
         b |= ((self.quick & 7) as u16) << 10;
+        b |= ((self.order & 3) as u16) << 13;
+        if self.drop {
+            b |= 1 << 15;
+        }
         (b, self.dx as i16, self.dy as i16)
     }
 
@@ -62,6 +71,8 @@ impl RunInput {
             take: f(8),
             lantern: f(9),
             quick: ((b >> 10) & 7) as u8,
+            order: ((b >> 13) & 3) as u8,
+            drop: b & (1 << 15) != 0,
         }
     }
 }
@@ -87,12 +98,63 @@ pub enum Event {
     Dead,
     Extracted,
     Grabbed,
+    FollowerHit { id: u32, damage: i32 },
+    FollowerDown { id: u32 },
+    FollowerDead { id: u32 },
+    FollowerStrike { id: u32, creature: u32, damage: i32 },
+    Ordered { order: Order },
+    PickedUp { id: u32 },
+    SetDown { id: u32 },
+    Dropped { source: usize, id: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RunResult {
     Extracted { tick: u64 },
     Died { tick: u64 },
+}
+
+/// A dead Runner's body as the sim records it; the save keeps it (save::CorpseRecord) and the next run of the
+/// route places it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Corpse {
+    pub x: u16,
+    pub y: u16,
+    pub chunk: String,
+    pub day: u32,
+    pub rig: Rig,
+    pub raided: bool,
+}
+
+/// A follower brought along: who, and what they fight with.
+#[derive(Clone, Debug)]
+pub struct FollowerSetup {
+    pub id: u32,
+    pub name: String,
+    pub body: u8,
+    pub damage: i32,
+}
+
+/// What a run gives back to the colony. The run never reaches into the colony; the colony reads this.
+#[derive(Clone, Debug)]
+pub struct Outcome {
+    pub result: RunResult,
+    pub ticks: u64,
+    /// the rig, when extracted
+    pub rig: Option<Rig>,
+    /// the body, when died (Spored gear already removed)
+    pub corpse: Option<Corpse>,
+    pub followers_extracted: Vec<u32>,
+    pub followers_stranded: Vec<u32>,
+    pub followers_dead: Vec<u32>,
+    /// items dropped on Mat tiles: the Mat hauls them home either way
+    pub mat_haul: Vec<ItemInstance>,
+    /// Spored gear regrown at the Heart (flag cleared), on death
+    pub regrown: Vec<ItemInstance>,
+    pub kills: u32,
+    pub chunks_seen: u32,
+    pub route_memory: Vec<u8>,
+    pub blind_value: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -105,10 +167,17 @@ pub struct RunSim {
     pub loot: LootState,
     pub runner: Runner,
     pub creatures: Vec<Creature>,
+    pub followers: Vec<Follower>,
     pub salt: Vec<bool>,
     pub tick: u64,
     pub events: Vec<Event>,
     pub result: Option<RunResult>,
+    pub outcome: Option<Outcome>,
+    pub kills: u32,
+    /// indices of loot sources that are the Runner's own dropped piles
+    dropped: Vec<usize>,
+    prev_order: u8,
+    prev_drop: bool,
     rng: Pcg32,
     /// distance moved since the last footstep, in units
     step_accum: i32,
@@ -129,8 +198,10 @@ pub struct RunSim {
     pub open_source: Option<usize>,
 }
 
-/// how long a buffered press waits for the Runner to be free (ticks)
+/// how long a buffered press waits for the Runner to be free (ticks): combat presses briefly, interactions long
+/// enough to outlast a queued swing
 const PRESS_BUFFER: i32 = 8;
+const INTERACT_BUFFER: i32 = 40;
 
 pub struct RunSetup<'a> {
     pub mat_lume_gene: f32,
@@ -140,6 +211,9 @@ pub struct RunSetup<'a> {
     pub day: u32,
     pub rig: Rig,
     pub body: u8,
+    pub followers: Vec<FollowerSetup>,
+    /// corpses of earlier Runners on this route, with the day they died; the raider roll runs here
+    pub corpses: Vec<Corpse>,
 }
 
 impl RunSim {
@@ -154,6 +228,29 @@ impl RunSim {
             let _ = dmg;
             runner.ammo = mag;
         }
+        let runner_total: i32 = runner.max_sections.iter().sum();
+        let mut followers = Vec::new();
+        for (k, fs) in setup.followers.iter().take(2).enumerate() {
+            // beside the Runner on the Mat edge
+            let tile = map.entry.get(if k == 0 { 0 } else { 2 }).copied().unwrap_or(start);
+            followers.push(Follower::new(fs.id, &fs.name, (tile.0 as i32, tile.1 as i32), follower::hp_for(fs.body, runner_total), fs.damage.max(4)));
+        }
+        // the dead of earlier runs: raiders roll once per day since each death, 10 % + 5 % per stratum
+        let mut loot = loot;
+        for c in &setup.corpses {
+            let days = setup.day.saturating_sub(c.day);
+            let mut raided = c.raided;
+            let mut roll = Pcg32::new(map.seed ^ (c.x as u64) << 20 ^ (c.y as u64) << 8 ^ 0x5A1D);
+            let chance = 0.10 + 0.05 * map.stratum as f32;
+            for _ in 0..days {
+                if roll.f32() < chance {
+                    raided = true;
+                }
+            }
+            let items: Vec<ItemInstance> = if raided { Vec::new() } else { c.rig.backpack.items().cloned().chain(c.rig.quick.iter().flatten().cloned()).chain([&c.rig.gear.head, &c.rig.gear.body, &c.rig.gear.feet, &c.rig.gear.back].into_iter().flatten().cloned()).chain(c.rig.gear.hands.iter().flatten().cloned()).collect() };
+            let chunk = map.chunk_of[c.y as usize * map.w + c.x as usize];
+            loot.sources.push(LootSource { x: c.x, y: c.y, kind: SourceKind::OwnCorpse, tier: map.stratum, chunk: if chunk == crate::map::NO_CHUNK { 0 } else { chunk }, locked: false, state: if items.is_empty() { SourceState::Empty } else { SourceState::Closed }, items });
+        }
         let n = map.w * map.h;
         RunSim {
             map,
@@ -164,10 +261,16 @@ impl RunSim {
             loot,
             runner,
             creatures,
+            followers,
             salt: vec![false; n],
             tick: 0,
             events: Vec::new(),
             result: None,
+            outcome: None,
+            kills: 0,
+            dropped: Vec::new(),
+            prev_order: 0,
+            prev_drop: false,
             rng,
             step_accum: 0,
             prev_lantern: false,
@@ -300,9 +403,10 @@ impl RunSim {
             Life::Dead => {
                 self.events.push(Event::Dead);
                 self.result = Some(RunResult::Died { tick: self.tick });
+                self.finish();
                 return;
             }
-            Life::Down { .. } => {}
+            Life::Down { .. } => self.orders(input),
             Life::Up => self.runner_act(&rules, input),
         }
         // the surface under the Runner: deep water soaks
@@ -343,8 +447,9 @@ impl RunSim {
                 }
             }
         }
-        // ---- creatures
+        // ---- creatures and followers
         self.creatures_act(&rules);
+        self.followers_act(&rules);
         // ---- life
         if let Life::Down { left } = self.runner.life {
             if left == creature::ticks(rules.down_s) - 1 {
@@ -376,10 +481,10 @@ impl RunSim {
             self.buf_dodge = PRESS_BUFFER;
         }
         if input.interact && !self.prev_interact {
-            self.buf_interact = PRESS_BUFFER;
+            self.buf_interact = INTERACT_BUFFER;
         }
         if input.take && !self.prev_take {
-            self.buf_take = PRESS_BUFFER;
+            self.buf_take = INTERACT_BUFFER;
         }
         let attack_press = self.buf_attack > 0;
         let shoot_press = self.buf_shoot > 0;
@@ -400,6 +505,11 @@ impl RunSim {
         if self.runner.dimming && !self.runner.spend(dim_cost) {
             self.runner.dimming = false;
         }
+        self.orders(input);
+        if input.drop && !self.prev_drop && matches!(self.runner.action, Action::Idle) {
+            self.drop_last();
+        }
+        self.prev_drop = input.drop;
         let (dx, dy) = (input.dx as i32, input.dy as i32);
         if dx != 0 {
             self.runner.facing = dx.signum();
@@ -471,6 +581,7 @@ impl RunSim {
                         self.events.push(Event::Extracted);
                         self.result = Some(RunResult::Extracted { tick: self.tick });
                         self.runner.action = Action::Idle;
+                        self.finish();
                     } else {
                         self.runner.action = Action::Extract { progress: p };
                     }
@@ -694,6 +805,7 @@ impl RunSim {
             let kind = c.kind;
             let (x, y) = c.tile();
             let chunk = c.chunk;
+            self.kills += 1;
             // a killed burster still bursts, smaller
             if kind == Kind::Burster {
                 let d = self.defs.creature["burster"].death_burst;
@@ -725,9 +837,232 @@ impl RunSim {
                 self.events.push(Event::Down);
             }
         }
+        let rules = self.defs.runner.clone();
+        for k in 0..self.followers.len() {
+            let ft = self.followers[k].tile();
+            if (ft.0 - x).abs() <= radius && (ft.1 - y).abs() <= radius {
+                self.damage_follower(k, damage, by, &rules);
+            }
+        }
         // ooze puddle is loud enough to wake the corridor
         let tick = self.senses.tick;
         self.senses.noise.emit(&self.map, x as usize, y as usize, 9, tick, 2);
+    }
+
+    /// An order to every follower, on the press edge.
+    fn orders(&mut self, input: RunInput) {
+        if input.order != 0 && input.order != self.prev_order {
+            let order = match input.order {
+                1 => Order::Follow,
+                2 => Order::Hold,
+                _ => Order::Guard,
+            };
+            for f in self.followers.iter_mut().filter(|f| f.is_up()) {
+                f.give(order);
+            }
+            self.events.push(Event::Ordered { order });
+        }
+        self.prev_order = input.order;
+    }
+
+    /// Drop the last thing taken onto the tile as a pile the Runner owns; on a Mat tile the Mat hauls it home.
+    fn drop_last(&mut self) {
+        // the highest handle is the last thing placed
+        let Some(handle) = self.runner.rig.backpack.iter().map(|(h, _)| *h).max() else { return };
+        let Some(item) = self.runner.rig.backpack.remove(handle) else { return };
+        let (x, y) = self.runner.tile();
+        let id = self.table.def(item.def).id.clone();
+        let idx = if let Some(i) = self.dropped.iter().copied().find(|&i| self.loot.sources[i].x as i32 == x && self.loot.sources[i].y as i32 == y) {
+            self.loot.sources[i].items.push(item);
+            self.loot.sources[i].state = SourceState::Open;
+            i
+        } else {
+            let chunk = self.map.chunk_of[self.idx(x, y)];
+            let i = self.loot.sources.len();
+            self.loot.sources.push(LootSource { x: x as u16, y: y as u16, kind: SourceKind::Dropped, tier: self.map.stratum, chunk: if chunk == crate::map::NO_CHUNK { 0 } else { chunk }, locked: false, state: SourceState::Open, items: vec![item] });
+            self.dropped.push(i);
+            i
+        };
+        self.runner_sound(Sound::DropItem);
+        self.events.push(Event::Dropped { source: idx, id });
+    }
+
+    /// Is this tile the Mat's: the entry window or the two cord tiles beside it?
+    pub fn on_mat_tile(&self, x: i32, y: i32) -> bool {
+        self.map.entry.iter().any(|&(ex, ey)| ey as i32 == y && (x - ex as i32) >= 0 && (x - ex as i32) <= 2)
+    }
+
+    fn followers_act(&mut self, rules: &crate::creature::RunnerRules) {
+        if self.followers.is_empty() {
+            return;
+        }
+        let runner_down = matches!(self.runner.life, Life::Down { .. });
+        let exit = self.nearest_extraction();
+        let walk = follower::walk_units(rules.walk);
+        let windup = creature::ticks(rules.melee_windup + 0.1);
+        let cooldown = creature::ticks(0.8);
+        let mut runner_pos = (self.runner.x, self.runner.y);
+        let mut strikes: Vec<(usize, i32, bool, u32)> = Vec::new();
+        let mut carried = self.followers.iter().any(|f| f.carrying.is_some());
+        for k in 0..self.followers.len() {
+            let mut f = std::mem::replace(&mut self.followers[k], Follower::new(0, "", (0, 0), 1, 1));
+            let was_carrying = f.carrying.is_some();
+            let out = {
+                let cx = FollowerContext { map: &self.map, runner_tile: self.runner.tile(), runner_down, exit, walk_speed: walk, creatures: &self.creatures, windup_ticks: windup, cooldown_ticks: cooldown };
+                follower::update(&mut f, &cx, &mut runner_pos, carried && !was_carrying)
+            };
+            if out.picked_up {
+                carried = true;
+                self.events.push(Event::PickedUp { id: f.id });
+            }
+            if out.set_down {
+                carried = false;
+                self.events.push(Event::SetDown { id: f.id });
+            }
+            if let Some((ci, dmg, behind)) = out.strike {
+                strikes.push((ci, dmg, behind, f.id));
+            }
+            self.followers[k] = f;
+        }
+        if runner_down {
+            self.runner.x = runner_pos.0;
+            self.runner.y = runner_pos.1;
+            // a carrier standing on an extraction tile holds the channel for both
+            if self.followers.iter().any(|f| f.carrying.is_some()) && self.on_extraction() {
+                let p = match self.runner.action {
+                    Action::Extract { progress } => progress + 1,
+                    _ => 1,
+                };
+                self.runner_sound(Sound::ExtractChannel);
+                if p >= creature::ticks(rules.extract_s) {
+                    self.events.push(Event::Extracted);
+                    self.result = Some(RunResult::Extracted { tick: self.tick });
+                    self.runner.action = Action::Idle;
+                    self.finish();
+                    return;
+                }
+                self.runner.action = Action::Extract { progress: p };
+            } else if matches!(self.runner.action, Action::Extract { .. }) {
+                self.runner.action = Action::Idle;
+            }
+        }
+        for (ci, dmg, behind, fid) in strikes {
+            if ci < self.creatures.len() && !self.creatures[ci].dead {
+                let cid = self.creatures[ci].id;
+                self.events.push(Event::FollowerStrike { id: fid, creature: cid, damage: dmg });
+                self.damage_creature(ci, dmg, behind);
+            }
+        }
+        self.creatures.retain(|c| !c.dead);
+    }
+
+    fn nearest_extraction(&self) -> (i32, i32) {
+        let (rx, ry) = self.runner.tile();
+        self.map
+            .extraction_tiles()
+            .iter()
+            .map(|&(x, y)| (x as i32, y as i32))
+            .min_by_key(|&(x, y)| (x - rx).pow(2) + (y - ry).pow(2))
+            .unwrap_or((rx, ry))
+    }
+
+    fn damage_follower(&mut self, k: usize, damage: i32, by: u32, rules: &crate::creature::RunnerRules) {
+        let f = &mut self.followers[k];
+        if !f.is_up() {
+            return;
+        }
+        f.hp -= damage.max(1);
+        let id = f.id;
+        self.events.push(Event::FollowerHit { id, damage });
+        if f.hp <= 0 {
+            f.hp = 0;
+            f.carrying = None;
+            f.life = FollowerLife::Down { left: follower::down_ticks(rules.down_s) };
+            self.events.push(Event::FollowerDown { id });
+        }
+        let _ = by;
+    }
+
+    /// Build the outcome once the run is over: the rig or the corpse, followers, the Mat haul, Spored regrowth.
+    fn finish(&mut self) {
+        let Some(result) = self.result else { return };
+        let (rx, ry) = self.runner.tile();
+        // the Mat haul: everything the Runner dropped on Mat tiles
+        let mut mat_haul = Vec::new();
+        for &i in &self.dropped {
+            let src = &mut self.loot.sources[i];
+            if self.map.entry.iter().any(|&(ex, ey)| ey == src.y && src.x >= ex && src.x <= ex + 2) {
+                mat_haul.append(&mut src.items);
+                src.state = SourceState::Empty;
+            }
+        }
+        let extract_range2 = follower::EXTRACT_RANGE * follower::EXTRACT_RANGE;
+        let mut extracted_f = Vec::new();
+        let mut stranded = Vec::new();
+        let mut dead_f = Vec::new();
+        for f in &self.followers {
+            match f.life {
+                FollowerLife::Dead => dead_f.push(f.id),
+                _ => {
+                    let ft = f.tile();
+                    let near = (ft.0 - rx).pow(2) + (ft.1 - ry).pow(2) <= extract_range2;
+                    if matches!(result, RunResult::Extracted { .. }) && (near || f.carrying.is_some()) {
+                        extracted_f.push(f.id);
+                    } else {
+                        stranded.push(f.id);
+                    }
+                }
+            }
+        }
+        let blind_value: u32 = self.runner.rig.backpack.items().map(|it| items::price(self.table.def(it.def), it, items::PriceContext::default())).sum();
+        let (rig, corpse, regrown) = match result {
+            RunResult::Extracted { .. } => (Some(self.runner.rig.clone()), None, Vec::new()),
+            RunResult::Died { .. } => {
+                let mut rig = self.runner.rig.clone();
+                let mut regrown = Vec::new();
+                // Spored gear leaves the body and regrows at the Heart, once
+                let spored: Vec<u32> = rig.backpack.iter().filter(|(_, p)| p.item.spored).map(|(h, _)| *h).collect();
+                for h in spored {
+                    if let Some(mut it) = rig.backpack.remove(h) {
+                        it.spored = false;
+                        regrown.push(it);
+                    }
+                }
+                for q in rig.quick.iter_mut() {
+                    if q.as_ref().is_some_and(|it| it.spored) {
+                        let mut it = q.take().unwrap();
+                        it.spored = false;
+                        regrown.push(it);
+                    }
+                }
+                for slot in [&mut rig.gear.head, &mut rig.gear.body, &mut rig.gear.feet, &mut rig.gear.back].into_iter().chain(rig.gear.hands.iter_mut()) {
+                    if slot.as_ref().is_some_and(|it| it.spored) {
+                        let mut it = slot.take().unwrap();
+                        it.spored = false;
+                        regrown.push(it);
+                    }
+                }
+                let chunk = self.map.chunk_of[self.idx(rx, ry)];
+                let chunk_id = self.map.chunks.get(chunk as usize).map_or(String::new(), |c| c.id.clone());
+                (None, Some(Corpse { x: rx as u16, y: ry as u16, chunk: chunk_id, day: self.loot.day, rig, raided: false }), regrown)
+            }
+        };
+        let seen: std::collections::HashSet<u16> = self.senses.fog.state.iter().enumerate().filter(|(_, &st)| st != crate::fog::UNSEEN).map(|(i, _)| self.map.chunk_of[i]).filter(|&c| c != crate::map::NO_CHUNK).collect();
+        self.outcome = Some(Outcome {
+            result,
+            ticks: self.tick,
+            rig,
+            corpse,
+            followers_extracted: extracted_f,
+            followers_stranded: stranded,
+            followers_dead: dead_f,
+            mat_haul,
+            regrown,
+            kills: self.kills,
+            chunks_seen: seen.len() as u32,
+            route_memory: self.senses.fog.memory_bits(),
+            blind_value,
+        });
     }
 
     fn creatures_act(&mut self, rules: &crate::creature::RunnerRules) {
@@ -736,10 +1071,17 @@ impl RunSim {
         let last_sound = self.senses.noise.since(self.senses.tick.saturating_sub(1)).filter(|e| e.actor == 0).last().map(|e| (e.x as i32, e.y as i32));
         let noise = self.senses.noise.level.clone();
         let salt = self.salt.clone();
-        let st = Stimuli { runner_tile, runner_dodging: self.runner.dodging(), notice_range: notice, noise: &noise, last_sound, salt: &salt };
+        // targets: the Runner first, then followers; a follower is as visible as the Runner's lume makes the dark
+        let mut targets: Vec<Target> = vec![Target { tile: runner_tile, dodging: self.runner.dodging(), notice_range: notice, down: !self.runner.is_up() }];
+        for f in &self.followers {
+            let ft = f.tile();
+            let lit = self.senses.light.at(ft.0 as usize, ft.1 as usize).max(2);
+            targets.push(Target { tile: ft, dodging: false, notice_range: crate::senses::notice_range(lit, crate::senses::Motion::Walk), down: !f.is_up() });
+        }
+        let st = Stimuli { targets: &targets, noise: &noise, last_sound, salt: &salt };
         let aw = self.defs.awareness.clone();
         let n = self.creatures.len();
-        let mut attacks: Vec<(usize, Attack)> = Vec::new();
+        let mut attacks: Vec<(usize, Attack, usize)> = Vec::new();
         let mut shots: Vec<(i32, i32, bool)> = Vec::new();
         for i in 0..n {
             let kind = self.creatures[i].kind;
@@ -761,18 +1103,35 @@ impl RunSim {
                 self.senses.noise.emit(&self.map, from.0 as usize, from.1 as usize, def.shot_noise, tick, 2);
                 self.senses.flashes.push(Source { x: from.0 as u16, y: from.1 as u16, emit: crate::light::FLASH_EMIT });
             }
-            if let Some(a) = out.attack {
-                attacks.push((i, a));
+            if let Some((a, t)) = out.attack {
+                attacks.push((i, a, t));
             }
             let _ = tile;
         }
         for (x0, y0, hit) in shots {
             self.events.push(Event::Shot { x0, y0, x1: runner_tile.0, y1: runner_tile.1, by_runner: false, hit });
         }
-        for (i, a) in attacks {
+        for (i, a, t) in attacks {
             let id = self.creatures[i].id;
             let kind = self.creatures[i].kind;
             let def = self.defs.creature[kind.key()].clone();
+            // attacks on followers: one pool, no sections
+            if t > 0 {
+                let k = t - 1;
+                if k < self.followers.len() {
+                    match a {
+                        Attack::Bite { damage, .. } | Attack::Shot { damage } => self.damage_follower(k, damage, id, rules),
+                        Attack::Burst { damage, radius } => {
+                            let (x, y) = self.creatures[i].tile();
+                            self.burst(x, y, damage, radius, id);
+                            let chunk = self.creatures[i].chunk;
+                            let src = self.loot.add_open_source(&self.tables, &self.table, SourceKind::RatCorpse, x as usize, y as usize, chunk);
+                            self.events.push(Event::CreatureDied { id, kind, x, y, source: Some(src) });
+                        }
+                    }
+                }
+                continue;
+            }
             match a {
                 Attack::Bite { damage, grab_ticks } => {
                     if !self.runner.is_up() {
@@ -816,7 +1175,6 @@ impl RunSim {
                 }
             }
         }
-        self.creatures.retain(|c| !c.dead || c.kind == Kind::Scout && false);
         self.creatures.retain(|c| !c.dead);
     }
 
@@ -841,6 +1199,11 @@ impl RunSim {
             mix(c.hp as i64);
             mix((c.awareness * 1000.0) as i64);
         }
+        for f in &self.followers {
+            mix(f.x as i64);
+            mix(f.y as i64);
+            mix(f.hp as i64);
+        }
         mix(self.loot.sources.len() as i64);
         mix(self.senses.fog.seen_count() as i64);
         h
@@ -857,6 +1220,10 @@ mod tests {
     const ITEMS: &str = include_str!("../../../../data/items.toml");
 
     fn sim(seed: u64, stratum: u8) -> RunSim {
+        sim_with(seed, stratum, Vec::new(), Vec::new())
+    }
+
+    fn sim_with(seed: u64, stratum: u8, followers: Vec<FollowerSetup>, corpses: Vec<Corpse>) -> RunSim {
         let l = ChunkLib::from_toml(crate::CHUNKS_TOML).unwrap();
         let m = RouteMap::compile(&l, &route(&l, seed, stratum).unwrap());
         let table = ItemTable::from_toml(ITEMS).unwrap();
@@ -868,7 +1235,11 @@ mod tests {
         rig.quick = vec![Some(lantern), Some(pry), Some(anti), Some(salt)];
         let (_, pipe) = inventory::instance(&table, "ger_pipe").unwrap();
         rig.gear.hands[0] = Some(pipe);
-        RunSim::new(m, table, LootTables::shipped(), CreatureFile::shipped(), RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, body: 5 })
+        RunSim::new(m, table, LootTables::shipped(), CreatureFile::shipped(), RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, body: 5, followers, corpses })
+    }
+
+    fn two_followers() -> Vec<FollowerSetup> {
+        vec![FollowerSetup { id: 101, name: "Pell".into(), body: 5, damage: 4 }, FollowerSetup { id: 102, name: "Rook".into(), body: 4, damage: 4 }]
     }
 
     fn walk(s: &mut RunSim, dx: i8, dy: i8, n: usize, sprint: bool) {
@@ -1061,5 +1432,168 @@ mod tests {
         let (x, y) = s.runner.tile();
         assert!(s.salt[s.idx(x, y)]);
         assert!(s.events.iter().any(|e| matches!(e, Event::Salted { .. })));
+    }
+
+    #[test]
+    fn followers_follow_fight_and_extract_or_strand() {
+        let mut s = sim_with(11, 1, two_followers(), Vec::new());
+        assert_eq!(s.followers.len(), 2);
+        // walk east for four seconds; followers keep within reach
+        walk(&mut s, 1, 0, 80, false);
+        let (rx, ry) = s.runner.tile();
+        for f in &s.followers {
+            let ft = f.tile();
+            assert!((ft.0 - rx).abs() <= 6 && (ft.1 - ry).abs() <= 6, "follower {} fell behind at {ft:?} vs {rx},{ry}", f.name);
+        }
+        // hold: they stop following
+        s.step(RunInput { order: 2, ..Default::default() });
+        assert!(s.followers.iter().all(|f| f.order == Order::Hold));
+        assert!(s.events.iter().any(|e| matches!(e, Event::Ordered { order: Order::Hold })));
+        let posts: Vec<(i32, i32)> = s.followers.iter().map(|f| f.tile()).collect();
+        walk(&mut s, 1, 0, 60, false);
+        let after: Vec<(i32, i32)> = s.followers.iter().map(|f| f.tile()).collect();
+        assert_eq!(posts, after, "held followers moved");
+        // a crawler next to a follower gets struck
+        s.step(RunInput { order: 1, ..Default::default() });
+        let def = s.defs.creature["crawler"].clone();
+        let ft = s.followers[0].tile();
+        let mut c = Creature::new(77, Kind::Crawler, &def, (ft.0 + 1, ft.1), 0);
+        c.phase = Phase::Alert;
+        c.awareness = 1.0;
+        s.creatures.clear();
+        s.creatures.push(c);
+        for _ in 0..ticks(3.0) {
+            s.step(RunInput::default());
+        }
+        assert!(s.events.iter().any(|e| matches!(e, Event::FollowerStrike { id: 101, .. }) || matches!(e, Event::FollowerStrike { id: 102, .. })), "no follower struck the crawler");
+        // extraction: one follower held far away is stranded, the other extracts
+        s.creatures.clear();
+        let (ex, ey) = s.map.entry[1];
+        s.runner.x = ex as i32 * FP + FP / 2;
+        s.runner.y = ey as i32 * FP + FP / 2;
+        s.followers[0].x = s.runner.x + FP;
+        s.followers[0].y = s.runner.y;
+        s.followers[0].order = Order::Hold;
+        s.followers[1].x = s.runner.x + 30 * FP;
+        s.followers[1].order = Order::Hold;
+        for _ in 0..ticks(10.0) + 2 {
+            s.step(RunInput { interact: true, ..Default::default() });
+        }
+        let o = s.outcome.as_ref().expect("outcome");
+        assert!(matches!(o.result, RunResult::Extracted { .. }));
+        assert_eq!(o.followers_extracted, vec![101]);
+        assert_eq!(o.followers_stranded, vec![102]);
+        assert!(o.rig.is_some() && o.corpse.is_none());
+    }
+
+    #[test]
+    fn a_follower_carries_a_downed_runner_and_the_channel_extracts_both() {
+        let mut s = sim_with(11, 1, two_followers(), Vec::new());
+        s.creatures.clear();
+        // the Runner goes down eight tiles from the Mat edge
+        walk(&mut s, 1, 0, 60, false);
+        let rules = s.defs.runner.clone();
+        s.runner.take_damage(&rules, 999, &[0, 1, 0, 0], 0, &mut Pcg32::new(1));
+        assert!(matches!(s.runner.life, Life::Down { .. }));
+        let x_down = s.runner.x;
+        let mut picked = false;
+        let mut extracted = false;
+        for _ in 0..ticks(40.0) {
+            s.step(RunInput::default());
+            if s.events.iter().any(|e| matches!(e, Event::PickedUp { .. })) {
+                picked = true;
+            }
+            if matches!(s.result, Some(RunResult::Extracted { .. })) {
+                extracted = true;
+                break;
+            }
+            s.drain_events();
+        }
+        assert!(picked, "nobody picked the Runner up");
+        assert!(s.runner.x < x_down, "the Runner was not carried toward the Mat edge");
+        assert!(extracted, "the carrier did not extract the Runner (life {:?}, at {:?})", s.runner.life, s.runner.tile());
+        let o = s.outcome.as_ref().unwrap();
+        assert!(o.followers_extracted.len() >= 1);
+    }
+
+    #[test]
+    fn death_leaves_a_corpse_minus_spored_gear_and_the_mat_hauls_drops() {
+        let mut s = sim(11, 1);
+        s.creatures.clear();
+        // take something, flag the pipe Spored, drop one item on the Mat edge, walk off and die
+        let i = (0..s.loot.sources.len()).find(|&i| s.loot.sources[i].state == SourceState::Closed).unwrap();
+        let (sx, sy) = (s.loot.sources[i].x as i32, s.loot.sources[i].y as i32);
+        s.runner.x = sx * FP + FP / 2;
+        s.runner.y = sy * FP + FP / 2;
+        s.step(RunInput { interact: true, ..Default::default() });
+        s.step(RunInput::default());
+        s.step(RunInput { take: true, ..Default::default() });
+        let taken = s.runner.rig.backpack.count();
+        assert!(taken >= 1, "nothing to take from source {i}");
+        if let Some(p) = s.runner.rig.gear.hands[0].as_mut() {
+            p.spored = true;
+        }
+        let (ex, ey) = s.map.entry[1];
+        s.runner.x = ex as i32 * FP + FP / 2 + FP;
+        s.runner.y = ey as i32 * FP + FP / 2;
+        s.step(RunInput::default());
+        s.step(RunInput { drop: true, ..Default::default() });
+        assert!(s.events.iter().any(|e| matches!(e, Event::Dropped { .. })), "{:?}", s.events);
+        assert_eq!(s.runner.rig.backpack.count(), taken - 1);
+        assert!(s.loot.sources.iter().any(|src| src.kind == SourceKind::Dropped && src.items.len() == 1));
+        walk(&mut s, 1, 0, 40, false);
+        let rules = s.defs.runner.clone();
+        s.runner.take_damage(&rules, 999, &[1, 0, 0, 0], 0, &mut Pcg32::new(2));
+        for _ in 0..ticks(rules.down_s) + 3 {
+            s.step(RunInput::default());
+        }
+        let o = s.outcome.as_ref().expect("outcome");
+        assert!(matches!(o.result, RunResult::Died { .. }));
+        let corpse = o.corpse.as_ref().expect("corpse");
+        assert_eq!((corpse.x as i32, corpse.y as i32), s.runner.tile());
+        assert!(!corpse.chunk.is_empty());
+        assert!(corpse.rig.gear.hands[0].is_none(), "the Spored pipe stayed on the body");
+        assert_eq!(o.regrown.len(), 1);
+        assert!(!o.regrown[0].spored, "regrown gear keeps its Spored flag");
+        assert_eq!(o.mat_haul.len(), 1, "the Mat did not haul the dropped item");
+        assert_eq!(corpse.rig.backpack.count(), taken - 1);
+        assert!(o.rig.is_none());
+    }
+
+    #[test]
+    fn a_corpse_on_the_route_can_be_recovered_unless_raiders_rolled() {
+        let table = ItemTable::from_toml(ITEMS).unwrap();
+        let mut rig = Rig::new(8, 5, 4, 18.0);
+        for id in ["chr_street_eye", "prt_pipe", "org_paste"] {
+            let (d, inst) = inventory::instance(&table, id).unwrap();
+            rig.backpack.auto_place(table.def(d), inst).unwrap();
+        }
+        let corpse = |day: u32| Corpse { x: 20, y: 12, chunk: "sump_entry".into(), day, rig: rig.clone(), raided: false };
+        // same day: nobody has been by; the body holds everything
+        let s = sim_with(11, 1, Vec::new(), vec![corpse(1)]);
+        let own = s.loot.sources.iter().find(|src| src.kind == SourceKind::OwnCorpse).expect("own corpse placed");
+        assert_eq!(own.items.len(), 3);
+        assert_eq!(own.state, SourceState::Closed);
+        // open it through the input word and take it all back
+        let mut s = s;
+        s.runner.x = 20 * FP + FP / 2;
+        s.runner.y = 12 * FP + FP / 2;
+        s.step(RunInput { interact: true, ..Default::default() });
+        s.step(RunInput::default());
+        s.step(RunInput { take: true, ..Default::default() });
+        assert_eq!(s.runner.rig.backpack.count(), 3);
+        // forty days on, raiders have been by (10 % + 5 % per stratum, once per day)
+        let s2 = sim_with(11, 1, Vec::new(), vec![corpse(1)]);
+        let _ = s2;
+        let mut s3 = RunSim::new(
+            s.map.clone(),
+            table.clone(),
+            LootTables::shipped(),
+            CreatureFile::shipped(),
+            RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 9, route_runs: 3, day: 41, rig: Rig::new(8, 5, 4, 18.0), body: 5, followers: Vec::new(), corpses: vec![corpse(1)] },
+        );
+        let own = s3.loot.sources.iter().find(|src| src.kind == SourceKind::OwnCorpse).unwrap();
+        assert!(own.items.is_empty() && own.state == SourceState::Empty, "a forty-day-old body was not stripped");
+        s3.step(RunInput::default());
     }
 }

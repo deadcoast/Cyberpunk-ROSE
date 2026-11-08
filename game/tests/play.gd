@@ -12,6 +12,7 @@ var t := 0
 var shots := 0
 var phase := 0
 var crawler_id := -1
+var take_t := 0
 
 func _autoload(name: String, path: String) -> Node:
 	var n := root.get_node_or_null(name)
@@ -136,7 +137,13 @@ func _process(_delta: float) -> bool:
 				phase = 8
 		8:
 			scr.scripted = [scr.B_TAKE, 0, 0]
-			phase = 9
+			take_t = t
+			phase = 13
+		13:
+			# let the take land before leaving the source
+			scr.scripted = [0, 0, 0]
+			if t >= take_t + 12:
+				phase = 9
 		9:
 			# extraction
 			var e0: PackedInt32Array = scr.route.entry()

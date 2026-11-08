@@ -41,6 +41,14 @@ func _build_content(c: Control) -> void:
 		var left: int = stash.import_rig(Sim.pending_haul)
 		Sim.pending_haul = PackedByteArray()
 		haul_note = "   haul from %s: %d in%s" % [Sim.pending_haul_from, stash.count() - before, ("   %d left at the Mat edge: no room" % left) if left > 0 else ""]
+	# what the Mat hauled and what regrew at the Heart
+	if not Sim.pending_items.is_empty():
+		var before2: int = stash.count()
+		var left2 := 0
+		for b in Sim.pending_items:
+			left2 += maxi(0, stash.import_items(b))
+		Sim.pending_items.clear()
+		haul_note += "   the Mat brought %d home%s" % [stash.count() - before2, ("   %d would not fit" % left2) if left2 > 0 else ""]
 	_redraw()
 
 func _add_loot() -> void:
