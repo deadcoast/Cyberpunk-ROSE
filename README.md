@@ -1,7 +1,7 @@
 Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
-An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/Full Design v3.md`.
+An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
 Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase A, foundations.
 
     ./run.sh /path/to/godot4.5
