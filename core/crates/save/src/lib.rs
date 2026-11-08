@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 1;
+pub const SAVE_VERSION: u16 = 2;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -45,6 +45,17 @@ pub struct Snapshot {
     pub stash: Stash,
 }
 
+/// What a route's fog remembers between runs: one bit per tile of the assembled route (run::Fog::memory_bits).
+/// Keyed by the route's (seed, stratum); a size mismatch on load is ignored by the fog.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RouteMemory {
+    pub seed: u64,
+    pub stratum: u8,
+    pub w: u16,
+    pub h: u16,
+    pub bits: Vec<u8>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SaveFile {
     pub version: u16,
@@ -56,6 +67,40 @@ pub struct SaveFile {
     pub snapshots: Vec<Snapshot>,
     pub stash: Stash,
     pub play_ticks: u64,
+    /// since save version 2
+    pub route_memory: Vec<RouteMemory>,
+}
+
+/// The version-1 body, kept so old saves load: everything before `route_memory`.
+#[derive(Deserialize)]
+struct SaveFileV1 {
+    #[allow(dead_code)]
+    version: u16,
+    seed: u64,
+    strain_code: Option<String>,
+    difficulty: u8,
+    created_unix: u64,
+    inputs: Vec<TimedInput>,
+    snapshots: Vec<Snapshot>,
+    stash: Stash,
+    play_ticks: u64,
+}
+
+impl From<SaveFileV1> for SaveFile {
+    fn from(v: SaveFileV1) -> Self {
+        SaveFile {
+            version: SAVE_VERSION,
+            seed: v.seed,
+            strain_code: v.strain_code,
+            difficulty: v.difficulty,
+            created_unix: v.created_unix,
+            inputs: v.inputs,
+            snapshots: v.snapshots,
+            stash: v.stash,
+            play_ticks: v.play_ticks,
+            route_memory: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -98,7 +143,18 @@ impl SaveFile {
             snapshots: Vec::new(),
             stash: Stash::new(),
             play_ticks: 0,
+            route_memory: Vec::new(),
         }
+    }
+
+    /// Store a route's fog memory, replacing any earlier record of the same route.
+    pub fn remember_route(&mut self, seed: u64, stratum: u8, w: u16, h: u16, bits: Vec<u8>) {
+        self.route_memory.retain(|r| !(r.seed == seed && r.stratum == stratum));
+        self.route_memory.push(RouteMemory { seed, stratum, w, h, bits });
+    }
+
+    pub fn route_memory(&self, seed: u64, stratum: u8) -> Option<&RouteMemory> {
+        self.route_memory.iter().find(|r| r.seed == seed && r.stratum == stratum)
     }
 
     pub fn record(&mut self, tick: u64, input: Input) {
@@ -147,7 +203,10 @@ impl SaveFile {
         if fnv1a(body) != sum {
             return Err(SaveError::BadChecksum);
         }
-        postcard::from_bytes(body).map_err(|e| SaveError::Decode(e.to_string()))
+        match version {
+            1 => postcard::from_bytes::<SaveFileV1>(body).map(SaveFile::from).map_err(|e| SaveError::Decode(e.to_string())),
+            _ => postcard::from_bytes(body).map_err(|e| SaveError::Decode(e.to_string())),
+        }
     }
 
     /// Strain code: genome as 10 two-hex-digit values plus a class letter and a checksum nibble.
@@ -216,6 +275,43 @@ mod tests {
         assert_eq!(item.provenance.unwrap().chunk, 9);
         assert_eq!(back.stash.exposed_contraband(&t), 1);
         assert_eq!(back.inputs_from(20).count(), 1);
+    }
+
+    #[test]
+    fn route_memory_round_trips_and_v1_saves_still_load() {
+        let mut save = SaveFile::new(7, 1);
+        save.remember_route(11, 1, 160, 72, vec![0xFF; 160 * 72 / 8]);
+        save.remember_route(11, 1, 160, 72, vec![0x0F; 160 * 72 / 8]);
+        save.remember_route(12, 2, 192, 48, vec![1; 192 * 48 / 8]);
+        assert_eq!(save.route_memory.len(), 2);
+        let back = SaveFile::decode(&save.encode()).unwrap();
+        assert_eq!(back.route_memory(11, 1).unwrap().bits[0], 0x0F);
+        assert!(back.route_memory(99, 1).is_none());
+        // a version-1 body: the same struct without route_memory, written with version 1 in the header
+        let v1 = SaveFileV1Out { version: 1, seed: 7, strain_code: None, difficulty: 1, created_unix: 0, inputs: vec![], snapshots: vec![], stash: Stash::new(), play_ticks: 5 };
+        let body = postcard::to_allocvec(&v1).unwrap();
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(MAGIC);
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&fnv1a(&body).to_le_bytes());
+        bytes.extend_from_slice(&body);
+        let migrated = SaveFile::decode(&bytes).unwrap();
+        assert_eq!(migrated.version, SAVE_VERSION);
+        assert_eq!(migrated.play_ticks, 5);
+        assert!(migrated.route_memory.is_empty());
+    }
+
+    #[derive(Serialize)]
+    struct SaveFileV1Out {
+        version: u16,
+        seed: u64,
+        strain_code: Option<String>,
+        difficulty: u8,
+        created_unix: u64,
+        inputs: Vec<TimedInput>,
+        snapshots: Vec<Snapshot>,
+        stash: Stash,
+        play_ticks: u64,
     }
 
     #[test]

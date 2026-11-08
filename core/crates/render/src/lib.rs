@@ -3,7 +3,7 @@
 
 use logistics::city::{state, City};
 use mat::sim::{hy, is_hyphal, sub, MatSim};
-use run::{ContainerKind, HazardKind, RouteMap, SpawnKind};
+use run::{ContainerKind, HazardKind, LightField, NoiseField, RouteMap, SpawnKind};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -302,6 +302,47 @@ pub fn route_view(m: &RouteMap, scale: usize) -> Canvas {
     // chunk seams: one Void pixel at each chunk corner so the assembly reads
     for pc in &m.chunks {
         c.put(pc.x0 as usize, pc.y0 as usize, pal::VOID);
+    }
+    c.scaled(scale)
+}
+
+/// The route under its light: passable tiles in four steps by light band (unlit Sump, dark Culvert, dim Wet
+/// Concrete, lit Chalk), fixtures in Acid, the Mat edge in Ooze Glow, and a noise footprint in Cyan where `noise`
+/// is live. The dark-by-default check at a glance.
+pub fn route_light_view(m: &RouteMap, light: &LightField, noise: Option<&NoiseField>, scale: usize) -> Canvas {
+    let mut c = Canvas::new(m.w, m.h, pal::VOID);
+    for y in 0..m.h {
+        for x in 0..m.w {
+            let i = m.idx(x, y);
+            let lv = light.level[i];
+            let passable = run::chunk::substrate_passable(m.substrate[i]);
+            let col = if passable {
+                match lv {
+                    0 => pal::SUMP,
+                    1..=2 => pal::CULVERT,
+                    3..=6 => pal::WET_CONCRETE,
+                    _ => pal::CHALK,
+                }
+            } else if m.chunk_of[i] == run::map::NO_CHUNK {
+                pal::VOID
+            } else if lv > 0 {
+                pal::RUST
+            } else {
+                pal::SILT
+            };
+            c.put(x, y, col);
+            if let Some(n) = noise {
+                if n.level[i] > 0 && (x + y) % 2 == 0 {
+                    c.put(x, y, pal::CYAN);
+                }
+            }
+        }
+    }
+    for l in &m.lights {
+        c.put(l.x as usize, l.y as usize, pal::ACID);
+    }
+    for &(x, y) in &m.entry {
+        c.put(x as usize, y as usize, pal::MAT_GLOW);
     }
     c.scaled(scale)
 }

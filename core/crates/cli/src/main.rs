@@ -308,6 +308,31 @@ fn cmd_route(t: &Term, out: &Path, seed: u64, stratum: u8, chunks: usize, sweep:
     let p = out.join(format!("route_s{stratum}_seed{seed}.png"));
     img.save_png(&p).expect("png");
     t.wrote(&p, img.w, img.h);
+    // the senses: how dark the route is, what a lantern does, what a sprint step sounds like
+    let mut senses = run::Senses::new(&m, 0.5, None);
+    let pass: Vec<usize> = (0..m.w * m.h).filter(|&i| run::chunk::substrate_passable(m.substrate[i])).collect();
+    let band = |field: &[u8], lo: u8, hi: u8| pass.iter().filter(|&&i| field[i] >= lo && field[i] <= hi).count() * 100 / pass.len().max(1);
+    t.hrow(&[("light", 8), ("dark", 7), ("dim", 7), ("lit", 7), ("note", 48)]);
+    let st = &senses.light.static_;
+    t.row(&[("authored", 8), (&format!("{}%", band(st, 0, 2)), 7), (&format!("{}%", band(st, 3, 6)), 7), (&format!("{}%", band(st, 7, 15)), 7), ("fixtures, grates and the Mat edge only", 48)]);
+    senses.runner = (m.entry[1].0 as usize + 8, m.entry[1].1 as usize);
+    senses.lume = run::Lume { veins: 2, gear: 6, mat_bonus: 0, dimmed: false, soaked: false };
+    senses.tick(&m);
+    let lit_seen = senses.visible.iter().filter(|&&v| v).count();
+    let lit_exp = (senses.exposure, senses.notice_range());
+    let reached = senses.runner_sound(&m, run::Sound::SprintStep);
+    let light_img = render::route_light_view(&m, &senses.light, Some(&senses.noise), 4);
+    senses.lume = run::Lume { veins: 2, gear: 0, mat_bonus: 0, dimmed: true, soaked: false };
+    senses.tick(&m);
+    let dark_seen = senses.visible.iter().filter(|&&v| v).count();
+    let dark_exp = (senses.exposure, senses.notice_range());
+    t.hrow(&[("runner", 22), ("sees", 7), ("exposure", 9), ("noticed", 8)]);
+    t.row(&[("lantern on, 8 tiles in", 22), (&lit_seen.to_string(), 7), (&format!("{} {}", lit_exp.0, run::LightField::band(lit_exp.0)), 9), (&format!("{} tiles", lit_exp.1), 8)]);
+    t.row(&[("lantern off, veins dimmed", 22), (&dark_seen.to_string(), 7), (&format!("{} {}", dark_exp.0, run::LightField::band(dark_exp.0)), 9), (&format!("{} tiles", dark_exp.1), 8)]);
+    t.row(&[(&format!("a sprint step there reaches {reached} tiles; sewerats hear it at level >= {}, scouts at >= {}", run::noise::HEAR_SEWERAT, run::noise::HEAR_SCOUT), 100)]);
+    let p = out.join(format!("route_light_s{stratum}_seed{seed}.png"));
+    light_img.save_png(&p).expect("png");
+    t.wrote(&p, light_img.w, light_img.h);
     if sweep > 0 {
         t.hrow(&[("stratum", 8), ("routes", 7), ("chunks", 10), ("containers", 11), ("spawns", 8), ("reach min", 10), ("ms/route", 9)]);
         for s in lib.strata() {

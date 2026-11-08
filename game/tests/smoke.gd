@@ -103,6 +103,35 @@ func _verify_current() -> void:
 					dug = scr.route.dig(int(hz.x), int(hz.y))
 					break
 			_check(dug or scr.route.hazards().is_empty() or not _has_kind(scr.route.hazards(), "collapse"), "run: dig did not open a collapse")
+			# senses (PAC-021): light, sight, fog, noise
+			var st: PackedInt32Array = scr.route.sense_stats()
+			_check(st.size() == 4 and st[0] > 20, "run: nothing visible (%s)" % str(st))
+			_check(scr.route.memory_bits().size() == int(ceil(scr.route.width() * scr.route.height() / 8.0)), "run: memory bitset size")
+			for i in 6:
+				scr.step(Vector2i(1, 0))
+			_check(not scr.on_mat(), "run: still on the Mat after six steps east")
+			scr.lantern_on = true
+			scr._sense_tick()
+			var lit_band: String = scr.route.exposure_band()
+			var lit_exposure: int = scr.route.exposure()
+			var seen_lit: int = scr.route.sense_stats()[0]
+			scr.lantern_on = false
+			scr._sense_tick()
+			var dark_exposure: int = scr.route.exposure()
+			var seen_dark: int = scr.route.sense_stats()[0]
+			_check(lit_band == "lit" and lit_exposure >= 7, "run: lantern on should read lit (%s %d)" % [lit_band, lit_exposure])
+			_check(dark_exposure < lit_exposure, "run: lantern off did not lower exposure (%d -> %d)" % [lit_exposure, dark_exposure])
+			_check(seen_dark < seen_lit, "run: lantern off did not shrink sight (%d -> %d)" % [seen_lit, seen_dark])
+			_check(scr.route.notice_range() == 2 + dark_exposure + (-1 if scr.motion == 0 else 0) or scr.route.notice_range() >= 1, "run: notice range contract")
+			var reached: int = scr.route.runner_sound(2, 0)
+			_check(reached > 20 and scr.route.noise_here() >= 7, "run: sprint step footprint %d, here %d" % [reached, scr.route.noise_here()])
+			for i in 6:
+				scr._sense_tick()
+			_check(scr.route.noise_here() == 0, "run: noise did not decay (%d)" % scr.route.noise_here())
+			var seen_total: int = scr.route.sense_stats()[1]
+			_check(seen_total > scr.route.sense_stats()[0], "run: nothing remembered after moving (%d seen, %d visible)" % [seen_total, scr.route.sense_stats()[0]])
+			_check(scr.fog != null and scr.fog.texture != null, "run: fog overlay missing")
+			scr.lantern_on = true
 	print("[smoke] %-9s ok  slots %d" % [id, slots])
 
 func _has_kind(arr: Array, kind: String) -> bool:

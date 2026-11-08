@@ -61,3 +61,53 @@ Vestment White, gas in Pond Scum; unreached pockets dimmed.
 is 1.2 s not 4–10 s until digging has a loot payoff; extraction is a 3 s channel to the Stash with no followers, toll
 or corpse record (PAC-024); no fog or light cone (PAC-021). Chunks are authored in `gen_chunks.py`, not Godot's tile
 editor as the design states; the TOML is the contract either way and the editor export lands with Phase F tooling.
+
+## PAC-021 — `run` crate: fog, light and noise fields (2026-11-08)
+
+**Research first.** `docs/research/07-light-noise-fog.md` reads Thief's light gem and sensory paper, Brogue's
+stealth ranges and lighting, Minecraft's 0–15 propagation, Ford's symmetric shadowcasting, Mark of the Ninja's sound
+rings, Hunt: Showdown's sound traps, Project Zomboid's sneaking multipliers, Tarkov's surface and occlusion reads and
+Darkwood's visibility, and ends in ten decisions; every number ROSE adds is marked ours there.
+
+**What exists.** `run::fov` (symmetric shadowcasting, exact rational slopes), `run::light` (0–15 field, 8-connected
+Dijkstra with integer costs, water ×3, solids take light and stop it, static pass once + dynamic pass per tick),
+`run::noise` (footprints by substrate cost — open 2, pipe 1, brick 3, water 4, rubble 4, rock blocks — decay 2 per
+tick, event ring for the AI, the loudness table and surface adds), `run::fog` (unseen / remembered / visible, memory
+bitset), `run::senses` (lume, exposure, notice range, the 20 Hz tick, the overlay packing). The save format is now
+version 2 with `route_memory` per (seed, stratum) and a v1 migration. The bridge exposes all of it on `RoseRun`
+plus `RoseSim.gene(i)` for the strain's Lume; `rose route` prints the authored light bands and a lantern-on /
+dimmed comparison and writes `route_light_*.png`. In Godot, `fog.gdshader` draws fog, light and noise as a 1-bit
+Bayer dither in Void and Cyan at the art's pixel grid from one RGB8 texel per tile; the Run screen ticks the senses
+at 20 Hz, has sneak (Ctrl), sprint (Shift), dim veins (hold Q, stamina), lantern (L) and shows the light gem as
+numbers until PAC-025 draws the arcs.
+
+**Automated.** `cargo test -p run` — 28 tests (16 new): FOV open room, wall occlusion, radius cap, and symmetry over
+every pair of floor tiles in a fixture; fixture pools fade one step per tile and stop at rock (< ¼ of rock lit by one
+fixture); Mat glow 2 at gene 0 and 8 at gene 1; dynamic sources combine by max and restore the static field exactly;
+water costs three times air; loudness table (sprint 7, gunshot 14, clamp 15) and surface adds; footprint 10 → 9 → 8
+down a corridor, no noise in rock, decay empties the field in 5 ticks, events kept; synthetic corridors reach 10
+(open) / 5 (water) / 19 (pipe) tiles; fog states progress and the memory bitset round-trips, a mismatched size is
+ignored; lume adds, dims, halves when Soaked, clamps at 15 and floors at 1; notice range 3/7/14 at exposure 1/5/12,
++2 sprinting; a lantern Runner sees more than twice the tiles of a dimmed one and is lit; the Mat edge lights a
+Runner standing on it; a sprint step reaches > 20 tiles, overlay packs RGB per tile, memory survives a rebuild.
+`cargo test -p save` — route memory stored, replaced and read back; a hand-built version-1 body decodes and
+migrates. Workspace: 55 tests, 0 failures.
+
+`rose route --seed 11 --stratum 1` — authored light: 92 % dark, 7 % dim, 0 % lit of passable tiles (dark by
+default holds); lantern on eight tiles in: sees 166 tiles, exposure 8 lit, noticed within 9; lantern off and
+dimmed: sees 43, exposure 1 dark, noticed within 2; a sprint step there reaches 83 tiles.
+
+Godot headless smoke — on the Run: > 20 tiles visible at start, memory bitset sized ⌈w·h/8⌉, six steps east leave
+the Mat, lantern on reads "lit" with exposure ≥ 7, lantern off lowers exposure and shrinks sight, a sprint step's
+footprint exceeds 20 tiles with noise ≥ 7 under the Runner, six ticks later it is 0, remembered tiles outnumber
+visible ones after moving, the fog overlay is present. PASS with every earlier check green.
+
+**On the screenshots.** `docs/shots/run.png`: the fog overlay over the route — Void beyond what has been seen, heavy
+dither on remembered tiles, the lantern's pool open around the Runner, lit wall faces reading through the dither.
+`docs/shots/route_light_s1_seed11.png`: the whole route under its authored light with the lantern pool and a sprint
+step's cyan footprint eight tiles in.
+
+**Known gaps, by design of the PAC.** Nothing listens yet: hearing thresholds (sewerat 2, scout 4) and the awareness
+capacitor are PAC-023's. The gear light comes from a lantern toggle, not the rig (PAC-026 wires gear). Route memory
+is produced and restorable but not yet written to the save by the shell (PAC-026). The HUD light gem is text; the arcs
+are PAC-025. Authored sound traps (chains, loose grates) are a later chunk-authoring pass.

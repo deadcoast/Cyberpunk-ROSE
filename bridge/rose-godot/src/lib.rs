@@ -189,6 +189,12 @@ impl RoseSim {
         }
     }
 
+    /// The colony strain's gene value (0..1) by index (mat::genome constants); the Run reads Lume (4).
+    #[func]
+    fn gene(&self, index: i64) -> f64 {
+        self.city.as_ref().map_or(0.5, |c| c.sim.genome.0.get(index as usize).copied().unwrap_or(0.5) as f64)
+    }
+
     #[func]
     fn stats(&self) -> VarDictionary {
         let mut d = VarDictionary::new();
@@ -455,6 +461,8 @@ pub struct RoseRun {
     base: Base<RefCounted>,
     lib: Option<run::ChunkLib>,
     map: Option<run::RouteMap>,
+    senses: Option<run::Senses>,
+    mat_lume_gene: f32,
 }
 
 #[godot_api]
@@ -475,6 +483,7 @@ impl RoseRun {
             Ok(lay) => {
                 let m = run::RouteMap::compile(&lib, &lay);
                 let n = m.chunks.len() as i64;
+                self.senses = Some(run::Senses::new(&m, self.mat_lume_gene, None));
                 self.map = Some(m);
                 n
             }
@@ -637,6 +646,164 @@ impl RoseRun {
     #[func]
     fn connectivity(&self) -> f64 {
         self.map.as_ref().map_or(0.0, |m| m.connectivity() as f64)
+    }
+
+    // ------------------------------------------------------------ senses: light, sight, fog, noise (PAC-021)
+
+    /// Lume gene of the Mat the route starts from (0..1); set before `assemble`.
+    #[func]
+    fn set_mat_lume(&mut self, gene: f64) {
+        self.mat_lume_gene = gene.clamp(0.0, 1.0) as f32;
+    }
+
+    /// Start this run's fog from a previous run's memory of the route (bits from `memory_bits`).
+    #[func]
+    fn restore_memory(&mut self, bits: PackedByteArray) {
+        if let Some(m) = &self.map {
+            let v = bits.to_vec();
+            self.senses = Some(run::Senses::new(m, self.mat_lume_gene, Some(&v)));
+        }
+    }
+
+    /// One bit per tile: everything seen on this route so far. Store it in the save under (seed, stratum).
+    #[func]
+    fn memory_bits(&self) -> PackedByteArray {
+        self.senses.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.fog.memory_bits().as_slice()))
+    }
+
+    /// Advance the senses one tick (20 Hz). motion: 0 still, 1 sneak, 2 walk, 3 sprint, 4 dig.
+    #[func]
+    fn tick(&mut self, x: i64, y: i64, veins: i64, gear_light: i64, dimmed: bool, soaked: bool, eye: i64, motion: i64) {
+        let Some(m) = &self.map else { return };
+        let Some(s) = &mut self.senses else { return };
+        if x < 0 || y < 0 || x as usize >= m.w || y as usize >= m.h {
+            return;
+        }
+        s.runner = (x as usize, y as usize);
+        s.lume.veins = veins.clamp(0, 15) as u8;
+        s.lume.gear = gear_light.clamp(-15, 15) as i32;
+        s.lume.dimmed = dimmed;
+        s.lume.soaked = soaked;
+        s.eye = eye.clamp(0, 10) as u8;
+        s.motion = match motion {
+            1 => run::Motion::Sneak,
+            2 => run::Motion::Walk,
+            3 => run::Motion::Sprint,
+            4 => run::Motion::Dig,
+            _ => run::Motion::Still,
+        };
+        s.tick(m);
+    }
+
+    /// A one-tick light burst (muzzle flash, a carrier's lamp) at a tile; consumed by the next tick.
+    #[func]
+    fn flash(&mut self, x: i64, y: i64, emit: i64) {
+        if let Some(s) = &mut self.senses {
+            s.flashes.push(run::Source { x: x as u16, y: y as u16, emit: emit.clamp(0, 15) as u8 });
+        }
+    }
+
+    /// The Runner makes a sound at their tile. kind: 0 sneak step, 1 walk step, 2 sprint step, 3 dig,
+    /// 4 container open, 5 body pickup, 6 drop item, 7 extraction channel, 8 melee (gear noise in `gear`),
+    /// 9 gunshot (gear noise in `gear`). Returns tiles reached.
+    #[func]
+    fn runner_sound(&mut self, kind: i64, gear: i64) -> i64 {
+        let Some(m) = &self.map else { return 0 };
+        let Some(s) = &mut self.senses else { return 0 };
+        let sound = match kind {
+            0 => run::Sound::SneakStep,
+            1 => run::Sound::WalkStep,
+            2 => run::Sound::SprintStep,
+            3 => run::Sound::Dig,
+            4 => run::Sound::ContainerOpen,
+            5 => run::Sound::BodyPickup,
+            6 => run::Sound::DropItem,
+            7 => run::Sound::ExtractChannel,
+            8 => run::Sound::MeleeSwing(gear as i32),
+            _ => run::Sound::Gunshot(gear as i32),
+        };
+        s.runner_sound(m, sound) as i64
+    }
+
+    /// A sound by something else at a tile (a creature, a hazard, a trap). Returns tiles reached.
+    #[func]
+    fn world_sound(&mut self, x: i64, y: i64, loudness: i64) -> i64 {
+        let Some(m) = &self.map else { return 0 };
+        let Some(s) = &mut self.senses else { return 0 };
+        if x < 0 || y < 0 || x as usize >= m.w || y as usize >= m.h {
+            return 0;
+        }
+        let tick = s.tick;
+        s.noise.emit(m, x as usize, y as usize, loudness.clamp(0, 15) as u8, tick, 3) as i64
+    }
+
+    /// Light level 0-15 per tile.
+    #[func]
+    fn light(&self) -> PackedByteArray {
+        self.senses.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.light.level.as_slice()))
+    }
+
+    /// Fog state per tile: 0 unseen, 1 remembered, 2 visible.
+    #[func]
+    fn fog(&self) -> PackedByteArray {
+        self.senses.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.fog.state.as_slice()))
+    }
+
+    /// Noise level 0-15 per tile, this tick.
+    #[func]
+    fn noise(&self) -> PackedByteArray {
+        self.senses.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.noise.level.as_slice()))
+    }
+
+    /// RGB8 per tile for the fog shader: R light*17, G fog (0/128/255), B noise*17.
+    #[func]
+    fn overlay_rgb(&self) -> PackedByteArray {
+        self.senses.as_ref().map_or_else(PackedByteArray::new, |s| PackedByteArray::from(s.overlay_rgb().as_slice()))
+    }
+
+    #[func]
+    fn is_visible(&self, x: i64, y: i64) -> bool {
+        self.senses.as_ref().is_some_and(|s| x >= 0 && y >= 0 && (x as usize) < s.fog.w && (y as usize) < s.fog.h && s.is_visible(x as usize, y as usize))
+    }
+
+    #[func]
+    fn lume_emit(&self) -> i64 {
+        self.senses.as_ref().map_or(0, |s| s.lume.emit() as i64)
+    }
+
+    #[func]
+    fn see_radius(&self) -> i64 {
+        self.senses.as_ref().map_or(0, |s| s.lume.see_radius(s.eye) as i64)
+    }
+
+    /// max(light at the Runner's tile, lume): the light gem.
+    #[func]
+    fn exposure(&self) -> i64 {
+        self.senses.as_ref().map_or(0, |s| s.exposure as i64)
+    }
+
+    #[func]
+    fn exposure_band(&self) -> GString {
+        GString::from(self.senses.as_ref().map_or("dark", |s| run::LightField::band(s.exposure)))
+    }
+
+    /// How far anything can notice the Runner this tick, in tiles.
+    #[func]
+    fn notice_range(&self) -> i64 {
+        self.senses.as_ref().map_or(0, |s| s.notice_range() as i64)
+    }
+
+    #[func]
+    fn noise_here(&self) -> i64 {
+        self.senses.as_ref().map_or(0, |s| s.noise.at(s.runner.0, s.runner.1) as i64)
+    }
+
+    /// Counts for the HUD and tests: [visible tiles, remembered+visible tiles, live noise tiles, tick].
+    #[func]
+    fn sense_stats(&self) -> PackedInt32Array {
+        self.senses.as_ref().map_or_else(PackedInt32Array::new, |s| {
+            PackedInt32Array::from(&[s.fog.visible_count() as i32, s.fog.seen_count() as i32, s.noise.live_tiles() as i32, s.tick as i32][..])
+        })
     }
 
     #[func]

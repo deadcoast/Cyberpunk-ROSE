@@ -1,15 +1,21 @@
 extends ScreenBase
 ## Expedition: direct control of a Runner on a route assembled by the `run` crate (RoseRun) from the authored
-## chunks, at Street zoom. PAC-020: the route map, its props, the Mat edge as start and extraction, digging through
-## collapses and deposits. Fog, light and noise (PAC-021), loot (PAC-022), threats (PAC-023) and the full
+## chunks, at Street zoom. PAC-020 gave the route, props, the Mat edge as start and extraction, digging. PAC-021
+## adds the senses: light, symmetric sight, fog with route memory, noise footprints; the fog overlay draws them and
+## the HUD shows the one number that matters, exposure. Loot (PAC-022), threats (PAC-023) and the full
 ## extraction/death rules (PAC-024) build on this screen.
 ##
 ## Traversal: slimos are ooze and crawl any surface, so the Runner moves in four directions through every passable
 ## tile of the side-on cross-section; shafts need no ladders.
 
-const DIG_TIME := 1.2   # s per collapse/deposit tile (design: 4-10 s; tuned down until loot lands in PAC-022)
+const DIG_TIME := 1.2        # s per collapse/deposit tile (design: 4-10 s; tuned down until loot lands in PAC-022)
+const SENSE_HZ := 20.0       # the senses tick; fixed so a recorded run replays bit-exact
+const LANTERN_LIGHT := 6     # ger_lantern gear light from data/items.toml
+const VEINS_D2 := 2          # vein glow of a Mod-Depth 2 Runner
+const EYE := 3               # the Runner's Eye stat until Runner sheets land (PAC-032)
 
 var world: WorldView
+var fog: FogOverlay
 var cam: Camera2D
 var runner: Sprite2D
 var route: RoseRun
@@ -18,10 +24,12 @@ var stratum := 1
 var tile := Vector2i(1, 12)
 var move_cd := 0.0
 var clock := 0.0
+var sense_accum := 0.0
 var hp := 1.0
 var stamina := 1.0
 var hud: Label
 var card: Label
+var gem: Label
 var frame := 0
 var anim_t := 0.0
 var passable: PackedByteArray
@@ -35,14 +43,22 @@ var dig_target := Vector2i(-1, -1)
 var dig_t := 0.0
 var extract_t := 0.0
 var extracting := false
+var lantern_on := true
+var dimming := false
+var sneaking := false
+var motion := 0            # 0 still 1 sneak 2 walk 3 sprint 4 dig, as the senses tick reads it
+var memory_bits := PackedByteArray()   # what this route remembered before this run (from the save in PAC-026)
 
 func _ready() -> void:
 	screen_title = "RUN  -  S%d ROUTE %d" % [stratum, seed_value]
 	super._ready()
 	route = RoseRun.new()
+	route.set_mat_lume(Sim.ensure().gene(4))
 	var n := route.assemble(seed_value, stratum, 0)
 	if n == 0:
 		push_error("Run: no route assembled")
+	if not memory_bits.is_empty():
+		route.restore_memory(memory_bits)
 	world = WorldView.new()
 	world.bind_sim = false
 	world.draw_crowd = false
@@ -55,11 +71,16 @@ func _ready() -> void:
 	runner.centered = false
 	runner.offset = Vector2(0, -16)
 	runner.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	runner.z_index = 5
 	add_child(runner)
+	fog = FogOverlay.new()
+	fog.setup(route.width(), route.height())
+	add_child(fog)
 	cam = Camera2D.new()
 	add_child(cam)
 	cam.make_current()
 	_place()
+	_sense_tick()
 
 func _paint_route() -> void:
 	substrate = route.substrate()
@@ -104,7 +125,8 @@ func _build_content(c: Control) -> void:
 	make_gauge(c, "ui.gauge.ooze", Vector2(0, 284), 1.0, "STAMINA")
 	hud = make_label(c, "", Vector2(0, 0), UiTheme.CYAN)
 	card = make_label(c, "", Vector2(0, 12), UiTheme.DUST)
-	make_label(c, "WASD move   SHIFT sprint   F dig   E extract on the Mat or a grate   TAB stash", Vector2(260, 284), UiTheme.DUST)
+	gem = make_label(c, "", Vector2(0, 24), UiTheme.OOZE_GLOW)
+	make_label(c, "WASD move  SHIFT sprint  CTRL sneak  Q dim veins  L lantern  F dig  E extract on the Mat or a grate  TAB stash", Vector2(150, 284), UiTheme.DUST)
 	var quick := HBoxContainer.new()
 	quick.position = Vector2(480, 250)
 	c.add_child(quick)
@@ -148,15 +170,21 @@ func _place() -> void:
 	runner.position = Vector2(tile.x * WorldView.TILE, tile.y * WorldView.TILE)
 	cam.position = runner.position + Vector2(16, 16)
 
+## One step; the footstep is the sound of the current motion on the tile stepped onto.
 func step(dir: Vector2i) -> bool:
 	var t := tile + dir
 	if _open(t):
 		tile = t
 		_place()
+		_sense_tick()
+		match motion:
+			1: route.runner_sound(0, 0)
+			3: route.runner_sound(2, 0)
+			_: route.runner_sound(1, 0)
 		return true
 	return false
 
-## Dig the tile in `dir`; returns true when the dig finished this call.
+## Dig the tile in `dir`; returns true when the dig finished this call. Digging is loud every tick.
 func dig(dir: Vector2i, dt: float) -> bool:
 	var t := tile + dir
 	if not _diggable(t):
@@ -177,10 +205,19 @@ func dig(dir: Vector2i, dt: float) -> bool:
 		return true
 	return false
 
+func _sense_tick() -> void:
+	var gear_light := LANTERN_LIGHT if lantern_on else 0
+	route.tick(tile.x, tile.y, VEINS_D2, gear_light, dimming, false, EYE, motion)
+	if motion == 4:
+		route.runner_sound(3, 0)
+	fog.feed(route.overlay_rgb())
+
 func _process(delta: float) -> void:
 	clock += delta
 	move_cd -= delta
-	var sprint := Input.is_key_pressed(KEY_SHIFT) and stamina > 0.05
+	var sprint := Input.is_key_pressed(KEY_SHIFT) and stamina > 0.05 and not sneaking
+	sneaking = Input.is_key_pressed(KEY_CTRL)
+	dimming = Input.is_key_pressed(KEY_Q) and stamina > 0.02
 	var d := Vector2i.ZERO
 	if Input.is_key_pressed(KEY_W): d = Vector2i(0, -1)
 	elif Input.is_key_pressed(KEY_S): d = Vector2i(0, 1)
@@ -188,16 +225,23 @@ func _process(delta: float) -> void:
 	elif Input.is_key_pressed(KEY_D): d = Vector2i(1, 0)
 	var digging := Input.is_key_pressed(KEY_F) and d != Vector2i.ZERO
 	if digging:
+		motion = 4
 		dig(d, delta)
-	elif move_cd <= 0.0 and d != Vector2i.ZERO:
-		if step(d):
-			move_cd = 0.09 if sprint else 0.16
-			if sprint:
-				stamina = maxf(0.0, stamina - 0.03)
-		runner.flip_h = d.x < 0
+	elif d != Vector2i.ZERO:
+		motion = 1 if sneaking else (3 if sprint else 2)
+		if move_cd <= 0.0:
+			if step(d):
+				move_cd = 0.26 if sneaking else (0.09 if sprint else 0.16)
+				if sprint:
+					stamina = maxf(0.0, stamina - 0.03)
+			runner.flip_h = d.x < 0
+	else:
+		motion = 0
 	if not digging:
 		dig_target = Vector2i(-1, -1)
 		dig_t = 0.0
+	if dimming:
+		stamina = maxf(0.0, stamina - delta * 0.12)
 	if extracting:
 		extract_t += delta
 		if not can_extract():
@@ -206,7 +250,14 @@ func _process(delta: float) -> void:
 		elif extract_t >= 3.0:
 			Screens.show_screen("stash")
 			return
-	stamina = minf(1.0, stamina + delta * 0.08)
+	stamina = minf(1.0, stamina + delta * (0.0 if dimming else 0.08))
+	sense_accum += delta
+	var period := 1.0 / SENSE_HZ
+	while sense_accum >= period:
+		sense_accum -= period
+		if extracting:
+			route.runner_sound(7, 0)
+		_sense_tick()
 	anim_t += delta
 	if anim_t > 0.12:
 		anim_t = 0.0
@@ -218,13 +269,19 @@ func _process(delta: float) -> void:
 		act = "   digging %d%%" % int(dig_t / DIG_TIME * 100.0)
 	elif extracting:
 		act = "   extracting %d%%" % int(extract_t / 3.0 * 100.0)
-	hud.text = "run %02d:%02d   %s   tile %d,%d   %s   %s%s" % [int(clock) / 60, int(clock) % 60, current_chunk(), tile.x, tile.y, where, "sprint" if sprint else "quiet", act]
-	card.text = "route: %d chunks   %d containers   %d lights   lume 6  noise %s" % [route.chunk_count(), containers.size(), route.lights().size(), "loud" if digging else "low"]
+	var pace: String = ["still", "sneaking", "walking", "SPRINTING", "DIGGING"][motion]
+	hud.text = "run %02d:%02d   %s   tile %d,%d   %s   %s%s" % [int(clock) / 60, int(clock) % 60, current_chunk(), tile.x, tile.y, where, pace, act]
+	var st: PackedInt32Array = route.sense_stats()
+	card.text = "route: %d chunks   %d containers   seen %d tiles (%d now)   %s" % [route.chunk_count(), containers.size(), st[1] if st.size() > 1 else 0, st[0] if st.size() > 0 else 0, "lantern ON" if lantern_on else "lantern off"]
+	gem.text = "lume %d   sees %d   exposure %d %s   noticed within %d   noise here %d%s" % [route.lume_emit(), route.see_radius(), route.exposure(), route.exposure_band().to_upper(), route.notice_range(), route.noise_here(), "   VEINS DIMMED" if dimming else ""]
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_E and can_extract():
 			extracting = true
 			extract_t = 0.0
+		elif event.keycode == KEY_L:
+			lantern_on = not lantern_on
+			_sense_tick()
 		elif event.keycode == KEY_TAB:
 			Screens.show_screen("stash")
