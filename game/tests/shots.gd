@@ -51,10 +51,18 @@ func _process(_delta: float) -> bool:
 					placed = scr.place_ghost(int(heart.x) + 1 + dx, int(heart.y) + 1 + dy)
 					if placed >= 0:
 						break
+		# cargo (Full Design v3.11): the curios and tech queued to sell, a quota on the Heart's Pit that pulls the
+		# Chrome; at the shift end they leave the Heart as packets
+		var st: RoseStash = sim.ensure_stash()
+		for it in st.items():
+			if String(it.category) in ["curio", "tech", "organic"] and not bool(it.pinned):
+				st.queue_sell(int(it.handle), 0, sim.day)
+		rs.set_quota(int(heart.id), 2.0, 1)
 		sim.end_shift()
 		scr.set_view(0)
 		scr.cam.position = Vector2((int(heart.x) + 1) * 32 + 16, (int(heart.y) + 1) * 32 + 16)
-		scr.hover_tile(int(heart.x) + 6, int(heart.y) + 4)
+		scr.tool = "select"
+		scr.open_quota(int(heart.id))
 	if frames_on_screen == 6 and screen_i >= 0 and screen_ids[screen_i] == "charter":
 		# the Charter under load: Rationing signed with the Authority the Heart's district paid
 		sim.ensure().sign_law("rationing")

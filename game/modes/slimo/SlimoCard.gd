@@ -167,7 +167,7 @@ func _draw_card() -> void:
 		var col: Color = UiTheme.HOT_PINK if v < 20 else (UiTheme.ACID if v < 40 else UiTheme.OOZE_GLOW)
 		make_label(card_frame, key.to_upper(), Vector2(250, y), UiTheme.DUST)
 		_bar(card_frame, Vector2(300, y + 3), 100, v / 100.0, col, target / 100.0 if key == "mood" else -1.0)
-		make_label(card_frame, str(v) + ("  target %d" % target if key == "mood" else ""), Vector2(406, y), UiTheme.CHALK)
+		make_label(card_frame, str(v) + (" to %d" % target if key == "mood" else ""), Vector2(406, y), UiTheme.CHALK)
 		y += 11
 	var line := int(rec.unrest_line)
 	if line > 0:

@@ -163,3 +163,58 @@ Known gaps: defection has no destination until feral strains and Patrols at the 
 and nobody leaves; Open Grates, Conscription, Quarantine Protocol, Foreman's Cut and Tithe sign, cost and travel but
 their effects arrive with their systems (named on each card); a Bunkhouse or Pod sleeper's defection pause needs
 defection first; Ferality, named in Pass 2 and once in the design, is still undefined.
+
+## PAC-043 — logistics: demand-weighted routing, quotas, jams on the Stack view (2026-11-09)
+
+The source: Pass 2's Automation pillar (cargo routing, quotas, capacity) and its backend list, carried into Full
+Design v3.11 with numbers (Colony mode: The city's clock, Cargo). What I found first: the game's colony was Phase A's
+scale proof — three thousand slimos walking market → nearest Pit and feeding 0.3 on arrival, every market landing
+12–30 synthetic units every 15 ticks, and a FEED tool that dropped 5 nutrient anywhere — so the Mat lived on food
+nobody sent. Measured (research 16): without it the founding Mat loses a fifth in five minutes at 2 Hz; at Pass 1's
+125-step shift it recedes about 5 % a shift unfed and its core holds on ~4 nutrient a shift. Decisions written back:
+the Mat steps every 12 ticks (125 steps in a 12.5-minute shift) while cargo and slimos keep 2 Hz; the Mat eats only
+its Pits, its Deposits and Bait paid from the Stash; the phantoms stay in `rose scale` only; the founding is named
+for what it is (more Mat than one Runner feeds) until chapter 1 replaces it; hauls arrive at the Heart, so the split
+to quotas happens there by Pass 2's routing rule; a quota counts what is riding to it (Factorio's in-transit rule).
+
+`logistics`: `City::game` (no crowd, the Mat clock, markets are the grates the Mat reaches, index-stable), consumers
+with signal-weighted Dijkstra fields (a tile costs 1 + 2 × (1 − σ)), `choose` by demand per tile with low priority
+last and ties toward the Heart, packets with cargo ids released from their source at capacity, re-routing at each
+rebuild, spills off dead Mat, jams as a full tile with cargo waiting to enter it (half speed there), the roster's
+movers on walk fields; the scale proof behind `synthetic`. `inventory::Ledger`: shipments in flight, `dispatch_queue`,
+`pull` (the quotas, lowest tier then cheapest, never pinned), `land` (a sale at the glut it finds, a feed's nutrient
+and drift, a Part into a Still's store, a product home or held at the Heart), `spill`, `divert`, `close_shift`.
+`colony`: quotas on Pits and Stills (`quota_of`: yours, the foreman's — what the members ate from the Mat last shift
+— or a Still's slots; capped at the Pit's stock), the Foreman's Cut (one landing in twenty), the Pits as the Heart
+then every built Pit, the Still and Salt Works per slot. Save v9 carries the cargo, the stores, the held products,
+the report so far and the quotas. The bridge lands arrivals as the city ticks (`bind_stash`), dispatches at the shift
+end, refreshes demands every rebuild, and returns the Stack view drawn by `render::stack_view`.
+
+The game: SELECT replaces FEED; clicking a Pit or a Still opens its quota card (keep, whose, stock, riding, the tier
+ceiling, DEFAULT); Bait takes a Common Chrome from the Stash or says it has none; packets ride as pulses in their
+tier's colour (Street, District); the Stack view is the core's circuit board with jams Chalk white; the slimos on the
+map are the roster by depth, walking to work or home; the Stash's ledger shows what landed this shift and what is
+on the Mat; the Route Board takes the crew off the map.
+
+Reviewed by eye (`docs/shots/colony*.png`): four packets on a tile overlapped into one square — drawn side by side
+now; the Stack view at a thirty-second zoom only sampled the placeholder tiles' texels and the traffic vanished in the
+Mat's own pinks — it is now the core's one-pixel-a-tile image; every convoy of four the Heart released counted as a
+jam forever — a jam is now Pass 2's "above capacity", a full tile with cargo waiting behind it; the quota card sat
+over the trunk the cargo rides — moved above the tool bar; the District view still drew PAC-041's 8-tile box though
+PAC-042 made districts 12 cords — it draws the true reach now, and the Cut's stock when there is one.
+
+Tests: 1 in `logistics::field` (the bright trunk beats the dim shortcut), 5 new in `logistics::city` (the game city
+has no phantoms and keeps its own Mat clock and its markets are grates; cargo goes by demand per tile and lands once;
+sixty at once jam and all land; a lost consumer's cargo re-routes; movers walk to work and home), 5 in the ledger
+(a sale pays when it lands at the glut it finds; a feed lands where it arrives; a quota pulls cheapest-first, counts
+what rides and skips the pinned; the pull serves demand per tile and low priority last; a Still keeps its Parts, a
+product rides home, a spill is lost), 1 in `colony` (quotas default off / the foreman's / a Still's slots, yours
+capped at the stock, the Cut takes one in twenty once it reaches the district); the save round trip carries cargo and
+a quota; 123 in the workspace. The smoke checks the movers are the roster, the quota card, Bait's cost, the Stack
+image, and that a feed and two sales leave at the shift end, pay nothing on the way and land (the genome drifts, the
+eddies arrive) as the city ticks.
+
+Known gaps: stockpile zones hold nothing yet and haulers carry nothing off the Mat (PAC-044, with the Colony
+screens); Salt, Sever and Relay on the tool bar are still the Phase A verbs without their costs (PAC-044); the Vault
+takes cargo when Attention exists (Phase D); Patrols do not yet path toward a white trunk (Phase D); the founding is
+the scale proof's stratum until chapter 1 (Phase E); the Stack view shows one stratum, not the stack of six.

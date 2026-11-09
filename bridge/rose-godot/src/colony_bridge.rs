@@ -111,7 +111,7 @@ pub fn zones_array(colony: &Colony) -> VarArray {
     out
 }
 
-pub fn districts_array(colony: &Colony, people: Option<&RosePeople>, defs: Option<&StructureFile>) -> VarArray {
+pub fn districts_array(colony: &Colony, people: Option<&RosePeople>, defs: Option<&StructureFile>, mat: Option<&mat::MatSim>) -> VarArray {
     let mut out = VarArray::new();
     for d in &colony.districts {
         let mut e = VarDictionary::new();
@@ -131,6 +131,22 @@ pub fn districts_array(colony: &Colony, people: Option<&RosePeople>, defs: Optio
         e.set("strike", d.strike);
         e.set("ready_to_defect", d.ready_to_defect);
         e.set("refusals", d.refusals as i64);
+        // the foreman's cargo demand and stock (v3.11): what the members ate, what the Cut took
+        e.set("ate", d.ate as f64);
+        e.set("cut", d.cut as i64);
+        // the reach: the bounding box of the tiles within 12 cords of the hub
+        if let Some(m) = mat {
+            let reach = colony::charter::cord_reach(m, &[d.hub.1 as usize * m.w + d.hub.0 as usize], colony::DISTRICT_CORDS);
+            let (mut x0, mut y0, mut x1, mut y1) = (d.hub.0 as i64, d.hub.1 as i64, d.hub.0 as i64, d.hub.1 as i64);
+            for i in reach.keys() {
+                let (x, y) = ((i % m.w) as i64, (i / m.w) as i64);
+                x0 = x0.min(x);
+                y0 = y0.min(y);
+                x1 = x1.max(x);
+                y1 = y1.max(y);
+            }
+            e.set("reach", &PackedInt32Array::from([x0 as i32, y0 as i32, x1 as i32, y1 as i32].as_slice()));
+        }
         e.set("board", defs.is_some_and(|defs| colony.has_board(defs, d)));
         let mut p = VarDictionary::new();
         if let Some(pet) = &d.petition {
@@ -262,32 +278,14 @@ pub fn laws_array(colony: &Colony, laws: &colony::LawFile, mat: &mat::MatSim) ->
     out
 }
 
-/// Apply the shift's Stash-side effects: salt and doses into the grid, identifications, the lanterns' oil and the
-/// paste from the ledger. Returns the lines.
+/// Apply the shift's Stash-side effects: identifications, the lanterns' oil and the paste from the ledger. What the
+/// Stills and Salt Works make rides home as cargo (cargo_bridge::dispatch_shift). Returns the lines.
 pub fn apply_to_stash(o: &ShiftOutcome, stash: &mut RoseStash) -> Vec<String> {
     let mut lines = Vec::new();
     if o.identifies > 0 {
         let n = stash.identify_n(o.identifies as usize);
         if n > 0 {
             lines.push(format!("the Appraisal Table named {n} item{}", if n == 1 { "" } else { "s" }));
-        }
-    }
-    if o.salt > 0 {
-        let n = stash.add_by_id("prt_salt", o.salt as usize, 90);
-        lines.push(format!("the Salt Works made {n} salt"));
-    }
-    if o.doses > 0 {
-        // a dose needs a brine made this shift and an Enzyme-tag Part from the Stash
-        let mut made = 0;
-        for _ in 0..o.doses.min(o.brine) {
-            if stash.take_tagged("enzyme") {
-                made += stash.add_by_id("org_downer", 1, 100);
-            }
-        }
-        if made > 0 {
-            lines.push(format!("the Still made {made} dose{}", if made == 1 { "" } else { "s" }));
-        } else {
-            lines.push("the Still made nothing: no brine or no Enzyme part".into());
         }
     }
     let spend = o.upkeep + o.paste_eddies;

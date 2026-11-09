@@ -1,12 +1,14 @@
-//! logistics — the city on the Mat: sites, cargo routing with cord capacity, agent columns.
+//! logistics — the city on the Mat: the city's clock, consumers and their signal-weighted fields, cargo packets with
+//! cord capacity, demand routing and re-routing, the roster's movers (Full Design v3.11, Colony mode: Cargo).
 
 pub mod city;
+pub mod field;
 
-pub use city::{City, CityStats};
+pub use city::{Arrival, City, CityStats, Consumer, Kind, Mover};
 
-/// The reference scale scenario: one 192x48 stratum, a vigorous conductive strain, one Heart and seven Relays,
-/// `grow_ticks` of feeding, then a city of `agents` slimos with three markets.
-pub fn scale_scenario(seed: u64, agents: usize, grow_ticks: u64) -> City {
+/// The founding stratum (and the scale proof's): one 192x48 stratum, a vigorous conductive strain, one Heart and
+/// seven Relays, `grow_ticks` of feeding. The Mat the city is founded on (Full Design: The founding).
+pub fn founding_mat(seed: u64, grow_ticks: u64) -> mat::MatSim {
     use mat::genome::{CONDUCTANCE, VIGOR};
     use mat::{Genome, MatSim};
     let g = Genome::default().with(VIGOR, 0.8).with(CONDUCTANCE, 0.8);
@@ -23,5 +25,11 @@ pub fn scale_scenario(seed: u64, agents: usize, grow_ticks: u64) -> City {
         }
         sim.step();
     }
-    City::new(sim, agents, &[(60, 12), (130, 12), (96, 38)], seed)
+    sim
+}
+
+/// The reference scale scenario (Phase A's proof): the founding stratum with a synthetic city of `agents` slimos and
+/// three markets landing synthetic hauls. `rose scale` and the scale tests only; the game's city is `City::game`.
+pub fn scale_scenario(seed: u64, agents: usize, grow_ticks: u64) -> City {
+    City::new(founding_mat(seed, grow_ticks), agents, &[(60, 12), (130, 12), (96, 38)], seed)
 }

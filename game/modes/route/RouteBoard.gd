@@ -409,6 +409,7 @@ func _depart() -> void:
 	for id in follower_ids:
 		fids.append(id)
 	people.depart(runner_id, fids)
+	Sim.refresh_movers()   # the crew leaves the map
 	Sim.launch = {"stratum": int(r.stratum), "seed": int(r.seed), "name": String(r.name), "rig": rig, "followers": followers, "runner": rs, "runner_id": runner_id, "runner_name": String(rs.name)}
 	Screens.show_screen("run")
 

@@ -140,28 +140,30 @@ pub fn base_tiles(sim: &MatSim, dim: bool) -> Canvas {
     c
 }
 
-/// Stack view: the stratum as a circuit board; traffic drawn as light, nothing drawn individually.
+/// Stack view (Full Design v3.11, Cargo: Capacity and jams): the stratum as a circuit board at one pixel a tile,
+/// traffic (slimos + 2 × packets) drawn as light — Mat Lit, Mat Glow from 3 — and a jam (a full tile with cargo
+/// waiting to enter it) Chalk white; the consumers Acid, the markets Hot Pink. Nothing is drawn individually.
 pub fn stack_view(city: &City, scale: usize) -> Canvas {
     let sim = &city.sim;
     let mut c = base_tiles(sim, true);
     let traffic = city.traffic();
     for y in 0..sim.h {
         for x in 0..sim.w {
-            let t = traffic[y * sim.w + x];
-            if t >= 7 {
+            let i = y * sim.w + x;
+            if city.jam[i] {
                 c.put(x, y, pal::CHALK);
-            } else if t >= 3 {
+            } else if traffic[i] >= 3 {
                 c.put(x, y, pal::MAT_GLOW);
-            } else if t >= 1 {
+            } else if traffic[i] >= 1 {
                 c.put(x, y, pal::MAT_LIT);
             }
         }
     }
-    for &p in &city.pods {
+    for &p in city.crowd.as_ref().map_or(&[][..], |cr| cr.pods.as_slice()) {
         c.put(p % sim.w, p / sim.w, pal::OXIDE);
     }
-    for &p in &city.pits {
-        c.put(p % sim.w, p / sim.w, pal::ACID);
+    for k in &city.consumers {
+        c.put(k.cell % sim.w, k.cell / sim.w, if k.kind == logistics::Kind::Market { pal::HOT_PINK } else { pal::ACID });
     }
     for &p in &city.markets {
         c.put(p % sim.w, p / sim.w, pal::HOT_PINK);

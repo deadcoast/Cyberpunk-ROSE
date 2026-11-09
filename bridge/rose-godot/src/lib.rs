@@ -8,6 +8,7 @@ use mat::sim::{hy, sub};
 use logistics::City;
 use mat::MatSim;
 
+mod cargo_bridge;
 mod colony_bridge;
 mod people;
 
@@ -31,14 +32,24 @@ pub struct RoseSim {
     last_jobs: Vec<(u32, ::people::Job, u32)>,
     /// the Charter's eight laws (data/laws.toml)
     laws: Option<colony::LawFile>,
+    /// the city's one Stash, bound so cargo can land as it arrives (Full Design v3.11, Cargo)
+    stash: Option<Gd<RoseStash>>,
 }
 
 #[godot_api]
 impl RoseSim {
-    /// Build the reference scale scenario: grow a stratum for `grow_ticks`, then populate it with `agents` slimos.
+    /// The scale proof (Phase A): a grown stratum with `agents` synthetic slimos and synthetic market hauls. A load
+    /// test of the arrays, not the game's city (Full Design v3.11, The city's clock).
     #[func]
     fn start_scale(&mut self, seed: i64, agents: i64, grow_ticks: i64) {
         self.city = Some(logistics::scale_scenario(seed as u64, agents.max(0) as usize, grow_ticks.max(0) as u64));
+    }
+
+    /// The game's city: the founding stratum grown for `grow_ticks`, the Mat on its own clock, no phantoms; the
+    /// movers are the roster and the cargo is the Stash's.
+    #[func]
+    fn start_city(&mut self, seed: i64, grow_ticks: i64) {
+        self.city = Some(City::game(logistics::founding_mat(seed as u64, grow_ticks.max(0) as u64), seed as u64));
     }
 
     /// Fresh stratum with a Heart at (x, y) and no city; feed it to make it grow.
@@ -46,15 +57,41 @@ impl RoseSim {
     fn start_empty(&mut self, seed: i64, w: i64, h: i64, heart_x: i64, heart_y: i64) {
         let mut sim = MatSim::new(w.max(16) as usize, h.max(8) as usize, seed as u64, Genome::default());
         sim.seed_heart(heart_x as usize, heart_y as usize);
-        self.city = Some(City::new(sim, 0, &[], seed as u64));
+        self.city = Some(City::game(sim, seed as u64));
     }
 
+    /// Bind the city's Stash: cargo lands into it as it arrives. A ledger that comes with cargo this city is not
+    /// carrying (a loaded save) puts it back on the Mat at the Heart (Full Design v3.11: it rides again on load).
+    #[func]
+    fn bind_stash(&mut self, stash: Gd<RoseStash>) {
+        if let Some(c) = self.city.as_mut() {
+            if let Some(heart) = c.heart_cell() {
+                let riding: std::collections::HashSet<u32> = c.in_transit().iter().map(|t| t.0).collect();
+                for s in stash.bind().ledger.in_flight.iter().filter(|s| !riding.contains(&s.id)) {
+                    let (kind, key) = cargo_bridge::kind_of(s.to);
+                    c.dispatch(heart, s.id, kind, key);
+                }
+            }
+        }
+        self.stash = Some(stash);
+    }
+
+    /// One city tick: slimos walk, cargo rides and lands, the Mat steps on its own clock.
     #[func]
     fn step(&mut self) -> i64 {
         let t0 = std::time::Instant::now();
+        let defs = self.defs().clone();
         let changed = match self.city.as_mut() {
             Some(c) => {
                 c.step();
+                if let Some(st) = self.stash.as_mut() {
+                    let mut st = st.bind_mut();
+                    st.ensure();
+                    if c.tick % logistics::city::REBUILD_EVERY == 0 && !c.synthetic() {
+                        cargo_bridge::refresh_demands(&self.colony, &defs, c, &st);
+                    }
+                    cargo_bridge::land(c, &mut self.colony, &defs, &mut st);
+                }
                 c.sim.changed.len() as i64
             }
             None => 0,
@@ -118,7 +155,14 @@ impl RoseSim {
         })
     }
 
-    /// Slimo states (0 home, 1 to market, 2 carrying to pit, 3 going home).
+    /// Which slimo each mover is (roster ids; the scale proof's are indices).
+    #[func]
+    fn agent_ids(&self) -> PackedInt32Array {
+        self.city.as_ref().map_or_else(PackedInt32Array::new, |c| PackedInt32Array::from(c.ids.iter().map(|&p| p as i32).collect::<Vec<i32>>().as_slice()))
+    }
+
+    /// Slimo states: the roster's 0 at home, 3 going home, 4 going to work, 5 at work (the scale proof's 1 to market,
+    /// 2 carrying to a Pit).
     #[func]
     fn agent_states(&self) -> PackedByteArray {
         self.city.as_ref().map_or_else(PackedByteArray::new, |c| PackedByteArray::from(c.state.as_slice()))
@@ -130,6 +174,28 @@ impl RoseSim {
         self.city.as_ref().map_or_else(PackedInt32Array::new, |c| {
             PackedInt32Array::from(c.pk_pos.iter().map(|&p| p as i32).collect::<Vec<i32>>().as_slice())
         })
+    }
+
+    /// The tier rank (0 Common … 4 Relic) of the item each packet carries, in packet order; the Street view's pulse.
+    #[func]
+    fn packet_tiers(&self) -> PackedByteArray {
+        let Some(c) = &self.city else { return PackedByteArray::new() };
+        let Some(st) = &self.stash else { return PackedByteArray::from(vec![0u8; c.pk_pos.len()].as_slice()) };
+        let st = st.bind();
+        let Some(t) = st.table.as_ref() else { return PackedByteArray::from(vec![0u8; c.pk_pos.len()].as_slice()) };
+        let v: Vec<u8> = c
+            .pk_cargo
+            .iter()
+            .map(|id| st.ledger.in_flight.iter().find(|s| s.id == *id).map_or(0, |s| cargo_bridge::TIERS.iter().position(|x| *x == t.def(s.item.def).tier).unwrap_or(0) as u8))
+            .collect();
+        PackedByteArray::from(v.as_slice())
+    }
+
+    /// The Stack view, one pixel a tile, RGB (render::stack_view: the Mat dim, traffic as light, a jam — a full tile
+    /// with cargo waiting to enter it — Chalk white, consumers Acid, markets Hot Pink).
+    #[func]
+    fn stack_image(&self) -> PackedByteArray {
+        self.city.as_ref().map_or_else(PackedByteArray::new, |c| PackedByteArray::from(render::stack_view(c, 1).px.as_slice()))
     }
 
     /// Traffic per cell (slimos + 2 x packets), what the Stack view draws as light.
@@ -145,10 +211,17 @@ impl RoseSim {
         let mut d = VarDictionary::new();
         if let Some(c) = &self.city {
             let to_arr = |v: &Vec<usize>| PackedInt32Array::from(v.iter().map(|&p| p as i32).collect::<Vec<i32>>().as_slice());
-            let (m, p, h) = (to_arr(&c.markets), to_arr(&c.pits), to_arr(&c.pods));
-            d.set("markets", &m);
-            d.set("pits", &p);
-            d.set("pods", &h);
+            // the Pits: the Heart first, then every built Pit (the scale proof: the Heart and the Relays)
+            let pits: Vec<usize> = if c.synthetic() {
+                c.pits.clone()
+            } else {
+                let defs = self.defs.clone().unwrap_or_else(colony_bridge::structure_file);
+                self.colony.pits(&defs).into_iter().filter_map(|sid| self.colony.cargo_cell(&defs, &c.sim, sid)).collect()
+            };
+            d.set("markets", &to_arr(&c.markets));
+            d.set("markets_reached", &PackedByteArray::from(c.market_cells.iter().map(|m| m.is_some() as u8).collect::<Vec<u8>>().as_slice()));
+            d.set("pits", &to_arr(&pits));
+            d.set("pods", &to_arr(&c.crowd.as_ref().map_or(Vec::new(), |cr| cr.pods.clone())));
         }
         d
     }
@@ -161,6 +234,34 @@ impl RoseSim {
                 c.sim.feed(x as usize, y as usize, amount as f32);
             }
         }
+    }
+
+    /// Bait from the Stash (Full Design v3.11, The city's clock): the cheapest unpinned Common item with a feed value
+    /// is smeared onto the 3 × 3 around the tile, its nutrient spread over the nine, so the Mat grows toward it and
+    /// nothing is fed that the Stash did not give. "" or why not.
+    #[func]
+    fn bait_from_stash(&mut self, x: i64, y: i64) -> GString {
+        let Some(c) = self.city.as_mut() else { return GString::from("no city") };
+        if !Self::inside(c, x, y) {
+            return GString::from("off the map");
+        }
+        let Some(st) = self.stash.as_mut() else { return GString::from("no Stash") };
+        let mut st = st.bind_mut();
+        st.ensure();
+        let t = st.table.clone().unwrap();
+        let stash = st.stash.as_mut().unwrap();
+        let pick = stash
+            .grid
+            .placed()
+            .into_iter()
+            .filter(|(_, p)| !p.item.pinned && t.def(p.item.def).feed > 0.0 && t.def(p.item.def).tier == items::Tier::Common)
+            .map(|(h, p)| (items::price(t.def(p.item.def), &p.item, PriceContext::default()), h))
+            .min();
+        let Some((_, h)) = pick else { return GString::from("bait takes a Common Chrome from the Stash: none") };
+        let item = stash.grid.remove(h).unwrap();
+        let n = items::feed_value(t.def(item.def), &item).0;
+        c.sim.bait(x as usize, y as usize, n / 9.0);
+        GString::new()
     }
 
     #[func]
@@ -195,7 +296,6 @@ impl RoseSim {
         if let Some(c) = self.city.as_mut() {
             if Self::inside(c, x, y) {
                 c.sim.place_relay(x as usize, y as usize);
-                c.pits.push(y as usize * c.sim.w + x as usize);
                 c.rebuild_fields();
             }
         }
@@ -225,22 +325,13 @@ impl RoseSim {
         }
     }
 
-    /// Drop nutrient into the Pit with this index among the city's Pits (0 is the Heart).
+    /// Stock sitting in a Pit (nutrient units), by index among the city's Pits (0 is the Heart).
     #[func]
-    fn feed_pit(&mut self, pit: i64, amount: f64) -> bool {
-        let Some(c) = self.city.as_mut() else { return false };
-        let Some(&i) = c.pits.get(pit.max(0) as usize) else { return false };
-        let w = c.sim.w;
-        c.sim.feed(i % w, i / w, amount as f32);
-        true
-    }
-
-    /// Stock sitting in a Pit (nutrient units).
-    #[func]
-    fn pit_stock(&self, pit: i64) -> f64 {
+    fn pit_stock(&mut self, pit: i64) -> f64 {
+        let cells = self.sites().get("pits").and_then(|v| v.try_to::<PackedInt32Array>().ok()).unwrap_or_default();
         let Some(c) = self.city.as_ref() else { return 0.0 };
-        let Some(&i) = c.pits.get(pit.max(0) as usize) else { return 0.0 };
-        let w = c.sim.w;
+        let Some(&i) = cells.as_slice().get(pit.max(0) as usize) else { return 0.0 };
+        let (i, w) = (i as usize, c.sim.w);
         c.sim.pits.get(&(i % w, i / w)).copied().unwrap_or(0.0) as f64
     }
 
@@ -270,6 +361,8 @@ impl RoseSim {
             d.set("deliveries", cs.deliveries as i64);
             d.set("hauls", cs.hauls as i64);
             d.set("jammed", cs.jammed_tiles as i64);
+            d.set("riding", c.pk_pos.len() as i64);
+            d.set("waiting", (cs.packets - c.pk_pos.len()) as i64);
             d.set("step_us", self.last_step_us);
             let _ = (hy::EMPTY, sub::ROCK, state::HOME);
         }
@@ -424,7 +517,7 @@ impl RoseSim {
     fn districts(&mut self, people: Gd<RosePeople>) -> VarArray {
         let defs = self.defs().clone();
         let p = people.bind();
-        colony_bridge::districts_array(&self.colony, Some(&p), Some(&defs))
+        colony_bridge::districts_array(&self.colony, Some(&p), Some(&defs), self.city.as_ref().map(|c| &c.sim))
     }
 
     // ------------------------------------------------------------ the Charter (Full Design v3.10)
@@ -545,14 +638,18 @@ impl RoseSim {
         out
     }
 
-    /// The shift, whole: the colony plans the jobs and pays the ghosts out of the Stash, the Stash resolves its
-    /// queues and the Bench's slots, the Pits take the nutrient and the genome drifts, the colony's products land,
-    /// the roster takes the work and the contexts. `day` picks the shift of the day (Dim / Dark / Flood).
+    /// The shift, whole: the colony plans the jobs and pays the ghosts out of the Stash, the Bench's slots finish,
+    /// what the Stills and Salt Works made rides home, the Stash's queue and the quotas' pulls leave the Heart as
+    /// cargo, the roster takes the work and the contexts, and the movers take the next shift's plan. `day` picks the
+    /// shift of the day (Dim / Dark / Flood). The report is what landed since the last shift end and what just left.
     #[func]
     fn colony_end_shift(&mut self, people: Gd<RosePeople>, stash: Gd<RoseStash>, day: i64) -> VarDictionary {
         let defs = self.defs().clone();
         let mut people = people;
         let mut stash = stash;
+        if self.stash.is_none() {
+            self.stash = Some(stash.clone());
+        }
         let Some(city) = self.city.as_mut() else { return VarDictionary::new() };
         let shift_of_day = ((day.max(1) - 1) % 3) as u8;
         let eddies = stash.bind().ledger.eddies;
@@ -564,31 +661,12 @@ impl RoseSim {
             let mut pay = |cost: colony::Cost| st.take_cost(cost);
             self.colony.end_shift(&defs, &mut city.sim, &p.roster, &traits, shift_of_day, eddies, &mut pay)
         };
-        // the Stash: queues, the Bench's slots, the shift's products; the Pits
         let report = {
             let mut st = stash.bind_mut();
-            let r = st.resolve_with_slots(outcome.bench_slots as usize);
+            st.ensure();
             let mut lines = colony_bridge::apply_to_stash(&outcome, &mut st);
-            let mut r = r;
-            if let Some(dl) = r.get("deliveries").and_then(|v| v.try_to::<VarArray>().ok()) {
-                for v in dl.iter_shared() {
-                    if let Ok(e) = v.try_to::<VarDictionary>() {
-                        let pit = e.get("pit").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(0);
-                        let nutrient = e.get("nutrient").and_then(|v| v.try_to::<f64>().ok()).unwrap_or(0.0);
-                        if let Some(drift) = e.get("drift").and_then(|v| v.try_to::<PackedFloat32Array>().ok()) {
-                            let mut arr = [0f32; 10];
-                            for (i, g) in drift.as_slice().iter().take(10).enumerate() {
-                                arr[i] = *g;
-                            }
-                            city.sim.drift_genome(arr);
-                        }
-                        if let Some(&i) = city.pits.get(pit.max(0) as usize) {
-                            let w = city.sim.w;
-                            city.sim.feed(i % w, i / w, nutrient as f32);
-                        }
-                    }
-                }
-            }
+            lines.extend(cargo_bridge::dispatch_shift(city, &self.colony, &defs, &mut st, &outcome));
+            let mut r = st.close_with_slots(outcome.bench_slots as usize);
             r.set("stash_lines", &PackedStringArray::from(lines.drain(..).map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
             r
         };
@@ -597,7 +675,85 @@ impl RoseSim {
         // the roster: work, contexts, the clinic
         let people_lines = people.bind_mut().shift_from_colony(&outcome, sold, crafted);
         self.last_jobs = outcome.assignments.clone();
-        colony_bridge::outcome_dict(&outcome, &people_lines, report, &defs, &self.colony)
+        let out = colony_bridge::outcome_dict(&outcome, &people_lines, report, &defs, &self.colony);
+        self.refresh_movers(people, day + 1);
+        out
+    }
+
+    /// The roster on the map for shift `day`: everyone in the city at their bed, or walking to the structure the
+    /// colony's plan for that shift gives them; a Runner on a run is off the map.
+    #[func]
+    fn refresh_movers(&mut self, people: Gd<RosePeople>, day: i64) {
+        let defs = self.defs().clone();
+        let Some(city) = self.city.as_mut() else { return };
+        if city.synthetic() {
+            return;
+        }
+        let mut people = people;
+        let mut p = people.bind_mut();
+        p.ensure();
+        let traits = p.traits.clone().unwrap();
+        let plan = self.colony.assign_jobs(&defs, &p.roster, &traits, ((day.max(1) - 1) % 3) as u8);
+        let movers = cargo_bridge::movers(&self.colony, &defs, city, &p.roster, &plan);
+        city.set_movers(&movers);
+    }
+
+    // ------------------------------------------------------------ quotas (Full Design v3.11, Cargo: Quotas)
+
+    /// The Pit or Still whose footprint holds this tile, or -1.
+    #[func]
+    fn consumer_at(&mut self, x: i64, y: i64) -> i64 {
+        let defs = self.defs().clone();
+        for s in &self.colony.structures {
+            let d = &defs.structure[s.def];
+            if !matches!(d.id.as_str(), "heart" | "pit" | "still") || !(s.built || d.id == "heart") {
+                continue;
+            }
+            if x >= s.x as i64 && x < s.x as i64 + d.footprint[0] as i64 && y >= s.y as i64 && y < s.y as i64 + d.footprint[1] as i64 {
+                return s.id as i64;
+            }
+        }
+        -1
+    }
+
+    /// A Pit's or Still's quota for its card: {structure, name, kind "pit"|"still", target, ceiling, ceiling_name,
+    /// from "yours"|"the foreman's"|"its slots"|"off", stock, riding, cap, reached}; empty for anything else.
+    #[func]
+    fn quota(&mut self, structure: i64) -> VarDictionary {
+        let defs = self.defs().clone();
+        let (Some(c), Some(st)) = (self.city.as_ref(), self.stash.as_ref()) else { return VarDictionary::new() };
+        let mut st = st.clone();
+        st.bind_mut().ensure();
+        let st = st.bind();
+        cargo_bridge::quota_view(&self.colony, &defs, c, &st, structure as u32).unwrap_or_default()
+    }
+
+    /// Set a Pit's or Still's quota (a Pit's target in nutrient, a Still's in Parts; ceiling 0 Common … 4 Relic).
+    #[func]
+    fn set_quota(&mut self, structure: i64, target: f64, ceiling: i64) -> bool {
+        let defs = self.defs().clone();
+        let ok = self.colony.set_quota(&defs, structure as u32, Some(colony::QuotaSet { target: target.max(0.0) as f32, ceiling: ceiling.clamp(0, 4) as u8 }));
+        self.republish();
+        ok
+    }
+
+    /// Back to the default: off, the foreman's, or a Still's slots.
+    #[func]
+    fn clear_quota(&mut self, structure: i64) -> bool {
+        let defs = self.defs().clone();
+        let ok = self.colony.set_quota(&defs, structure as u32, None);
+        self.republish();
+        ok
+    }
+
+    fn republish(&mut self) {
+        let defs = self.defs().clone();
+        if let (Some(c), Some(st)) = (self.city.as_mut(), self.stash.as_ref()) {
+            let mut st = st.clone();
+            st.bind_mut().ensure();
+            let consumers = cargo_bridge::consumers(&self.colony, &defs, c, &st.bind());
+            c.set_consumers(consumers);
+        }
     }
 }
 
@@ -750,40 +906,12 @@ impl RoseStash {
         done
     }
 
-    /// Add `n` of an item by id at a condition; returns how many found room.
-    pub(crate) fn add_by_id(&mut self, id: &str, n: usize, condition: u8) -> usize {
+    /// Shift end on the Stash's side, after the cargo left: the Bench's Tweak slots finish (a slot finishes one job a
+    /// shift) and the ledger closes the shift. The report is what landed since the last shift end (sold, earned,
+    /// fed, stored, home, spilled, cut, deliveries) and what just left.
+    pub(crate) fn close_with_slots(&mut self, bench_slots: usize) -> VarDictionary {
         self.ensure();
         let t = self.table.as_ref().unwrap().clone();
-        let Some(idx) = t.id_of(id) else { return 0 };
-        let stash = self.stash.as_mut().unwrap();
-        let mut done = 0;
-        for _ in 0..n {
-            let mut inst = ItemInstance::new(idx);
-            inst.condition = condition;
-            if stash.grid.auto_place(t.def(inst.def), inst).is_ok() {
-                done += 1;
-            }
-        }
-        done
-    }
-
-    /// Take one Part carrying a tag (the Still's Enzyme part). Returns whether one was there.
-    pub(crate) fn take_tagged(&mut self, tag: &str) -> bool {
-        self.ensure();
-        let t = self.table.as_ref().unwrap().clone();
-        let stash = self.stash.as_mut().unwrap();
-        let h = stash.grid.placed().into_iter().find(|(_, p)| !p.item.pinned && t.def(p.item.def).category == items::Category::Part && t.def(p.item.def).tags.iter().any(|x| x == tag)).map(|(h, _)| h);
-        match h {
-            Some(h) => stash.grid.remove(h).is_some(),
-            None => false,
-        }
-    }
-
-    /// Resolve the shift with the Bench's Tweak slots (Full Design: a slot finishes one job a shift).
-    pub(crate) fn resolve_with_slots(&mut self, bench_slots: usize) -> VarDictionary {
-        self.ensure();
-        let t = self.table.as_ref().unwrap().clone();
-        let r = self.ledger.resolve(&t);
         let products = self.bench.end_shift_slots(&t, self.recipes.as_ref().unwrap(), bench_slots);
         let mut crafted = 0i64;
         let mut crafted_names = Vec::new();
@@ -798,15 +926,26 @@ impl RoseStash {
                 }
             }
         }
-        let mut d = VarDictionary::new();
-        d.set("sold", r.sold as i64);
-        d.set("earned", r.earned as i64);
-        d.set("fed", r.fed as i64);
+        let r = self.ledger.close_shift(self.stash.as_mut().unwrap(), &t);
+        let mut d = Self::report_dict(&r);
         d.set("crafted", crafted);
         d.set("crafted_names", &PackedStringArray::from(crafted_names.as_slice()));
         d.set("waiting", self.bench.waiting.len() as i64);
         d.set("eddies", self.ledger.eddies as i64);
         d.set("bench_slots", bench_slots.min(i64::MAX as usize) as i64);
+        d
+    }
+
+    fn report_dict(r: &inventory::ShiftReport) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        d.set("sold", r.sold as i64);
+        d.set("earned", r.earned as i64);
+        d.set("fed", r.fed as i64);
+        d.set("stored", r.stored as i64);
+        d.set("home", r.home as i64);
+        d.set("spilled", r.spilled as i64);
+        d.set("cut", r.cut as i64);
+        d.set("left", r.left as i64);
         let mut dl = VarArray::new();
         for de in &r.deliveries {
             let mut e = VarDictionary::new();
@@ -1196,11 +1335,14 @@ impl RoseStash {
         PackedInt32Array::from(v.as_slice())
     }
 
-    /// Shift end: resolve the queues. Returns {sold, earned, fed, eddies, deliveries: [{pit, nutrient, drift: [10]}]}
-    /// for the colony to apply.
+    /// What has landed since the last shift end (the report so far) and what the Stash has on the Mat:
+    /// {sold, earned, fed, stored, home, spilled, cut, left, deliveries, riding, held}.
     #[func]
-    fn resolve_shift(&mut self) -> VarDictionary {
-        self.resolve_with_slots(usize::MAX)
+    fn landed(&self) -> VarDictionary {
+        let mut d = Self::report_dict(&self.ledger.landed);
+        d.set("riding", self.ledger.in_flight.len() as i64);
+        d.set("held", self.ledger.held.len() as i64);
+        d
     }
 
     #[func]

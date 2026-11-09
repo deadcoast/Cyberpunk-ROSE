@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city (PAC-020–028, PAC-040–042 done).
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city (PAC-020–028, PAC-040–043 done).
 
     ./run.sh /path/to/godot4.5
 
@@ -33,14 +33,17 @@ Where things come from
 Controls in the shell
 ---------------------
 
-ESC menu · nav bar on every screen · Colony: LMB apply tool, BUILD places the structure armed on the Build menu
-(the ghost shows why a tile refuses), RMB cancels an unpaid ghost, TAB view (Street / District / Stack; District
-shows each district's reach, foreman and petition), SPACE pause, 1/2/3 speed, WASD pan, wheel zoom · Build: the 24
+ESC menu · nav bar on every screen · Colony: LMB apply tool; SELECT on a Pit or a Still opens its quota (KEEP −/+,
+TIER ceiling, DEFAULT), BAIT smears a Common Chrome from the Stash, BUILD places the structure armed on the Build menu
+(the ghost shows why a tile refuses), RMB cancels an unpaid ghost, TAB view (Street / District / Stack; the roster
+walks and cargo rides as tier-coloured pulses; District shows each district's reach, foreman and petition; Stack is
+the circuit board with traffic as light and jams white), SPACE pause, 1/2/3 speed, WASD pan, wheel zoom · Build: the 24
 structures with their costs and per-tier numbers, PLACE ON THE COLONY · Slimo: the schedule row cycles Work / Rest / Any;
 a D5's card can DISSOLVE it into the Heart · Charter: SIGN and REPEAL the eight laws with Authority; ANSWER or REFUSE a
 district's petition (two refusals dissolve the district) · Stash: filter buttons select the view, SORT re-packs the grid; click an item for
 its card and the four verbs (Sell to a grate market, Feed to a Pit, Craft to the Bench, Keep pins); SELL ALL / FEED
-ALL act on the unpinned view; BACK pulls a queued item out; queues resolve when the shift ends after a run · Bench:
+ALL act on the unpinned view; BACK pulls a queued item out; at the shift end after a run the queue leaves the Heart as
+cargo and each item pays or feeds when it lands · Bench:
 pick a recipe, click a slot then a Stash item that carries its tag, CRAFT queues (parts leave the Stash), CANCEL
 returns them; jobs finish at shift end · Slimo: the roster left, click a name for its record; click a job cell to
 cycle its priority 0–4; MEMORIAL for the dead; SEND ON A RUN · Route

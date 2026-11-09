@@ -2,8 +2,9 @@ extends ScreenBase
 ## The Stash (Full Design v3.4): a view of the city's one grid (Sim.stash, the inventory crate through RoseStash).
 ## Filter and sort bar on top; the grid left, every item a tile at its real size, scrolling when the Stash
 ## outgrows the screen; right column: the item card with the three numbers and the four verbs (Sell, Feed, Craft,
-## Keep), the bulk bar that applies Sell or Feed to the filtered view, and the queue panel with the ledger. The
-## queues resolve when the shift ends (Sim.end_shift, after a run); the report shows here on the way back.
+## Keep), the bulk bar that applies Sell or Feed to the filtered view, and the queue panel with the ledger. At the
+## shift end (Sim.end_shift, after a run) the queue leaves the Heart as cargo and each item pays or feeds when it
+## lands (Full Design v3.11, Cargo); the report shows what landed and what left on the way back.
 
 const CELL := 32
 const CATEGORIES := ["", "chrome", "part", "organic", "tech", "gear", "contraband", "key", "curio", "relic"]
@@ -180,7 +181,7 @@ func _draw_card() -> void:
 		make_label(card, "STASH   tier %d   %d items   %d free" % [stash.tier(), stash.count(), stash.free_cells()], Vector2(6, 4), UiTheme.CYAN)
 		make_label(card, "click an item for its card", Vector2(6, 18), UiTheme.DUST)
 		make_label(card, "filters select the view; bulk acts on it", Vector2(6, 30), UiTheme.DUST)
-		make_label(card, "sells and feeds resolve when the shift ends", Vector2(6, 42), UiTheme.DUST)
+		make_label(card, "sells and feeds ride the Mat at shift end", Vector2(6, 42), UiTheme.DUST)
 		make_button(card, "UPGRADE STASH", Vector2(6, 104), func():
 			if stash.upgrade():
 				_redraw())
@@ -316,11 +317,19 @@ func _draw_queue() -> void:
 		make_label(queue_panel, "+%d more queued" % (q.size() - shown), Vector2(6, y), UiTheme.DUST)
 		y += 12
 	var foot := ""
+	var now: Dictionary = stash.landed()
 	if q.size() > 0:
-		foot = "%d queued: %d e, %.1f n   at shift end" % [q.size(), sell_sum, feed_sum]
+		foot = "%d queued: %d e, %.1f n   leave at shift end" % [q.size(), sell_sum, feed_sum]
+		if int(now.riding) > 0:
+			foot += "   %d on the Mat" % int(now.riding)
+	elif int(now.riding) > 0 or int(now.sold) + int(now.fed) > 0:
+		# cargo this shift: what has landed so far and what is still riding
+		foot = "this shift: sold %d for %d e, fed %d   %d on the Mat" % [int(now.sold), int(now.earned), int(now.fed), int(now.riding)]
 	elif not Sim.shift_report.is_empty():
 		var r: Dictionary = Sim.shift_report
-		foot = "last shift: sold %d for %d e, fed %d, crafted %d" % [int(r.sold), int(r.earned), int(r.fed), int(r.get("crafted", 0))]
+		foot = "last shift: sold %d for %d e, fed %d, crafted %d, %d left" % [int(r.sold), int(r.earned), int(r.fed), int(r.get("crafted", 0)), int(r.get("left", 0))]
+		if int(r.get("spilled", 0)) > 0:
+			foot += ", %d spilled" % int(r.spilled)
 		# the roster's first line of the shift (who worked what, a level gained); the rest are on the Slimo card
 		if Sim.people_lines.size() > 0:
 			foot += "   " + String(Sim.people_lines[0]).left(40)

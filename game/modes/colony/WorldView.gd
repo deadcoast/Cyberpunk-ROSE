@@ -1,7 +1,8 @@
 class_name WorldView
 extends Node2D
-## The sewer and the Mat as TileMapLayers built from placeholder slots, 32 px per tile, plus the crowd.
-## Shared by the Colony (bound to the live Sim) and the Run (painted from a RoseRun route map).
+## The sewer and the Mat as TileMapLayers built from placeholder slots, 32 px per tile, the roster on it and the
+## cargo riding it (Full Design v3.11, Cargo). Shared by the Colony (bound to the live Sim) and the Run (painted from
+## a RoseRun route map). The Stack view draws traffic per tile as light and a jam Chalk white (render::stack_view).
 
 const TILE := 32
 const SUB := {0: "tile.concrete", 1: "", 2: "tile.pipe", 3: "tile.brick", 4: "tile.deposit", 5: "tile.water", 6: "tile.grate", 7: "tile.concrete", 8: "tile.collapse"}
@@ -12,6 +13,10 @@ var substrate: TileMapLayer
 var matlayer: TileMapLayer
 var props: TileMapLayer
 var crowd: Node2D
+var cargo: Node2D      # packets as pulses in their tier's colour (Street 8 px, District 4 px)
+var traffic_sprite: Sprite2D   # the Stack view: the core's circuit board, one texel a tile
+var traffic_img: Image
+var view_level := 0    # 0 Street, 1 District, 2 Stack (set by the Colony)
 var buildings: Node2D  # the colony's structures and ghosts, drawn from RoseSim.structures()
 var districts: Node2D  # hub rings and names, District view
 var show_districts := false
@@ -33,12 +38,21 @@ func _ready() -> void:
 	props = TileMapLayer.new()
 	props.tile_set = tileset
 	add_child(props)
-	crowd = Node2D.new()
-	crowd.draw.connect(_draw_crowd)
-	add_child(crowd)
 	buildings = Node2D.new()
 	buildings.draw.connect(_draw_buildings)
 	add_child(buildings)
+	cargo = Node2D.new()
+	cargo.draw.connect(_draw_cargo)
+	add_child(cargo)
+	crowd = Node2D.new()
+	crowd.draw.connect(_draw_crowd)
+	add_child(crowd)
+	traffic_sprite = Sprite2D.new()
+	traffic_sprite.centered = false
+	traffic_sprite.scale = Vector2(TILE, TILE)
+	traffic_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	traffic_sprite.visible = false
+	add_child(traffic_sprite)
 	districts = Node2D.new()
 	districts.draw.connect(_draw_districts)
 	add_child(districts)
@@ -129,6 +143,60 @@ func _on_tick() -> void:
 		for i in changed:
 			_paint_mat(i % w, i / w, int(hy[i]), sig[i])
 	crowd.queue_redraw()
+	cargo.queue_redraw()
+	if view_level == 2:
+		paint_traffic()
+
+## The Stack view (Full Design v3.11): the stratum as a circuit board at one pixel a tile, drawn by the core
+## (render::stack_view) — the Mat dim, traffic as light, a jam (a full tile with cargo waiting to enter it) Chalk
+## white, consumers Acid, markets Hot Pink — in place of the tiles, which at a thirty-second zoom would only sample
+## their own texels.
+func paint_traffic() -> void:
+	var sim: RoseSim = Sim.ensure()
+	var rgb: PackedByteArray = sim.stack_image()
+	if rgb.size() != w * h * 3:
+		return
+	traffic_img = Image.create_from_data(w, h, false, Image.FORMAT_RGB8, rgb)
+	if traffic_sprite.texture == null or traffic_sprite.texture.get_width() != w:
+		traffic_sprite.texture = ImageTexture.create_from_image(traffic_img)
+	else:
+		(traffic_sprite.texture as ImageTexture).update(traffic_img)
+
+func set_view_level(i: int) -> void:
+	view_level = i
+	var stack := i == 2
+	traffic_sprite.visible = stack
+	for layer in [substrate, matlayer, props, buildings, cargo, crowd]:
+		layer.visible = not stack
+	if stack:
+		paint_traffic()
+	cargo.queue_redraw()
+	crowd.queue_redraw()
+
+## Packets riding the Mat as pulses in their item's tier colour: at Street a quarter of a tile, up to four side by
+## side on a tile; at District one larger pulse a tile, so it reads at a quarter zoom. The Stack view counts them into
+## traffic instead.
+func _draw_cargo() -> void:
+	if not bind_sim or view_level == 2:
+		return
+	var sim: RoseSim = Sim.ensure()
+	var pos: PackedInt32Array = sim.packet_positions()
+	if pos.is_empty():
+		return
+	var tiers: PackedByteArray = sim.packet_tiers()
+	var size := 8 if view_level == 0 else 16
+	var cols := [UiTheme.DUST, UiTheme.CYAN, UiTheme.HOT_PINK, UiTheme.OOZE_GLOW, UiTheme.VESTMENT]
+	var seen := {}
+	for k in pos.size():
+		var p: int = pos[k]
+		var n: int = seen.get(p, 0)
+		seen[p] = n + 1
+		var col: Color = cols[mini(int(tiers[k]) if k < tiers.size() else 0, 4)]
+		# up to four to a tile, side by side along the tile's middle
+		var x := (p % w) * TILE + 2 + (n % 4) * (TILE - 4 - size) / 3 if view_level == 0 else (p % w) * TILE + (TILE - size) / 2
+		var y := (p / w) * TILE + (TILE - size) / 2
+		cargo.draw_rect(Rect2(x - 1, y - 1, size + 2, size + 2), UiTheme.VOID)
+		cargo.draw_rect(Rect2(x, y, size, size), col)
 
 ## Structures stand on their footprint: the sprite's bottom edge on the footprint's bottom row, its width the
 ## footprint's. A ghost is half-transparent with its build progress as a bar; a damaged one shows its HP.
@@ -156,7 +224,8 @@ func _draw_buildings() -> void:
 			var frac := float(st.hp) / maxf(1.0, float(st.hp_max))
 			buildings.draw_rect(Rect2(int(st.x) * TILE, int(st.y) * TILE + fh + 2, fw * frac, 2), UiTheme.HOT_PINK)
 
-## District view: a ring of the district's reach around its hub, its name and foreman.
+## District view: the district's reach (the box of the tiles within 12 cords of its hub), the hub, its name and
+## foreman, the Foreman's Cut's stock when it holds any, and a standing petition.
 func _draw_districts() -> void:
 	if not bind_sim or not show_districts:
 		return
@@ -167,20 +236,23 @@ func _draw_districts() -> void:
 	for d in sim.districts(Sim.ensure_people()):
 		var hx := int(d.hub_x) * TILE + TILE / 2
 		var hy := int(d.hub_y) * TILE + TILE / 2
-		var r := 8 * TILE + TILE / 2
-		districts.draw_rect(Rect2(hx - r, hy - r, r * 2, r * 2), Color(UiTheme.CYAN, 0.7), false, 2.0 * k)
+		var rc: PackedInt32Array = d.get("reach", PackedInt32Array([int(d.hub_x) - 12, int(d.hub_y) - 12, int(d.hub_x) + 12, int(d.hub_y) + 12]))
+		var box := Rect2(rc[0] * TILE, rc[1] * TILE, (rc[2] - rc[0] + 1) * TILE, (rc[3] - rc[1] + 1) * TILE)
+		districts.draw_rect(box, Color(UiTheme.CYAN, 0.7), false, 2.0 * k)
 		districts.draw_circle(Vector2(hx, hy), 3.0 * k, UiTheme.CYAN)
 		var name := String(d.name).to_upper()
 		if String(d.foreman_name) != "":
 			name += "   FOREMAN " + String(d.foreman_name).to_upper()
+		if int(d.get("cut", 0)) > 0:
+			name += "   CUT %d" % int(d.cut)
 		# the name inside the top-left corner of the reach on a dark backing, the petition inside the bottom-left
-		districts.draw_set_transform(Vector2(hx - r + 3 * k, hy - r + 8 * k), 0.0, Vector2(k, k))
+		districts.draw_set_transform(box.position + Vector2(3 * k, 8 * k), 0.0, Vector2(k, k))
 		districts.draw_rect(Rect2(-2, -6, name.length() * 4 + 3, 8), Color(UiTheme.SUMP, 0.85))
 		districts.draw_string(font, Vector2.ZERO, name, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.CYAN)
 		var pet: Dictionary = d.petition
 		if not pet.is_empty():
 			var ptext := "PETITION: %s   %d SHIFTS" % [String(pet.need).to_upper(), int(pet.shifts_left)]
-			districts.draw_set_transform(Vector2(hx - r + 3 * k, hy + r - 3 * k), 0.0, Vector2(k, k))
+			districts.draw_set_transform(Vector2(box.position.x + 3 * k, box.end.y - 3 * k), 0.0, Vector2(k, k))
 			districts.draw_rect(Rect2(-2, -6, ptext.length() * 4 + 3, 8), Color(UiTheme.SUMP, 0.85))
 			districts.draw_string(font, Vector2.ZERO, ptext, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.HOT_PINK if bool(pet.missed) else UiTheme.ACID)
 		districts.draw_set_transform(Vector2.ZERO)
@@ -189,16 +261,16 @@ func redraw_city() -> void:
 	buildings.queue_redraw()
 	districts.queue_redraw()
 
+## The roster on the map: each slimo by its depth, walking or standing at work; up to four drawn to a tile.
 func _draw_crowd() -> void:
 	if not draw_crowd or not bind_sim:
 		return
 	var cam := get_viewport().get_camera_2d()
 	if cam == null:
 		return
-	var tex := Assets.texture("slimo.d2.walk")
-	if tex == null:
-		return
 	var sim: RoseSim = Sim.ensure()
+	var ids: PackedInt32Array = sim.agent_ids()
+	var people: RosePeople = Sim.ensure_people()
 	var half: Vector2 = get_viewport_rect().size * 0.5 / cam.zoom.x
 	var x0 := int(floor((cam.position.x - half.x) / TILE)) - 1
 	var y0 := int(floor((cam.position.y - half.y) / TILE)) - 2
@@ -215,9 +287,19 @@ func _draw_crowd() -> void:
 		if px < x0 or px > x1 or py < y0 or py > y1:
 			continue
 		var s: int = slot.get(p, 0)
-		if s >= 2:
+		if s >= 4:
 			continue
 		slot[p] = s + 1
-		var dst := Rect2(px * TILE + s * 12 - 6, py * TILE - 16, 32, 48)
-		var src := Rect2(frame * 32, 0, 32, 48)
-		crowd.draw_texture_rect_region(tex, dst, src, Color.WHITE if st[k] == 2 else Color(0.7, 0.7, 0.75))
+		var rec: Dictionary = people.record(ids[k]) if k < ids.size() else {}
+		var depth := String(rec.get("depth", "D2")).to_lower()
+		var moving: bool = st[k] == 3 or st[k] == 4
+		var tex := Assets.texture("slimo.%s.%s" % [depth, "walk" if moving else "idle"])
+		if depth == "d5":
+			tex = Assets.texture("slimo.d5.pile")
+		if tex == null:
+			continue
+		var fw := 32
+		var frames := maxi(1, tex.get_width() / fw)
+		var dst := Rect2(px * TILE + s * 8 - 12, py * TILE + TILE - tex.get_height(), fw, tex.get_height())
+		var src := Rect2((frame % frames) * fw, 0, fw, tex.get_height())
+		crowd.draw_texture_rect_region(tex, dst, src, Color.WHITE)

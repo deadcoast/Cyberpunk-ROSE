@@ -7,16 +7,19 @@ var tick_hz := 2.0
 var accum := 0.0
 var ticks_per_frame := 0   # headless tests: fixed ticks per frame instead of the clock
 var seed_value := 11
-var agents := 3000
 var grow_ticks := 500
 signal ticked
 
+## The city (Full Design v3.11, The city's clock): the founding stratum, the Mat on its own clock, the roster's
+## slimos and the Stash's cargo — no phantoms. The Stash is bound so cargo lands into it as it arrives.
 func ensure() -> RoseSim:
 	if sim == null:
 		sim = RoseSim.new()
-		sim.start_scale(seed_value, agents, grow_ticks)
+		sim.start_city(seed_value, grow_ticks)
 		# the city on the grown Mat: the Heart, a Route Board, a Bench, a Pit on every Relay
 		sim.found_city()
+		sim.bind_stash(ensure_stash())
+		sim.refresh_movers(ensure_people(), day)
 	return sim
 
 func _process(delta: float) -> void:
@@ -80,11 +83,11 @@ var shift_report := {}
 ## The item the Stash sent to the Bench with Craft (a RoseStash.items() entry), consumed by the Bench screen.
 var bench_slot := {}
 
-## Market sites the Mat has reached (grates), as tile indices; selling needs one.
+## Market sites: the grates the Mat has reached (a grate once reached keeps its number), as tile indices.
 func markets() -> PackedInt32Array:
 	return ensure().sites().get("markets", PackedInt32Array())
 
-## Pits: the Heart first, then every Relay.
+## Pits: the Heart first, then every built Pit (the founding put one on every Relay).
 func pits() -> PackedInt32Array:
 	return ensure().sites().get("pits", PackedInt32Array())
 
@@ -92,7 +95,11 @@ func market_name(i: int) -> String:
 	return "GRATE %d" % (i + 1)
 
 func pit_name(i: int) -> String:
-	return "HEART" if i == 0 else "RELAY %d" % i
+	return "HEART" if i == 0 else "PIT %d" % i
+
+## Who is on the map changed (a Runner left): the movers follow the roster.
+func refresh_movers() -> void:
+	ensure().refresh_movers(ensure_people(), day)
 
 ## Shift end, whole (RoseSim.colony_end_shift): the colony hands out the jobs and pays the ghosts from the Stash,
 ## the Stash resolves its queues and the Bench's slots, the Pits take the nutrient and the genome drifts, the

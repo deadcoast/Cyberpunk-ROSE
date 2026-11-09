@@ -1,7 +1,8 @@
 extends ScreenBase
-## Colony: the world at Street / District / Stack zoom, the clock, the tools, and the city on it (Full Design v3.9):
-## structures and ghosts drawn on their footprints, the build tool placing the def the Build menu armed (the ghost
-## cursor is Cyan where it may stand, Hot Pink with the reason where it may not), districts named in District view.
+## Colony: the world at Street / District / Stack zoom, the clock, the tools, and the city on it (Full Design v3.9,
+## v3.11): structures and ghosts drawn on their footprints, the build tool placing the def the Build menu armed (the
+## ghost cursor is Cyan where it may stand, Hot Pink with the reason where it may not), districts named in District
+## view, the roster and the cargo on the Mat, the Stack view's traffic. Click a Pit or a Still for its quota.
 
 const ZOOMS := [1.0, 0.25, 1.0 / 32.0]
 const VIEW_NAMES := ["STREET", "DISTRICT", "STACK"]
@@ -11,7 +12,9 @@ var cam: Camera2D
 var view_index := 0
 var stats_label: Label
 var city_label: Label
-var tool := "feed"
+var tool := "select"
+var quota_panel: Panel
+var quota_id := -1
 var cursor: Node2D
 var cursor_tile := Vector2i(-1, -1)
 var cursor_reason := ""
@@ -46,12 +49,13 @@ func _build_content(c: Control) -> void:
 	tools.position = Vector2(4, 2)
 	tools.add_theme_constant_override("separation", 4)
 	bar.add_child(tools)
-	for t in ["feed", "bait", "salt", "sever", "relay", "build"]:
+	for t in ["select", "bait", "salt", "sever", "relay", "build"]:
 		var b := Button.new()
 		b.text = t.to_upper()
 		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(func():
 			tool = t
+			cursor_reason = ""
 			if t == "build" and Sim.build_tool == "":
 				Screens.show_screen("build")
 			_refresh())
@@ -60,14 +64,17 @@ func _build_content(c: Control) -> void:
 	hint.text = "  LMB apply   RMB cancel ghost   TAB view   SPACE pause   1/2/3 speed   WASD pan"
 	hint.add_theme_color_override("font_color", UiTheme.DUST)
 	tools.add_child(hint)
+	# a Pit's or Still's quota (Full Design v3.11, Quotas): opened by clicking one with SELECT
+	quota_panel = make_frame(c, Vector2(412, 190), Vector2(220, 92))
+	quota_panel.visible = false
 
 
 func _refresh() -> void:
 	var sim: RoseSim = Sim.ensure()
 	var s: Dictionary = sim.stats()
-	stats_label.text = "t %d  %s  %s  %.0f Hz   cells %d  nodes %d   slimos %d  carrying %d  cargo %d  delivered %d  jam %d" % [
+	stats_label.text = "t %d  %s  %s  %.0f Hz   cells %d  nodes %d   slimos %d  at work %d   cargo riding %d waiting %d  landed %d  jam %d" % [
 		s.get("tick", 0), VIEW_NAMES[view_index], "PAUSED" if Sim.paused else "RUN", Sim.tick_hz,
-		s.get("cells", 0), s.get("nodes", 0), s.get("agents", 0), s.get("carrying", 0), s.get("packets", 0), s.get("deliveries", 0), s.get("jammed", 0)]
+		s.get("cells", 0), s.get("nodes", 0), s.get("agents", 0), s.get("carrying", 0), s.get("riding", 0), s.get("waiting", 0), s.get("deliveries", 0), s.get("jammed", 0)]
 	# the city line: tier, structures and ghosts, beds, districts, the tool in hand
 	var pop: int = Sim.ensure_people().count()
 	var built := 0
@@ -84,13 +91,55 @@ func _refresh() -> void:
 	if tool == "build":
 		line += "   %s: %s" % [Sim.build_tool.to_upper() if Sim.build_tool != "" else "BUILD", cursor_reason if cursor_reason != "" else ("click to place" if Sim.build_tool != "" else "pick one on BUILD")]
 	else:
-		line += "   tool %s" % tool.to_upper()
+		line += "   tool %s%s" % [tool.to_upper(), (": " + cursor_reason) if cursor_reason != "" else ""]
 	var waiting: Array = Sim.last_shift.get("waiting", [])
 	if waiting.size() > 0:
 		line += "   %s waits for %s" % [String(waiting[0].name), String(waiting[0].cost.text)]
 	city_label.text = line.left(128)
 	world.redraw_city()
 	cursor.queue_redraw()
+	if quota_panel.visible:
+		_draw_quota()
+
+## The quota card: what the consumer keeps, whose rule it is, what it has and what is riding to it, the tier ceiling.
+func open_quota(sid: int) -> void:
+	quota_id = sid
+	quota_panel.visible = sid >= 0
+	if sid >= 0:
+		_draw_quota()
+
+func _draw_quota() -> void:
+	for ch in quota_panel.get_children():
+		ch.queue_free()
+	var q: Dictionary = Sim.ensure().quota(quota_id)
+	if q.is_empty():
+		quota_panel.visible = false
+		return
+	var pit := String(q.kind) == "pit"
+	make_label(quota_panel, String(q.name).to_upper(), Vector2(6, 4), UiTheme.CYAN)
+	make_button(quota_panel, "X", Vector2(198, 1), func(): open_quota(-1))
+	var keep := "KEEP %.1f nutrient" % float(q.target) if pit else "KEEP %d Enzyme Parts" % int(q.target)
+	make_label(quota_panel, "%s   %s" % [keep, String(q.from).to_upper()], Vector2(6, 18), UiTheme.ACID if float(q.target) > 0.0 else UiTheme.DUST)
+	var have := "stock %.2f  riding %.2f" % [float(q.stock), float(q.riding)] if pit else "store %d  riding %d" % [int(q.stock), int(q.riding)]
+	make_label(quota_panel, have + ("" if bool(q.reached) else "   NOT ON THE MAT"), Vector2(6, 30), UiTheme.DUST if bool(q.reached) else UiTheme.HOT_PINK)
+	if pit:
+		make_label(quota_panel, "CEILING %s   cap %.0f" % [String(q.ceiling_name), float(q.cap)], Vector2(6, 42), UiTheme.DUST)
+	var step := 0.5 if pit else 1.0
+	var cap: float = float(q.cap) if pit else 99.0
+	make_button(quota_panel, "-", Vector2(6, 58), func():
+		Sim.ensure().set_quota(quota_id, maxf(0.0, float(q.target) - step), int(q.ceiling))
+		_draw_quota())
+	make_button(quota_panel, "+", Vector2(26, 58), func():
+		Sim.ensure().set_quota(quota_id, minf(cap, float(q.target) + step), int(q.ceiling))
+		_draw_quota())
+	if pit:
+		make_button(quota_panel, "TIER", Vector2(46, 58), func():
+			Sim.ensure().set_quota(quota_id, float(q.target), (int(q.ceiling) + 1) % 5)
+			_draw_quota())
+	make_button(quota_panel, "DEFAULT", Vector2(90 if pit else 46, 58), func():
+		Sim.ensure().clear_quota(quota_id)
+		_draw_quota())
+	make_label(quota_panel, "pulled from the Stash at shift end", Vector2(6, 78), UiTheme.DUST)
 
 func _draw_cursor() -> void:
 	if tool != "build" or Sim.build_tool == "" or cursor_tile.x < 0:
@@ -122,8 +171,9 @@ func _process(delta: float) -> void:
 func set_view(i: int) -> void:
 	view_index = clampi(i, 0, ZOOMS.size() - 1)
 	cam.zoom = Vector2.ONE * ZOOMS[view_index]
-	world.draw_crowd = view_index == 0
+	world.draw_crowd = view_index < 2
 	world.show_districts = view_index == 1
+	world.set_view_level(view_index)
 	_refresh()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -160,13 +210,14 @@ func hover_tile(tx: int, ty: int) -> void:
 func apply_tool(tx: int, ty: int) -> void:
 	var sim: RoseSim = Sim.ensure()
 	match tool:
-		"feed": sim.feed(tx, ty, 5.0)
-		"bait": sim.bait(tx, ty, 0.4)
+		"select": open_quota(int(sim.consumer_at(tx, ty)))
+		"bait": cursor_reason = String(sim.bait_from_stash(tx, ty))
 		"salt": sim.salt(tx, ty, true)
 		"sever": sim.sever(tx, ty)
 		"relay": sim.place_relay(tx, ty)
 		"build": place_ghost(tx, ty)
-	world.full_paint()
+	if tool in ["bait", "salt", "sever", "relay"]:
+		world.full_paint()
 	_refresh()
 
 ## Place the armed def as a ghost; the reason stays on the city line when it cannot stand.

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub mod ledger;
-pub use ledger::{Delivery, Ledger, Queued, ShiftReport, Verb};
+pub use ledger::{Delivery, Dest, Landing, Ledger, Queued, Quota, Shipment, ShiftReport, Verb, Want};
 
 pub type Handle = u32;
 

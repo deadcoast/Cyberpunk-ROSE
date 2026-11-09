@@ -8,7 +8,8 @@
 #   d2_militia / scav_alarm_minus_20         (Patrols at the colony)
 #   relay_auto_sever / false_positive_sever  (Blooms)
 #   tithe_t1_10        (the accord)
-#   foreman_cut_5 / self_repair_x2 / quotas_slower   (quotas, damage)
+#   foreman_cut_5      one packet in twenty landing in the district is the foreman's (the cargo)
+#   self_repair_x2 / quotas_slower           (damage; the cut is what slows the quotas)
 
 [[law]]
 id = "rationing"
@@ -87,6 +88,6 @@ name = "Foreman's Cut"
 authority = 2
 mood = 0
 effect = "Foremen take 5% of district cargo as discretionary stock."
-cost = "Districts self-repair faster; your quotas fill slower."
-live = "PAC-043 quotas, D damage"
+cost = "Districts self-repair faster (with damage, Phase D); your quotas fill slower."
+live = ""
 flags = ["foreman_cut_5", "self_repair_x2", "quotas_slower"]

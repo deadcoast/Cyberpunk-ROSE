@@ -317,7 +317,34 @@ pub struct Structure {
     /// an upgrade in progress: the tier being built toward
     pub upgrading_to: Option<u8>,
     pub district: Option<u32>,
+    /// a Pit's or Still's quota as the player set it; None is the default (Full Design v3.11, Quotas)
+    #[serde(default)]
+    pub quota: Option<QuotaSet>,
 }
+
+/// A standing cargo policy: for a Pit, keep `target` nutrient taking no tier above `ceiling` (0 Common … 4 Relic);
+/// for a Still, keep `target` Enzyme-tag Parts in its store. A target of 0 is off.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct QuotaSet {
+    pub target: f32,
+    pub ceiling: u8,
+}
+
+/// Whose quota stands on a consumer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QuotaFrom {
+    /// the player's
+    Set,
+    /// the district's foreman: what the members' meals took last shift
+    Foreman,
+    /// a Still's default: its Cook slots
+    Slots,
+}
+
+/// A Pit's default tier ceiling (Pass 2's "never Blackline"; Uncommon unless raised).
+pub const QUOTA_CEILING: u8 = 1;
+/// The Foreman's Cut: one in this many packets landing in the district is the foreman's.
+pub const CUT_EVERY: u32 = 20;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ZoneKind {
@@ -413,6 +440,14 @@ pub struct District {
     pub ready_to_defect: bool,
     /// petitions refused; the second dissolves the district
     pub refusals: u8,
+    /// nutrient the members' meals took from the Mat last shift: the foreman's cargo demand (v3.11)
+    #[serde(default)]
+    pub ate: f32,
+    /// packets landed in the district while the Foreman's Cut stood, and the foreman's stock it took
+    #[serde(default)]
+    pub cut_seen: u32,
+    #[serde(default)]
+    pub cut: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -457,10 +492,12 @@ pub struct ShiftOutcome {
     pub bench_slots: u32,
     /// items the Appraise slots identify
     pub identifies: u32,
-    /// salt made, doses made, brine made
+    /// salt made, doses made, brine made; the Still per Cook slot that worked, the Salt Works and what it made
     pub salt: u32,
     pub doses: u32,
     pub brine: u32,
+    pub stills: Vec<u32>,
+    pub salt_from: Vec<(u32, u32)>,
     /// eddies the lanterns burn
     pub upkeep: u32,
     /// slimos a Medic treated
@@ -643,7 +680,7 @@ impl Colony {
         let di = defs.index(def_id).ok_or(PlaceError::Unknown)?;
         let id = self.next_id;
         self.next_id += 1;
-        self.structures.push(Structure { id, def: di, x, y, tier: 1, hp: defs.structure[di].hp_at(1), built: false, progress: 0, paid: false, upgrading_to: None, district: None });
+        self.structures.push(Structure { id, def: di, x, y, tier: 1, hp: defs.structure[di].hp_at(1), built: false, progress: 0, paid: false, upgrading_to: None, district: None, quota: None });
         Ok(id)
     }
 
@@ -692,6 +729,91 @@ impl Colony {
         Ok(to)
     }
 
+    // ------------------------------------------------------------ cargo (Full Design v3.11, Cargo)
+
+    /// The city's Pits in the order the Stash names them: the Heart first, then every built Pit by id.
+    pub fn pits(&self, defs: &StructureFile) -> Vec<u32> {
+        let mut v: Vec<u32> = self.structures.iter().filter(|s| defs.structure[s.def].id == "heart").map(|s| s.id).collect();
+        let mut p: Vec<u32> = self.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "pit").map(|s| s.id).collect();
+        p.sort_unstable();
+        v.extend(p);
+        v
+    }
+
+    /// The built Stills by id.
+    pub fn stills(&self, defs: &StructureFile) -> Vec<u32> {
+        let mut v: Vec<u32> = self.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "still").map(|s| s.id).collect();
+        v.sort_unstable();
+        v
+    }
+
+    /// The Mat cell a structure takes cargo at: the Heart's node for the Heart, else its anchor.
+    pub fn cargo_cell(&self, defs: &StructureFile, mat: &MatSim, id: u32) -> Option<usize> {
+        let s = self.get(id)?;
+        if defs.structure[s.def].id == "heart" {
+            return mat.heart.map(|(x, y)| y * mat.w + x);
+        }
+        Some(s.y as usize * mat.w + s.x as usize)
+    }
+
+    /// The quota standing on a Pit or Still: (target, tier ceiling, whose). A Pit's target is capped at its stock;
+    /// with none of the player's, a Pit in a district with a foreman carries the foreman's (the members' meals of
+    /// last shift, shared among the district's Pits without one of the player's), a Still its Cook slots.
+    pub fn quota_of(&self, defs: &StructureFile, id: u32) -> Option<(f32, u8, QuotaFrom)> {
+        let s = self.get(id)?;
+        let d = &defs.structure[s.def];
+        match d.id.as_str() {
+            "heart" | "pit" => {
+                let cap = d.stock_at(s.tier).max(0) as f32;
+                if let Some(q) = s.quota {
+                    return Some((q.target.clamp(0.0, cap), q.ceiling.min(4), QuotaFrom::Set));
+                }
+                let dist = self.districts.iter().find(|x| x.structures.contains(&id) && x.foreman.is_some())?;
+                let open = dist
+                    .structures
+                    .iter()
+                    .filter_map(|sid| self.get(*sid))
+                    .filter(|x| x.quota.is_none() && (x.built || defs.structure[x.def].id == "heart") && matches!(defs.structure[x.def].id.as_str(), "heart" | "pit"))
+                    .count()
+                    .max(1);
+                Some(((dist.ate / open as f32).min(cap), QUOTA_CEILING, QuotaFrom::Foreman))
+            }
+            "still" => match s.quota {
+                Some(q) => Some((q.target.max(0.0).round(), 0, QuotaFrom::Set)),
+                None => Some((d.slots_at(s.tier) as f32, 0, QuotaFrom::Slots)),
+            },
+            _ => None,
+        }
+    }
+
+    /// The player sets a Pit's or Still's quota (None restores the default). False for anything else.
+    pub fn set_quota(&mut self, defs: &StructureFile, id: u32, q: Option<QuotaSet>) -> bool {
+        let Some(s) = self.structures.iter_mut().find(|s| s.id == id) else { return false };
+        if !matches!(defs.structure[s.def].id.as_str(), "heart" | "pit" | "still") {
+            return false;
+        }
+        s.quota = q;
+        true
+    }
+
+    /// A packet landed at a structure: under the Foreman's Cut one in CUT_EVERY landing in its district is the
+    /// foreman's discretionary stock. Returns true when this one is.
+    pub fn cut_takes(&mut self, mat: &MatSim, id: u32) -> bool {
+        let Some(did) = self.get(id).and_then(|s| s.district) else { return false };
+        let Some(k) = self.districts.iter().position(|d| d.id == did) else { return false };
+        let dist = self.district_dist(mat, &self.districts[k]);
+        if !self.charter.flag_at("foreman_cut_5", dist) {
+            return false;
+        }
+        let d = &mut self.districts[k];
+        d.cut_seen += 1;
+        if d.cut_seen % CUT_EVERY == 0 {
+            d.cut += 1;
+            return true;
+        }
+        false
+    }
+
     /// The founding city: the Heart (3 × 3 on the heart node), a Route Board and a tier-1 Tweaker Bench beside it,
     /// a Pit on every Relay. Fails only when the Mat has no Heart.
     pub fn found(&mut self, defs: &StructureFile, mat: &MatSim) -> Result<(), String> {
@@ -702,7 +824,7 @@ impl Colony {
         let di = defs.index("heart").ok_or("no heart def")?;
         let id = self.next_id;
         self.next_id += 1;
-        self.structures.push(Structure { id, def: di, x: ax, y: ay, tier: 1, hp: defs.structure[di].hp_at(1), built: true, progress: 0, paid: true, upgrading_to: None, district: None });
+        self.structures.push(Structure { id, def: di, x: ax, y: ay, tier: 1, hp: defs.structure[di].hp_at(1), built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: None });
         // the Route Board and the Bench on the nearest tissue that takes them
         for (what, tier) in [("route_board", 1u8), ("bench", 1u8)] {
             let mut placed = false;
@@ -981,6 +1103,9 @@ impl Colony {
                 strike: false,
                 ready_to_defect: false,
                 refusals: 0,
+                ate: 0.0,
+                cut_seen: 0,
+                cut: 0,
             });
             // the district's own structures before the next hub is sought
             let reach = charter::cord_reach(mat, &[i], DISTRICT_CORDS);
@@ -1396,8 +1521,15 @@ impl Colony {
                 Job::Haul => out.sellers.push(slimo),
                 Job::Tend => out.work.tend_shifts_by.push(slimo),
                 Job::Cook => match d.id.as_str() {
-                    "still" => out.doses += 1,
-                    "salt_works" => out.salt += d.value_at("salt", s.tier).max(0) as u32,
+                    "still" => {
+                        out.doses += 1;
+                        out.stills.push(sid);
+                    }
+                    "salt_works" => {
+                        let n = d.value_at("salt", s.tier).max(0) as u32;
+                        out.salt += n;
+                        out.salt_from.push((sid, n));
+                    }
                     // the clinic: a Cook at a Lung is the medic
                     "lung" => out.treated.push(slimo),
                     _ => {}
@@ -1459,6 +1591,7 @@ impl Colony {
         let dark = shift_of_day == 1;
         let working: std::collections::HashSet<u32> = jobs.iter().map(|j| j.0).collect();
         let heart_tier = self.heart_tier(defs);
+        let mut ate: HashMap<u32, f32> = HashMap::new();
         for r in &roster.records {
             if r.status == Status::OnRun || r.status == Status::Stranded || r.status == Status::Dead {
                 continue;
@@ -1480,6 +1613,9 @@ impl Colony {
             if signalled && mat.n[i] >= MEAL_NUTRIENT {
                 mat.n[i] -= takes;
                 fed = true;
+                if let Some(d) = self.district_of(r.id).map(|d| d.id) {
+                    *ate.entry(d).or_insert(0.0) += takes;
+                }
             } else if eddies_left >= paste {
                 eddies_left -= paste;
                 out.paste_meals += 1;
@@ -1528,6 +1664,10 @@ impl Colony {
                     extra_target: extra,
                 },
             );
+        }
+        // what the members ate from the Mat: the foreman's cargo demand for the next shift
+        for d in self.districts.iter_mut() {
+            d.ate = ate.get(&d.id).copied().unwrap_or(0.0);
         }
         self.charter.dissolution_hit = false;
         // petitions read last shift's needs; the wake is over after one shift
@@ -1664,6 +1804,53 @@ mod tests {
         let laws = LawFile::shipped();
         assert!(c.charter.cannot_sign(laws.get("rationing").unwrap()).is_none());
         assert_eq!(c.charter.cannot_sign(laws.get("conscription").unwrap()), Some("needs 2 Authority".into()));
+    }
+
+    #[test]
+    fn quotas_default_to_off_the_foremans_meals_or_a_stills_slots_and_the_cut_takes_one_in_twenty() {
+        let (mut c, defs, mut mat, r, t) = with_district();
+        let pits = c.pits(&defs);
+        assert_eq!(defs.structure[c.get(pits[0]).unwrap().def].id, "heart", "the Heart is Pit 0");
+        assert_eq!(pits.len(), 1 + mat.relays.len(), "then a Pit on every Relay");
+        // a Relay's Pit outside any district: off
+        let outside = *pits.iter().find(|p| c.get(**p).unwrap().district.is_none()).expect("a Pit beyond the district");
+        assert_eq!(c.quota_of(&defs, outside), None);
+        // the Heart, in a district with a foreman, carries the foreman's: what the members ate from the Mat
+        let heart = pits[0];
+        let d = c.districts[0].clone();
+        assert!(d.foreman.is_some() && d.structures.contains(&heart));
+        for (who, home) in c.homes.clone() {
+            let h = c.get(home).unwrap();
+            mat.n[h.y as usize * mat.w + h.x as usize] = 0.9;
+            let _ = who;
+        }
+        c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        let ate = c.districts[0].ate;
+        assert!(ate > 0.0, "the members ate from the Mat");
+        let (q, ceiling, from) = c.quota_of(&defs, heart).unwrap();
+        assert_eq!(from, QuotaFrom::Foreman);
+        assert_eq!(ceiling, QUOTA_CEILING);
+        assert!(q > 0.0 && q <= ate + 1e-6);
+        // the player's stands over it, capped at the Pit's stock (the Heart's 40 at tier 1); 0 is off
+        assert!(c.set_quota(&defs, heart, Some(QuotaSet { target: 99.0, ceiling: 3 })));
+        assert_eq!(c.quota_of(&defs, heart), Some((40.0, 3, QuotaFrom::Set)));
+        assert!(c.set_quota(&defs, heart, Some(QuotaSet { target: 0.0, ceiling: 1 })));
+        assert_eq!(c.quota_of(&defs, heart).unwrap().0, 0.0);
+        // a Pod takes no quota
+        let pod = c.structures.iter().find(|s| defs.structure[s.def].id == "pod").unwrap().id;
+        assert!(!c.set_quota(&defs, pod, Some(QuotaSet { target: 1.0, ceiling: 1 })));
+        // a Still keeps its Cook slots unless told otherwise
+        let (x, y) = spot(&c, &defs, &mat, "still", (mat.heart.unwrap().0 as i32, mat.heart.unwrap().1 as i32)).unwrap();
+        let still = c.place_built(&defs, &mat, "still", x, y, 1).unwrap();
+        assert_eq!(c.quota_of(&defs, still), Some((defs.get("still").unwrap().slots_at(1) as f32, 0, QuotaFrom::Slots)));
+        assert_eq!(c.stills(&defs), vec![still]);
+        // the Foreman's Cut: nothing taken before it reaches the district, then one landing in twenty
+        assert!(!(0..40).any(|_| c.cut_takes(&mat, heart)));
+        c.charter.earn(1);
+        c.sign(&defs, &mat, LawFile::shipped().get("foremans_cut").unwrap()).unwrap();
+        let taken = (0..40).filter(|_| c.cut_takes(&mat, heart)).count();
+        assert_eq!(taken, 2);
+        assert_eq!(c.districts[0].cut, 2);
     }
 
     #[test]

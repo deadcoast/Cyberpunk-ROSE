@@ -19,5 +19,6 @@ save = { path = "../../core/crates/save" }
 run = { path = "../../core/crates/run" }
 people = { path = "../../core/crates/people" }
 colony = { path = "../../core/crates/colony" }
+render = { path = "../../core/crates/render" }
 toml.workspace = true
 postcard.workspace = true

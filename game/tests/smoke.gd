@@ -63,6 +63,14 @@ func _process(_delta: float) -> bool:
 			return _finish()
 	return false
 
+## Step the city until the Stash's report shows `n` of `what` landed (or 1200 ticks); returns the ticks taken.
+func _ride(st: RoseStash, what: String, n: int) -> int:
+	for t in 1200:
+		sim.ensure().step()
+		if int(st.landed().get(what, 0)) >= n:
+			return t + 1
+	return 1200
+
 func _verify_current() -> void:
 	var id: String = screen_ids[screen_i]
 	var scr: Node = screens.current
@@ -112,9 +120,24 @@ func _verify_current() -> void:
 			_check(String(rs.can_place("vault", hx, hy)) != "", "colony: a Vault should refuse without the Heart at tier 2")
 			_check(rs.structures().size() == founded.size() + 1 and not bool(rs.structures()[-1].built), "colony: the ghost is not a ghost")
 			sim.build_tool = ""
-			scr.tool = "feed"
+			# the city has no phantoms (Full Design v3.11): the movers are the roster, one each
+			var ids: PackedInt32Array = rs.agent_ids()
+			_check(ids.size() == sim.ensure_people().count() and int(rs.stats().agents) == ids.size(), "colony: %d movers for a roster of %d" % [ids.size(), sim.ensure_people().count()])
+			# SELECT on the Heart opens its quota card; a quota set stands as yours, DEFAULT restores the default
+			scr.tool = "select"
+			scr.apply_tool(hx, hy)
+			_check(scr.quota_panel.visible and scr.quota_id == int(founded[0].id), "colony: selecting the Heart did not open its quota")
+			_check(rs.set_quota(scr.quota_id, 1.5, 1) and is_equal_approx(float(rs.quota(scr.quota_id).target), 1.5) and String(rs.quota(scr.quota_id).from) == "yours", "colony: quota %s" % str(rs.quota(scr.quota_id)))
+			_check(rs.clear_quota(scr.quota_id) and String(rs.quota(scr.quota_id).from) != "yours", "colony: the default did not come back")
+			_check(int(rs.consumer_at(int(founded[1].x), int(founded[1].y))) == -1, "colony: the Route Board is not a consumer")
+			# bait costs a Common Chrome from the Stash: the starting haul has none, so it says so and the Mat keeps
+			scr.tool = "bait"
+			scr.apply_tool(hx + 3, hy)
+			_check(scr.cursor_reason.contains("Common Chrome"), "colony: bait without Common Chrome said '%s'" % scr.cursor_reason)
+			# the Stack view is the core's circuit board, one pixel a tile
+			scr.tool = "select"
 			scr.set_view(2)
-			scr.apply_tool(96, 24)
+			_check(rs.stack_image().size() == rs.width() * rs.height() * 3 and scr.world.traffic_sprite.visible and not scr.world.matlayer.visible, "colony: the Stack view did not draw the core's image")
 		"stash":
 			var st: RoseStash = scr.stash
 			_check(st.count() >= 14, "stash: starting haul not placed (%d)" % st.count())
@@ -156,20 +179,23 @@ func _verify_current() -> void:
 			var vals := []
 			for it in st.items():
 				vals.append(int(it.sell))
-			# shift end: the ledger pays, the Pit eats, the genome drifts
+			# shift end: the feed leaves the Heart as cargo (Full Design v3.11, Cargo) and lands when its packet does:
+			# the Pit eats and the genome drifts on arrival, not at the shift end
 			var genes0: PackedFloat32Array = sim.ensure().genes()
-			var stock0: float = sim.ensure().pit_stock(0)
 			sim.end_shift()
 			var r: Dictionary = sim.shift_report
-			_check(int(r.get("fed", 0)) == 1 and st.queue_count() == 0, "stash: shift end did not resolve the feed (%s)" % str(r))
-			_check(sim.ensure().pit_stock(0) > stock0, "stash: the Heart took no nutrient (%.2f -> %.2f)" % [stock0, sim.ensure().pit_stock(0)])
+			_check(int(r.get("left", 0)) >= 1 and int(r.get("fed", 0)) == 0 and st.queue_count() == 0, "stash: the feed did not leave as cargo (%s)" % str(r))
+			_check(int(sim.ensure().stats().get("riding", 0)) + int(sim.ensure().stats().get("waiting", 0)) >= 1, "stash: nothing on the Mat after the shift end")
+			var ticks := _ride(st, "fed", 1)
+			var landed: Dictionary = st.landed()
+			_check(int(landed.fed) == 1 and landed.deliveries.size() == 1 and int(landed.deliveries[0].pit) == 0, "stash: the feed did not land at the Heart (%s after %d ticks)" % [str(landed), ticks])
 			var genes1: PackedFloat32Array = sim.ensure().genes()
 			var drifted := false
 			for g in 10:
 				if absf(genes1[g] - genes0[g]) > 1e-6:
 					drifted = true
-			_check(drifted, "stash: fed chrome did not drift the genome")
-			# sell resolves too, with glut: two curios (the Route Board packs the tools later)
+			_check(drifted, "stash: fed chrome did not drift the genome when it landed")
+			# sell rides too and pays on arrival, with glut: two curios (the Route Board packs the tools later)
 			var sold := 0
 			for it in st.items():
 				if String(it.category) in ["curio", "tech"] and not bool(it.pinned) and sold < 2:
@@ -178,7 +204,9 @@ func _verify_current() -> void:
 			_check(sold == 2, "stash: could not queue two sales (%d)" % sold)
 			var e0: int = st.eddies()
 			sim.end_shift()
-			_check(st.eddies() > e0 and int(sim.shift_report.sold) == 2, "stash: selling earned nothing (%d -> %d)" % [e0, st.eddies()])
+			_check(st.eddies() == e0, "stash: a sale paid before it reached its market")
+			ticks = _ride(st, "sold", 2)
+			_check(st.eddies() > e0 and int(st.landed().sold) == 2, "stash: selling earned nothing on arrival (%d -> %d after %d ticks)" % [e0, st.eddies(), ticks])
 			_check(st.save_round_trip(), "stash: save round trip with a ledger failed")
 			_check(st.upgrade() and st.width() == 16, "stash: upgrade failed")
 			# Craft hands the Bench an item

@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 8;
+pub const SAVE_VERSION: u16 = 9;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -91,7 +91,8 @@ pub struct SaveFile {
     pub bench: bench::BenchQueue,
     /// the slimos: records, the memorial (v6)
     pub roster: people::Roster,
-    /// the city: structures, zones, districts, homes (v7); the Charter, unrest, barred hubs (v8)
+    /// the city: structures, zones, districts, homes (v7); the Charter, unrest, barred hubs (v8); quotas, the foreman's
+    /// cut (v9). The ledger carries what is on the Mat, the Stills' stores and what waits at the Heart (v9)
     pub colony: colony::Colony,
 }
 
@@ -300,7 +301,13 @@ mod tests {
         save.colony.charter.earn(1);
         save.colony.charter.sign(colony::LawFile::shipped().get("rationing").unwrap(), 4, 42, (0, 1)).unwrap();
         save.colony.barred_hubs.push((10, 12, 30));
+        // cargo on the Mat and a quota (v9)
+        save.colony.structures.push(colony::Structure { id: 3, def: 1, x: 4, y: 5, tier: 1, hp: 100, built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: Some(colony::QuotaSet { target: 2.5, ceiling: 1 }) });
+        save.ledger.ship(items::ItemInstance::new(items::ItemId(0)), inventory::Dest::Pit(1));
+        save.ledger.stores.push((3, vec![items::ItemInstance::new(items::ItemId(1))]));
         let back = SaveFile::decode(&save.encode()).unwrap();
+        assert_eq!(back.ledger.in_flight, save.ledger.in_flight);
+        assert_eq!(back.ledger.stores, save.ledger.stores);
         assert_eq!(back.colony.charter.law("rationing").unwrap().reach, 42);
         assert_eq!(back.roster, save.roster);
         assert_eq!(back.roster.records.len(), 6);
