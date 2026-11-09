@@ -277,7 +277,7 @@ sigma = 0.3
 cost = { parts = 6, chrome = 0, eddies = 0 }
 build = 8
 hp = 100
-text = "Where a district's laws are posted. One per district; no Board, no laws there."
+text = "Where a district's laws are posted. Its foreman votes on every law and petitions the Charter from here; one per district."
 art = "struct.charter_board"
 
 [[structure]]

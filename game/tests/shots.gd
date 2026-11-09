@@ -55,6 +55,10 @@ func _process(_delta: float) -> bool:
 		scr.set_view(0)
 		scr.cam.position = Vector2((int(heart.x) + 1) * 32 + 16, (int(heart.y) + 1) * 32 + 16)
 		scr.hover_tile(int(heart.x) + 6, int(heart.y) + 4)
+	if frames_on_screen == 6 and screen_i >= 0 and screen_ids[screen_i] == "charter":
+		# the Charter under load: Rationing signed with the Authority the Heart's district paid
+		sim.ensure().sign_law("rationing")
+		screens.current._redraw()
 	if frames_on_screen == 6 and screen_i >= 0 and screen_ids[screen_i] == "stash":
 		# the Stash with a card open and a sale and a feed queued
 		var scr: Node = screens.current

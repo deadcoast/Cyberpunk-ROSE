@@ -11,6 +11,7 @@ var sim_sent_handle := -1
 var screen_ids: Array = []
 var smoke_runner := -1
 var smoke_ghost := -1
+var smoke_signed := false
 var screen_i := -1
 var frames_on_screen := 0
 var resolved_per_screen := {}
@@ -205,10 +206,31 @@ func _verify_current() -> void:
 			_check(float(pp.record(scr.selected).utility[scav]) <= 0.0, "slimo: priority 0 should mean never")
 			pp.set_priority(scr.selected, scav, 2)
 			var sched: PackedStringArray = pp.record(scr.selected).schedule
-			_check(Array(sched) == ["Work", "Rest", "Any"], "slimo: default schedule %s" % str(sched))
-			_check(String(pp.cycle_schedule(scr.selected, 1)) == "Any" and String(pp.cycle_schedule(scr.selected, 1)) == "Work" and String(pp.cycle_schedule(scr.selected, 1)) == "Rest", "slimo: schedule does not cycle")
+			_check(Array(sched) == ["Any", "Any", "Any"], "slimo: default schedule %s" % str(sched))
+			_check(String(pp.cycle_schedule(scr.selected, 1)) == "Work" and String(pp.cycle_schedule(scr.selected, 1)) == "Rest" and String(pp.cycle_schedule(scr.selected, 1)) == "Any", "slimo: schedule does not cycle")
 			_check(scr.card_frame.get_child_count() > 40, "slimo: card drawn thin (%d nodes)" % scr.card_frame.get_child_count())
 			smoke_runner = int(el[0])
+		"charter":
+			# the eight laws as cards; Authority comes from a district formed, and one signs Rationing
+			var rs: RoseSim = sim.ensure()
+			var laws: Array = rs.laws()
+			_check(laws.size() == 8 and scr.laws_frame.get_child_count() == 8, "charter: %d laws, %d cards" % [laws.size(), scr.laws_frame.get_child_count()])
+			var ds: Array = rs.districts(sim.ensure_people())
+			if ds.is_empty():
+				_check(int(rs.authority()) == 0 and String(rs.sign_law("rationing")) == "needs 1 Authority", "charter: signed with no Authority")
+			else:
+				_check(int(rs.authority()) >= 1, "charter: a district formed and no Authority (%d)" % int(rs.authority()))
+				var why := String(rs.sign_law("rationing"))
+				_check(why == "", "charter: Rationing would not sign (%s)" % why)
+				_check(String(rs.sign_law("rationing")) == "already signed", "charter: Rationing signed twice")
+				var st_ := ""
+				for l in rs.laws():
+					if String(l.id) == "rationing":
+						st_ = String(l.state)
+				_check(st_ in ["signed", "spreading"], "charter: Rationing is %s" % st_)
+				_check(rs.charter_history().size() >= 1, "charter: the board has no history")
+				smoke_signed = true
+			_check(String(rs.sign_law("tithe")) == "only the accord offers it", "charter: Tithe outside the accord")
 		"bench":
 			var st: RoseStash = scr.stash
 			_check(scr.recipes.size() == 60 and int(st.tier_open()) == 1, "bench: %d recipes, tier %d open" % [scr.recipes.size(), int(st.tier_open())])
@@ -441,6 +463,16 @@ func _verify_current() -> void:
 			_check(ds.size() == 1 and int(ds[0].foreman) >= 0 and ds[0].structures.size() >= 3, "run: the Heart's district did not form (%s)" % str(ds))
 			var fm: Dictionary = pp.record(int(ds[0].foreman))
 			_check(not fm.is_empty() and ds[0].members.has(int(ds[0].foreman)), "run: the foreman is not a member")
+			# the Charter: the law signed before the run is in force in the Heart's district by now
+			if smoke_signed:
+				var arrived := false
+				for l in rs.laws():
+					if String(l.id) == "rationing":
+						var reached: PackedStringArray = l.get("reached", PackedStringArray())
+						arrived = reached.has(String(ds[0].name))
+				_check(arrived, "run: Rationing never reached %s" % String(ds[0].name))
+			else:
+				_check(int(rs.authority()) >= 1, "run: the district formed and paid no Authority")
 			for b in rr.bonds:
 				_check(int(b.runs) == 1, "run: bond runs %d after one run together" % int(b.runs))
 			_check(rr.bonds.size() == 2, "run: %d bonds counted for two followers" % rr.bonds.size())

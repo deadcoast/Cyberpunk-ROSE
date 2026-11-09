@@ -3,8 +3,11 @@
 //! around a hub and elect a foreman, and the foreman's petitions. Every number here is the design's; the Godot
 //! screens draw what this crate holds and the roster (`people`) reads the `ShiftContext` it writes.
 
-use std::collections::HashMap;
+pub mod charter;
 
+use std::collections::{HashMap, HashSet};
+
+pub use charter::{Charter, LawDef, LawFile, SignedLaw};
 use mat::sim::{hy, sub};
 use mat::MatSim;
 use people::{Job, Need, Record, Roster, ShiftContext, ShiftWork, Stat, Status, TraitFile};
@@ -14,8 +17,10 @@ pub const STRUCTURES_TOML: &str = include_str!("../../../../data/structures.toml
 
 /// Signal a structure needs under it unless its def says otherwise, and the floor for any zone cell.
 pub const SIGNAL_FLOOR: f32 = 0.3;
-/// Tiles from a hub within which structures and beds belong to its district.
-pub const DISTRICT_RADIUS: i32 = 8;
+/// Cords from a hub within which structures and beds belong to its district (Pass 2: 12 cords).
+pub const DISTRICT_CORDS: u32 = 12;
+/// Shifts a dissolved district's Node cannot hub again.
+pub const HUB_BAR_SHIFTS: u32 = 10;
 /// Built structures a hub needs to form a district.
 pub const DISTRICT_MIN_STRUCTURES: usize = 3;
 /// Shifts a foreman serves before the next election.
@@ -369,9 +374,12 @@ pub struct Zone {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Petition {
+    /// the failing need (Mood for the unrest petition at 10)
     pub need: Need,
-    /// structure ids that answer it, the first the one asked for
+    /// structure ids that answer it, the first the one asked for (empty when it asks a repeal)
     pub asks: Vec<String>,
+    /// the law it asks repealed (the unrest petition, Pass 2)
+    pub repeal: Option<String>,
     pub shifts_left: u8,
     pub missed: bool,
 }
@@ -395,6 +403,16 @@ pub struct District {
     pub wake: bool,
     /// consecutive shifts each need averaged under 30
     pub low: [u8; 5],
+    /// the members' average Mood, read at the start of the shift (Pass 2's district Mood)
+    pub mood: i32,
+    /// consecutive shifts that average has been under 30
+    pub low_mood: u8,
+    /// on strike: members take no jobs until the average is back at 30
+    pub strike: bool,
+    /// the average is under 20: members leave when a destination is there (Phase D)
+    pub ready_to_defect: bool,
+    /// petitions refused; the second dissolves the district
+    pub refusals: u8,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -447,14 +465,21 @@ pub struct ShiftOutcome {
     pub upkeep: u32,
     /// slimos a Medic treated
     pub treated: Vec<u32>,
-    /// slimos who ate paste (2 e each)
+    /// slimos who ate paste, and the eddies it cost (2 e each, 1 under Rationing)
     pub paste_meals: u32,
+    pub paste_eddies: u32,
     /// who worked the market, for the sales' Trade XP
     pub sellers: Vec<u32>,
     pub contexts: HashMap<u32, ShiftContext>,
     pub work: ShiftWork,
     pub districts_formed: Vec<u32>,
     pub elections: Vec<(u32, u32)>,
+    /// districts striking this shift, districts ready to defect
+    pub strikes: Vec<u32>,
+    pub ready_to_defect: Vec<u32>,
+    /// laws that reached a district this shift: (law, district)
+    pub laws_arrived: Vec<(String, u32)>,
+    pub authority_gained: u32,
     pub petitions_raised: Vec<(u32, Need)>,
     pub petitions_met: Vec<u32>,
     pub petitions_missed: Vec<u32>,
@@ -472,6 +497,18 @@ pub struct Colony {
     pub shift: u32,
     /// names not yet given to a district
     pub names_left: Vec<String>,
+    /// the laws, Authority and the board's history (Full Design, The Charter)
+    pub charter: Charter,
+    /// Nodes a dissolved district stood on, and the shift they may hub again
+    pub barred_hubs: Vec<(u16, u16, u32)>,
+    /// structures that lost signal priority with their district (read by the routing, PAC-043)
+    pub low_priority: Vec<u32>,
+    /// cord distance from the Heart per tile, refreshed each shift
+    #[serde(skip)]
+    pub heart_dist: Vec<u32>,
+    /// each slimo's wave distance this shift (its hub, its bed or the Heart)
+    #[serde(skip)]
+    pub wave: HashMap<u32, u32>,
 }
 
 impl Default for Colony {
@@ -491,7 +528,20 @@ fn cheb(a: (i32, i32), b: (i32, i32)) -> i32 {
 
 impl Colony {
     pub fn new() -> Self {
-        Colony { structures: Vec::new(), zones: Vec::new(), districts: Vec::new(), homes: HashMap::new(), next_id: 1, shift: 0, names_left: DISTRICT_NAMES.iter().map(|s| s.to_string()).collect() }
+        Colony {
+            structures: Vec::new(),
+            zones: Vec::new(),
+            districts: Vec::new(),
+            homes: HashMap::new(),
+            next_id: 1,
+            shift: 0,
+            names_left: DISTRICT_NAMES.iter().map(|s| s.to_string()).collect(),
+            charter: Charter::default(),
+            barred_hubs: Vec::new(),
+            low_priority: Vec::new(),
+            heart_dist: Vec::new(),
+            wave: HashMap::new(),
+        }
     }
 
     /// The city tier from the population: 1 Hamlet (under 100), 2 Quarter, 3 City, 4 Empire.
@@ -836,47 +886,118 @@ impl Colony {
         }
     }
 
+    // ------------------------------------------------------------ distances on the Mat
+
+    /// The tiles of a structure's footprint that are on the Mat (its anchor at least).
+    fn mat_tiles(defs: &StructureFile, mat: &MatSim, s: &Structure) -> Vec<usize> {
+        Self::footprint(&defs.structure[s.def], s.x, s.y)
+            .into_iter()
+            .map(|(x, y)| y as usize * mat.w + x as usize)
+            .filter(|&i| i < mat.hy.len() && (mat.hy[i] == hy::CORD || mat.hy[i] == hy::NODE))
+            .collect()
+    }
+
+    /// Refresh the cord distance from the Heart (the wave's yardstick).
+    pub fn refresh_heart_dist(&mut self, mat: &MatSim) {
+        let starts: Vec<usize> = mat.heart.map(|(x, y)| vec![y * mat.w + x]).unwrap_or_default();
+        self.heart_dist = charter::cord_distances(mat, &starts, u32::MAX);
+    }
+
+    fn dist_at(&self, i: usize) -> u32 {
+        if self.heart_dist.is_empty() { 0 } else { self.heart_dist.get(i).copied().unwrap_or(u32::MAX) }
+    }
+
+    /// How far the wave has to walk to reach a slimo: its district's hub, else its bed, else the Heart (0).
+    pub fn wave_dist(&self, defs: &StructureFile, mat: &MatSim, slimo: u32) -> u32 {
+        if self.heart_dist.is_empty() {
+            return 0;
+        }
+        if let Some(d) = self.district_of(slimo) {
+            return self.dist_at(d.hub.1 as usize * mat.w + d.hub.0 as usize);
+        }
+        if let Some(h) = self.home_of(slimo) {
+            return Self::mat_tiles(defs, mat, h).into_iter().map(|i| self.dist_at(i)).min().unwrap_or(u32::MAX);
+        }
+        0
+    }
+
+    /// The wave's distance to a district's hub.
+    pub fn district_dist(&self, mat: &MatSim, d: &District) -> u32 {
+        self.dist_at(d.hub.1 as usize * mat.w + d.hub.0 as usize)
+    }
+
     // ------------------------------------------------------------ districts
 
-    /// Form districts where a Node (or a Relay with a Shrine) has three built structures within reach, greedily by
-    /// count, up to the city tier's cap; refresh membership and claim structures. Returns the ids formed this call.
-    pub fn form_districts(&mut self, mat: &MatSim, city_tier: u8) -> Vec<u32> {
+    /// Form districts where a Node has three built structures within 12 cords, greedily by count, up to the city
+    /// tier's cap; then give every structure to the nearest hub within 12 cords. Returns the ids formed.
+    pub fn form_districts(&mut self, defs: &StructureFile, mat: &MatSim, city_tier: u8) -> Vec<u32> {
         let cap = DISTRICT_CAP[(city_tier.max(1) as usize - 1).min(3)];
         let mut formed = Vec::new();
-        let claimed = |me: &Colony, sid: u32| me.districts.iter().any(|d| d.structures.contains(&sid));
+        self.barred_hubs.retain(|b| b.2 > self.shift);
         while self.districts.len() < cap {
-            // candidate hubs: node tiles with the most unclaimed built structures within reach
-            let mut best: Option<(usize, (u16, u16))> = None;
-            let built: Vec<(u32, i32, i32)> = self.structures.iter().filter(|s| s.built && !claimed(self, s.id)).map(|s| (s.id, s.x as i32, s.y as i32)).collect();
-            for y in 0..mat.h {
-                for x in 0..mat.w {
-                    let i = y * mat.w + x;
-                    if mat.hy[i] != hy::NODE {
-                        continue;
-                    }
-                    if self.districts.iter().any(|d| cheb((d.hub.0 as i32, d.hub.1 as i32), (x as i32, y as i32)) <= DISTRICT_RADIUS) {
-                        continue;
-                    }
-                    let n = built.iter().filter(|&&(_, sx, sy)| cheb((sx, sy), (x as i32, y as i32)) <= DISTRICT_RADIUS).count();
-                    if n >= DISTRICT_MIN_STRUCTURES && best.is_none_or(|(bn, _)| n > bn) {
-                        best = Some((n, (x as u16, y as u16)));
-                    }
+            let claimed: HashSet<u32> = self.districts.iter().flat_map(|d| d.structures.iter().copied()).collect();
+            let built: Vec<Vec<usize>> = self.structures.iter().filter(|s| s.built && !claimed.contains(&s.id)).map(|s| Self::mat_tiles(defs, mat, s)).collect();
+            if built.len() < DISTRICT_MIN_STRUCTURES {
+                break;
+            }
+            let hubs: Vec<usize> = self.districts.iter().map(|d| d.hub.1 as usize * mat.w + d.hub.0 as usize).collect();
+            let near_hub = charter::cord_reach(mat, &hubs, DISTRICT_CORDS);
+            let mut best: Option<(usize, usize)> = None; // (count, tile)
+            for i in 0..mat.hy.len() {
+                if mat.hy[i] != hy::NODE || near_hub.contains_key(&i) {
+                    continue;
+                }
+                let (x, y) = ((i % mat.w) as u16, (i / mat.w) as u16);
+                if self.barred_hubs.iter().any(|b| b.0 == x && b.1 == y) {
+                    continue;
+                }
+                let reach = charter::cord_reach(mat, &[i], DISTRICT_CORDS);
+                let n = built.iter().filter(|tiles| tiles.iter().any(|t| reach.contains_key(t))).count();
+                if n >= DISTRICT_MIN_STRUCTURES && best.is_none_or(|(bn, bi)| n > bn || (n == bn && i < bi)) {
+                    best = Some((n, i));
                 }
             }
-            let Some((_, hub)) = best else { break };
+            let Some((_, i)) = best else { break };
             let id = self.next_id;
             self.next_id += 1;
             let name = if self.names_left.is_empty() { format!("District {id}") } else { self.names_left.remove(0) };
-            self.districts.push(District { id, name, hub, structures: Vec::new(), members: Vec::new(), foreman: None, term_left: 0, served: 0, priorities: [2; 9], petition: None, boon_shifts: 0, wake: false, low: [0; 5] });
+            let hub = ((i % mat.w) as u16, (i / mat.w) as u16);
+            self.districts.push(District {
+                id,
+                name,
+                hub,
+                structures: Vec::new(),
+                members: Vec::new(),
+                foreman: None,
+                term_left: 0,
+                served: 0,
+                priorities: [2; 9],
+                petition: None,
+                boon_shifts: 0,
+                wake: false,
+                low: [0; 5],
+                mood: 60,
+                low_mood: 0,
+                strike: false,
+                ready_to_defect: false,
+                refusals: 0,
+            });
+            // the district's own structures before the next hub is sought
+            let reach = charter::cord_reach(mat, &[i], DISTRICT_CORDS);
+            let mine: Vec<u32> = self.structures.iter().filter(|s| s.built && !claimed.contains(&s.id) && Self::mat_tiles(defs, mat, s).iter().any(|t| reach.contains_key(t))).map(|s| s.id).collect();
+            self.districts.last_mut().unwrap().structures = mine;
             formed.push(id);
         }
-        // structures to the nearest hub within reach; beds decide members
-        for s in self.structures.iter_mut() {
-            let mut best: Option<(i32, u32)> = None;
-            for d in &self.districts {
-                let dist = cheb((d.hub.0 as i32, d.hub.1 as i32), (s.x as i32, s.y as i32));
-                if dist <= DISTRICT_RADIUS && best.is_none_or(|(bd, _)| dist < bd) {
-                    best = Some((dist, d.id));
+        // every structure to the nearest hub within 12 cords
+        let reaches: Vec<(u32, HashMap<usize, u32>)> = self.districts.iter().map(|d| (d.id, charter::cord_reach(mat, &[d.hub.1 as usize * mat.w + d.hub.0 as usize], DISTRICT_CORDS))).collect();
+        let tiles: Vec<Vec<usize>> = self.structures.iter().map(|s| Self::mat_tiles(defs, mat, s)).collect();
+        for (s, t) in self.structures.iter_mut().zip(tiles.iter()) {
+            let mut best: Option<(u32, u32)> = None;
+            for (did, reach) in &reaches {
+                if let Some(dist) = t.iter().filter_map(|i| reach.get(i)).min() {
+                    if best.is_none_or(|(bd, _)| *dist < bd) {
+                        best = Some((*dist, *did));
+                    }
                 }
             }
             s.district = best.map(|b| b.1);
@@ -906,6 +1027,11 @@ impl Colony {
 
     pub fn district_of(&self, slimo: u32) -> Option<&District> {
         self.districts.iter().find(|d| d.members.contains(&slimo))
+    }
+
+    /// A district's voice on the Charter: a built Charter Board among its structures, or the Heart (its own board).
+    pub fn has_board(&self, defs: &StructureFile, d: &District) -> bool {
+        d.structures.iter().any(|sid| self.get(*sid).is_some_and(|s| s.built && matches!(defs.structure[s.def].id.as_str(), "charter_board" | "heart")))
     }
 
     /// Elections (research 14): weight Voice + Mood / 20, Orator × 2; on a run or stranded cannot stand; ties to
@@ -965,10 +1091,78 @@ impl Colony {
         }
     }
 
-    /// Petitions (research 14): a need averaging under 30 for two shifts raises one; the deadline counts down; the
-    /// structure standing in the district answers it. Returns (raised, met, missed).
-    fn petitions(&mut self, defs: &StructureFile, roster: &Roster) -> (Vec<(u32, Need)>, Vec<u32>, Vec<u32>) {
+    /// The structures that answer a failing need.
+    fn asks_for(need: Need) -> Vec<String> {
+        match need {
+            Need::Fed => vec!["pit".into()],
+            Need::Lit => vec!["lume_farm".into(), "lantern".into()],
+            Need::Dry => vec!["lung".into()],
+            Need::Rest => vec!["bunkhouse".into(), "pod".into()],
+            _ => vec!["shrine".into()],
+        }
+    }
+
+    /// Unrest (Pass 2), read off each district's average Mood at the start of the shift: strike after two shifts
+    /// under 30; ready to defect under 20; under 10 the foreman petitions (through a Board) to repeal the law that
+    /// costs the district the most Mood, or for the structure its worst need lacks.
+    fn unrest(&mut self, defs: &StructureFile, mat: &MatSim, roster: &Roster, out: &mut ShiftOutcome) {
+        let boards: HashSet<u32> = self.districts.iter().filter(|d| self.has_board(defs, d)).map(|d| d.id).collect();
+        let dists: HashMap<u32, u32> = self.districts.iter().map(|d| (d.id, self.district_dist(mat, d))).collect();
+        let charter = &self.charter;
+        for d in self.districts.iter_mut() {
+            let members: Vec<&Record> = d.members.iter().filter_map(|m| roster.get(*m)).collect();
+            if members.is_empty() {
+                d.strike = false;
+                d.ready_to_defect = false;
+                continue;
+            }
+            d.mood = members.iter().map(|r| r.mood()).sum::<i32>() / members.len() as i32;
+            if d.mood < 30 {
+                d.low_mood = d.low_mood.saturating_add(1);
+            } else {
+                d.low_mood = 0;
+            }
+            let was = d.strike;
+            d.strike = d.mood < 30 && (d.low_mood >= 2 || was);
+            if d.strike {
+                out.strikes.push(d.id);
+                if !was {
+                    out.lines.push(format!("{} is on strike: Mood {}", d.name, d.mood));
+                }
+            }
+            d.ready_to_defect = d.mood < 20;
+            if d.ready_to_defect {
+                out.ready_to_defect.push(d.id);
+            }
+            if d.mood < 10 && d.foreman.is_some() && boards.contains(&d.id) {
+                let dist = dists[&d.id];
+                let costliest = charter.in_force(dist).filter(|l| l.mood < 0).min_by_key(|l| (l.mood, l.shift)).map(|l| (l.id.clone(), l.name.clone()));
+                let standing_repeal = d.petition.as_ref().and_then(|p| p.repeal.clone());
+                if let Some((law, name)) = costliest {
+                    if standing_repeal.as_deref() != Some(law.as_str()) {
+                        d.petition = Some(Petition { need: Need::Mood, asks: Vec::new(), repeal: Some(law), shifts_left: PETITION_SHIFTS, missed: false });
+                        out.petitions_raised.push((d.id, Need::Mood));
+                        out.lines.push(format!("{} petitions the Charter: repeal {}", d.name, name));
+                    }
+                } else if d.petition.is_none() {
+                    let worst = [Need::Fed, Need::Lit, Need::Dry, Need::Signal, Need::Rest].into_iter().min_by_key(|n| members.iter().map(|r| r.need(*n)).sum::<i32>()).unwrap();
+                    d.petition = Some(Petition { need: worst, asks: Self::asks_for(worst), repeal: None, shifts_left: PETITION_SHIFTS, missed: false });
+                    out.petitions_raised.push((d.id, worst));
+                    out.lines.push(format!("{} petitions the Charter: {}", d.name, worst.name().to_lowercase()));
+                }
+            }
+        }
+    }
+
+    /// Petitions (research 14): a need averaging under 30 for two shifts raises one through a Board; the deadline
+    /// counts down; the structure standing in the district (or the repeal having reached it) answers it.
+    /// Returns (raised, met, missed).
+    fn petitions(&mut self, defs: &StructureFile, mat: &MatSim, roster: &Roster) -> (Vec<(u32, Need)>, Vec<u32>, Vec<u32>) {
         let (mut raised, mut met, mut missed) = (Vec::new(), Vec::new(), Vec::new());
+        let boards: HashSet<u32> = self.districts.iter().filter(|d| self.has_board(defs, d)).map(|d| d.id).collect();
+        let dists: HashMap<u32, u32> = self.districts.iter().map(|d| (d.id, self.district_dist(mat, d))).collect();
+        let charter = &self.charter;
+        let structures = &self.structures;
         for d in self.districts.iter_mut() {
             if d.boon_shifts > 0 {
                 d.boon_shifts -= 1;
@@ -979,7 +1173,10 @@ impl Colony {
             }
             // open petition: answered?
             if let Some(p) = d.petition.clone() {
-                let answered = d.structures.iter().any(|sid| self.structures.iter().any(|s| s.id == *sid && s.built && p.asks.contains(&defs.structure[s.def].id)));
+                let answered = match &p.repeal {
+                    Some(law) => !charter.law(law).is_some_and(|l| l.at(dists[&d.id])),
+                    None => d.structures.iter().any(|sid| structures.iter().any(|s| s.id == *sid && s.built && p.asks.contains(&defs.structure[s.def].id))),
+                };
                 if answered {
                     d.petition = None;
                     d.boon_shifts = 3;
@@ -1007,7 +1204,7 @@ impl Colony {
                     d.low[k] = 0;
                 }
             }
-            if d.foreman.is_none() {
+            if d.foreman.is_none() || !boards.contains(&d.id) {
                 continue;
             }
             let worst = [Need::Fed, Need::Lit, Need::Dry, Need::Signal, Need::Rest].into_iter().enumerate().filter(|(k, _)| d.low[*k] >= PETITION_AFTER).min_by_key(|(k, _)| {
@@ -1015,18 +1212,74 @@ impl Colony {
                 members.iter().map(|r| r.need(need)).sum::<i32>()
             });
             if let Some((_, need)) = worst {
-                let asks: Vec<String> = match need {
-                    Need::Fed => vec!["pit".into()],
-                    Need::Lit => vec!["lume_farm".into(), "lantern".into()],
-                    Need::Dry => vec!["lung".into()],
-                    Need::Rest => vec!["bunkhouse".into(), "pod".into()],
-                    _ => vec!["shrine".into()],
-                };
-                d.petition = Some(Petition { need, asks, shifts_left: PETITION_SHIFTS, missed: false });
+                d.petition = Some(Petition { need, asks: Self::asks_for(need), repeal: None, shifts_left: PETITION_SHIFTS, missed: false });
                 raised.push((d.id, need));
             }
         }
         (raised, met, missed)
+    }
+
+    /// Refuse a district's standing petition: it closes; the second refusal dissolves the district (Pass 2) — its
+    /// hub is removed, its foreman stands down, its structures lose signal priority, and the Node cannot hub again
+    /// for ten shifts. Returns whether the district was dissolved.
+    pub fn refuse_petition(&mut self, district: u32) -> Result<bool, String> {
+        let idx = self.districts.iter().position(|d| d.id == district).ok_or("no such district")?;
+        if self.districts[idx].petition.is_none() {
+            return Err("no petition stands".into());
+        }
+        let d = &mut self.districts[idx];
+        d.petition = None;
+        d.refusals += 1;
+        if d.refusals < 2 {
+            self.charter.history.push(format!("shift {}: refused {}'s petition", self.shift, d.name));
+            return Ok(false);
+        }
+        let d = self.districts.remove(idx);
+        self.barred_hubs.push((d.hub.0, d.hub.1, self.shift + HUB_BAR_SHIFTS));
+        for s in self.structures.iter_mut() {
+            if s.district == Some(d.id) {
+                s.district = None;
+                if !self.low_priority.contains(&s.id) {
+                    self.low_priority.push(s.id);
+                }
+            }
+        }
+        self.charter.history.push(format!("shift {}: refused {} twice; the district is dissolved", self.shift, d.name));
+        Ok(true)
+    }
+
+    // ------------------------------------------------------------ the Charter
+
+    /// Sign a law: the districts with a Board vote through their foremen (against when it costs Mood), the
+    /// Authority is paid and the wave leaves the Heart.
+    pub fn sign(&mut self, defs: &StructureFile, mat: &MatSim, law: &LawDef) -> Result<(), String> {
+        let voters = self.districts.iter().filter(|d| d.foreman.is_some() && self.has_board(defs, d)).count() as u32;
+        let votes = if law.mood < 0 { (0, voters) } else { (voters, 0) };
+        self.charter.sign(law, self.shift, charter::wave_speed(mat), votes)
+    }
+
+    pub fn repeal(&mut self, mat: &MatSim, law: &str) -> Result<(), String> {
+        self.charter.repeal(law, self.shift, charter::wave_speed(mat))
+    }
+
+    /// Dissolve a D5 into the Heart's Pit (Full Design, Dissolution): 0.30 nutrient, the name on the Memorial, and
+    /// the per-event Mood hit next shift unless the Rite is in force at the Heart.
+    pub fn dissolve(&mut self, roster: &mut Roster, mat: &mut MatSim, slimo: u32) -> Result<String, String> {
+        let r = roster.get(slimo).ok_or("no such slimo")?;
+        if r.depth != people::Depth::D5 {
+            return Err("only a D5 can be dissolved".into());
+        }
+        let name = r.full_name();
+        roster.dissolve(slimo).ok_or("no such slimo")?;
+        self.homes.remove(&slimo);
+        if let Some((x, y)) = mat.heart {
+            mat.feed(x, y, charter::DISSOLUTION_NUTRIENT);
+        }
+        let rite = self.charter.flag_at("dissolution_rite", 0);
+        if !rite {
+            self.charter.dissolution_hit = true;
+        }
+        Ok(format!("{name} was dissolved into the Heart{}", if rite { " by the Rite" } else { "; the city felt it" }))
     }
 
     // ------------------------------------------------------------ the shift
@@ -1054,11 +1307,15 @@ impl Colony {
     /// shift of the day, filled best pair first; a district in a wake sits out.
     pub fn assign_jobs(&self, defs: &StructureFile, roster: &Roster, traits: &TraitFile, shift_of_day: u8) -> Vec<(u32, Job, u32)> {
         let slots = self.slots(defs);
-        let waking: std::collections::HashSet<u32> = self.districts.iter().filter(|d| d.wake).flat_map(|d| d.members.iter().copied()).collect();
+        // a district in a wake or on strike sits out
+        let out_: HashSet<u32> = self.districts.iter().filter(|d| d.wake || d.strike).flat_map(|d| d.members.iter().copied()).collect();
         let mut pairs: Vec<(f32, u32, usize)> = Vec::new();
         for r in &roster.records {
-            // a district in a wake sits out; a slimo whose shift was a run (shift_job set by apply_run) is done
-            if waking.contains(&r.id) || r.shift_job.is_some() || !r.on_duty(shift_of_day) {
+            // a slimo whose shift was a run (shift_job set by apply_run) is done; Curfew sends everyone home in Dark
+            if out_.contains(&r.id) || r.shift_job.is_some() || !r.on_duty(shift_of_day) {
+                continue;
+            }
+            if shift_of_day == 1 && self.charter.flag_at("curfew", self.wave.get(&r.id).copied().unwrap_or(0)) {
                 continue;
             }
             let mut by_job: HashMap<Job, Option<f32>> = HashMap::new();
@@ -1097,9 +1354,16 @@ impl Colony {
         self.shift += 1;
         let mut out = ShiftOutcome::default();
         let city_tier = Self::city_tier(roster.records.len());
-        // homes and districts first: jobs read the foreman's priorities
+        // the wave's yardstick, homes and districts first: unrest and jobs read them
+        self.refresh_heart_dist(mat);
         self.assign_homes(defs, roster, traits, mat);
-        out.districts_formed = self.form_districts(mat, city_tier);
+        out.districts_formed = self.form_districts(defs, mat, city_tier);
+        // Authority by deeds: a district formed (Pass 2)
+        out.authority_gained = out.districts_formed.len() as u32;
+        self.charter.earn(out.authority_gained);
+        self.refresh_members(roster, &[]);
+        self.wave = roster.records.iter().map(|r| (r.id, self.wave_dist(defs, mat, r.id))).collect();
+        self.unrest(defs, mat, roster, &mut out);
         let jobs = self.assign_jobs(defs, roster, traits, shift_of_day);
         self.refresh_members(roster, &jobs);
         out.elections = self.elect(roster, traits);
@@ -1207,19 +1471,27 @@ impl Colony {
             let in_bunkhouse = home.as_ref().is_some_and(|h| h.0 == "bunkhouse");
             let in_pod = home.as_ref().is_some_and(|h| h.0 == "pod");
             let alone_in_pod = in_pod && self.homes.values().filter(|hid| Some(**hid) == self.homes.get(&r.id).copied()).count() == 1;
-            // a meal: the Mat's nutrient at the home, else paste
+            // the laws the wave has brought to this slimo
+            let wd = self.wave_dist(defs, mat, r.id);
+            let rationed = self.charter.flag_at("meal_draw_half", wd);
+            // a meal: the Mat's nutrient at the home, else paste; Rationing halves the draw
+            let (takes, paste) = if rationed { (MEAL_TAKES * 0.5, PASTE_EDDIES / 2) } else { (MEAL_TAKES, PASTE_EDDIES) };
             let mut fed = false;
             if signalled && mat.n[i] >= MEAL_NUTRIENT {
-                mat.n[i] -= MEAL_TAKES;
+                mat.n[i] -= takes;
                 fed = true;
-            } else if eddies_left >= PASTE_EDDIES {
-                eddies_left -= PASTE_EDDIES;
+            } else if eddies_left >= paste {
+                eddies_left -= paste;
                 out.paste_meals += 1;
+                out.paste_eddies += paste;
                 fed = true;
             }
             // a slimo who ran this shift worked it; everyone without a slot slept
             let asleep = !working.contains(&r.id) && r.shift_job.is_none();
-            let mut extra = 0;
+            let mut extra = self.charter.mood_at(wd);
+            if self.charter.dissolution_hit {
+                extra += charter::DISSOLUTION_HIT;
+            }
             if let Some(d) = self.district_of(r.id) {
                 if d.boon_shifts > 0 {
                     extra += 10;
@@ -1257,8 +1529,9 @@ impl Colony {
                 },
             );
         }
+        self.charter.dissolution_hit = false;
         // petitions read last shift's needs; the wake is over after one shift
-        let (raised, met, missed) = self.petitions(defs, roster);
+        let (raised, met, missed) = self.petitions(defs, mat, roster);
         for (did, need) in &raised {
             let d = self.districts.iter().find(|d| d.id == *did).unwrap();
             let fm = d.foreman.and_then(|f| roster.get(f)).map(|r| r.full_name()).unwrap_or_default();
@@ -1272,16 +1545,35 @@ impl Colony {
             let d = self.districts.iter().find(|d| d.id == *did).unwrap();
             out.lines.push(format!("{}'s petition went unanswered", d.name));
         }
-        out.petitions_raised = raised;
+        out.petitions_raised.extend(raised);
         out.petitions_met = met;
         out.petitions_missed = missed;
         for d in self.districts.iter_mut() {
             d.wake = false;
         }
+        // what the waves brought to a district this shift (each law announces itself once per district)
+        let dists: Vec<(u32, String, u32)> = self.districts.iter().map(|d| (d.id, d.name.clone(), self.district_dist(mat, d))).collect();
+        for l in self.charter.laws.iter_mut() {
+            for (did, name, dist) in &dists {
+                let here = l.at(*dist);
+                if here && !l.reached.contains(did) {
+                    l.reached.push(*did);
+                    out.lines.push(format!("{} reached {}", l.name, name));
+                    out.laws_arrived.push((l.id.clone(), *did));
+                } else if !here && l.reached.contains(did) {
+                    l.reached.retain(|x| x != did);
+                    out.lines.push(format!("{} lifted in {}", l.name, name));
+                }
+            }
+        }
+        let farthest = self.heart_dist.iter().copied().filter(|d| *d != u32::MAX).max().unwrap_or(0);
+        self.charter.advance(charter::wave_speed(mat), farthest);
         out.assignments = jobs;
         out
     }
+
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -1329,6 +1621,174 @@ mod tests {
             }
         }
         None
+    }
+
+    /// A tile within the district's 12 cords where a def can stand, nearest the hub first.
+    fn spot_in(c: &Colony, defs: &StructureFile, mat: &MatSim, id: &str, hub: (u16, u16)) -> Option<(u16, u16)> {
+        let reach = charter::cord_reach(mat, &[hub.1 as usize * mat.w + hub.0 as usize], DISTRICT_CORDS);
+        let mut tiles: Vec<(u32, usize)> = reach.iter().map(|(i, d)| (*d, *i)).collect();
+        tiles.sort();
+        tiles.into_iter().map(|(_, i)| ((i % mat.w) as u16, (i / mat.w) as u16)).find(|&(x, y)| c.can_place(defs, mat, id, x, y).is_ok())
+    }
+
+    /// The founded city with three pods by the Heart and one shift run, so the Heart's district stands.
+    fn with_district() -> (Colony, StructureFile, MatSim, Roster, TraitFile) {
+        let (mut c, defs, mut mat, mut r, t) = city();
+        for rec in r.records.iter_mut() {
+            rec.priorities = [0; 9];
+        }
+        let heart = mat.heart.unwrap();
+        for _ in 0..3 {
+            let (x, y) = spot_in(&c, &defs, &mat, "pod", (heart.0 as u16, heart.1 as u16)).unwrap();
+            c.place_built(&defs, &mat, "pod", x, y, 1).unwrap();
+        }
+        c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert_eq!(c.districts.len(), 1);
+        (c, defs, mat, r, t)
+    }
+
+    #[test]
+    fn a_district_holds_what_stands_within_twelve_cords_and_its_forming_pays_the_first_law() {
+        let (c, defs, mat, _, _) = with_district();
+        let d = &c.districts[0];
+        let reach = charter::cord_reach(&mat, &[d.hub.1 as usize * mat.w + d.hub.0 as usize], DISTRICT_CORDS);
+        for sid in &d.structures {
+            let s = c.get(*sid).unwrap();
+            assert!(Colony::mat_tiles(&defs, &mat, s).iter().any(|t| reach.contains_key(t)), "{} is not within 12 cords", defs.structure[s.def].id);
+        }
+        // the Heart's district speaks through the Heart's own board
+        assert!(c.has_board(&defs, d));
+        // Authority by deeds: the district formed is one, and one signs Rationing
+        assert_eq!(c.charter.authority, 1);
+        assert_eq!((c.charter.earned, c.charter.ivan_state()), (1, 1));
+        let laws = LawFile::shipped();
+        assert!(c.charter.cannot_sign(laws.get("rationing").unwrap()).is_none());
+        assert_eq!(c.charter.cannot_sign(laws.get("conscription").unwrap()), Some("needs 2 Authority".into()));
+    }
+
+    #[test]
+    fn rationing_halves_the_draw_and_costs_five_and_the_wave_reaches_the_heart_at_once() {
+        let (mut c, defs, mut mat, r, t) = with_district();
+        let laws = LawFile::shipped();
+        c.sign(&defs, &mat, laws.get("rationing").unwrap()).unwrap();
+        assert_eq!(c.charter.authority, 0);
+        let sl = c.charter.law("rationing").unwrap();
+        assert_eq!(sl.reach, charter::wave_speed(&mat));
+        assert_eq!((sl.votes_for, sl.votes_against), (0, 1), "the Heart's foreman votes against a law that costs Mood");
+        // a slimo with a bed on nutrient eats half a meal's draw
+        let (who, home) = c.homes.iter().map(|(a, b)| (*a, *b)).next().unwrap();
+        let h = c.get(home).unwrap();
+        let i = h.y as usize * mat.w + h.x as usize;
+        mat.n[i] = 0.5;
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert!(o.contexts[&who].fed);
+        assert!((0.5 - mat.n[i] - MEAL_TAKES * 0.5).abs() < 1e-5, "draw {}", 0.5 - mat.n[i]);
+        assert!(o.contexts[&who].extra_target <= -5);
+        assert!(o.laws_arrived.iter().any(|(l, _)| l == "rationing"));
+        // paste costs 1 e
+        mat.n[i] = 0.0;
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 1, &mut |_| true);
+        assert!(o.contexts[&who].fed && o.paste_eddies >= 1);
+        // a repeal is free and the Heart is clear of it the shift it is repealed
+        c.repeal(&mat, "rationing").unwrap();
+        assert_eq!(c.charter.authority, 0);
+        mat.n[i] = 0.5;
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert!((0.5 - mat.n[i] - MEAL_TAKES).abs() < 1e-5);
+        assert!(o.contexts[&who].extra_target > -5);
+    }
+
+    #[test]
+    fn unrest_strikes_after_two_shifts_under_30_petitions_at_10_and_two_refusals_dissolve() {
+        let (mut c, defs, mut mat, mut r, t) = with_district();
+        let laws = LawFile::shipped();
+        c.sign(&defs, &mat, laws.get("rationing").unwrap()).unwrap();
+        let did = c.districts[0].id;
+        let members = c.districts[0].members.clone();
+        for rec in r.records.iter_mut() {
+            rec.priorities = [2; 9];
+        }
+        let set_mood = |r: &mut Roster, m: i32| {
+            for id in &members {
+                r.get_mut(*id).unwrap().needs[Need::Mood.index()] = m;
+            }
+        };
+        set_mood(&mut r, 25);
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert!(o.strikes.is_empty(), "one shift under 30 is not a strike");
+        set_mood(&mut r, 25);
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert_eq!(o.strikes, vec![did]);
+        assert!(!o.assignments.iter().any(|a| members.contains(&a.0)), "strikers took jobs");
+        // under 20: ready to defect (the destinations are Phase D's)
+        set_mood(&mut r, 15);
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert_eq!(o.ready_to_defect, vec![did]);
+        // under 10: the foreman petitions the Charter to repeal Rationing, the law that costs the district Mood
+        set_mood(&mut r, 5);
+        c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        let p = c.districts[0].petition.clone().unwrap();
+        assert_eq!(p.repeal.as_deref(), Some("rationing"));
+        // refused once: it closes; raised again, refused again: the district is dissolved and its Node barred
+        assert_eq!(c.refuse_petition(did), Ok(false));
+        set_mood(&mut r, 5);
+        c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert!(c.districts[0].petition.as_ref().is_some_and(|p| p.repeal.is_some()));
+        let hub = c.districts[0].hub;
+        assert_eq!(c.refuse_petition(did), Ok(true));
+        assert!(c.districts.is_empty());
+        assert!(c.barred_hubs.iter().any(|b| (b.0, b.1) == hub));
+        assert!(!c.low_priority.is_empty());
+        assert!(c.structures.iter().all(|s| s.district.is_none()));
+        assert!(c.charter.history.last().unwrap().contains("dissolved"));
+    }
+
+    #[test]
+    fn answering_a_repeal_petition_is_the_repeal_reaching_the_district() {
+        let (mut c, defs, mut mat, mut r, t) = with_district();
+        c.sign(&defs, &mat, LawFile::shipped().get("rationing").unwrap()).unwrap();
+        let did = c.districts[0].id;
+        for id in c.districts[0].members.clone() {
+            r.get_mut(id).unwrap().needs[Need::Mood.index()] = 5;
+        }
+        c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert!(c.districts[0].petition.as_ref().is_some_and(|p| p.repeal.is_some()));
+        c.repeal(&mat, "rationing").unwrap();
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert_eq!(o.petitions_met, vec![did]);
+        assert_eq!(c.districts[0].boon_shifts, 3);
+    }
+
+    #[test]
+    fn a_d5_dissolves_into_the_heart_and_the_city_feels_it_without_the_rite() {
+        let (mut c, defs, mut mat, mut r, t) = with_district();
+        // make the first record a D5 (2 % of creation)
+        let id = r.records[0].id;
+        r.get_mut(id).unwrap().depth = people::Depth::D5;
+        let (hx, hy_) = mat.heart.unwrap();
+        let before = mat.pits.get(&(hx, hy_)).copied().unwrap_or(0.0);
+        let not_d5 = r.records.iter().find(|x| x.depth != people::Depth::D5).unwrap().id;
+        assert_eq!(c.dissolve(&mut r, &mut mat, not_d5).unwrap_err(), "only a D5 can be dissolved");
+        let line = c.dissolve(&mut r, &mut mat, id).unwrap();
+        assert!(line.contains("the city felt it"));
+        assert!(r.get(id).is_none() && r.memorial.iter().any(|m| m.id == id));
+        assert!((mat.pits[&(hx, hy_)] - before - charter::DISSOLUTION_NUTRIENT).abs() < 1e-6, "the Heart's Pit took 0.30");
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        let other = r.records[0].id;
+        assert!(o.contexts[&other].extra_target <= charter::DISSOLUTION_HIT, "the per-event hit");
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert!(o.contexts[&other].extra_target > charter::DISSOLUTION_HIT, "the hit is one shift");
+        // with the Rite: no hit, a standing -3
+        c.charter.authority = 2;
+        c.sign(&defs, &mat, LawFile::shipped().get("dissolution_rite").unwrap()).unwrap();
+        let id2 = r.records[0].id;
+        r.get_mut(id2).unwrap().depth = people::Depth::D5;
+        let line = c.dissolve(&mut r, &mut mat, id2).unwrap();
+        assert!(line.contains("by the Rite"));
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        let other = r.records[0].id;
+        let x = o.contexts[&other].extra_target;
+        assert!(x > charter::DISSOLUTION_HIT && x <= -3, "standing -3 only: {x}");
     }
 
     #[test]
@@ -1497,7 +1957,7 @@ mod tests {
         assert_eq!(p.asks[0], "lume_farm");
         assert_eq!(p.shifts_left, PETITION_SHIFTS);
         // a Lantern Post in the district answers it: the members' target gains 10 for three shifts
-        let (x, y) = spot(&c, &defs, &mat, "lantern", (d.hub.0 as i32, d.hub.1 as i32)).unwrap();
+        let (x, y) = spot_in(&c, &defs, &mat, "lantern", d.hub).expect("a lantern spot inside the district");
         c.place_built(&defs, &mat, "lantern", x, y, 1).unwrap();
         let o3 = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
         assert_eq!(o3.petitions_met, vec![d.id]);
@@ -1541,22 +2001,30 @@ mod tests {
     }
 
     #[test]
-    fn the_schedule_sends_the_city_to_bed_in_dark_and_any_rests_the_tired() {
-        let (c, defs, _mat, mut r, t) = city();
-        // Dim: the default row works; Dark: nobody takes a slot; Flood: Any works while Rest is 40 or more
-        assert!(!c.assign_jobs(&defs, &r, &t, 0).is_empty());
-        assert!(c.assign_jobs(&defs, &r, &t, 1).is_empty(), "the default row rests in Dark");
-        let flood = c.assign_jobs(&defs, &r, &t, 2).len();
-        assert!(flood > 0);
+    fn any_works_while_rested_and_curfew_sends_the_city_home_in_dark() {
+        let (mut c, defs, mut mat, mut r, t) = with_district();
+        for rec in r.records.iter_mut() {
+            rec.priorities = [2; 9];
+        }
+        // the default row is Any in every shift: rested slimos work Dark too
+        assert!(!c.assign_jobs(&defs, &r, &t, 1).is_empty());
         for rec in r.records.iter_mut() {
             rec.needs[Need::Rest.index()] = 39;
         }
-        assert!(c.assign_jobs(&defs, &r, &t, 2).is_empty(), "Any sleeps under Rest 40");
-        // a row set to Work in Dark takes a slot there
+        assert!(c.assign_jobs(&defs, &r, &t, 1).is_empty(), "Any sleeps under Rest 40");
+        for rec in r.records.iter_mut() {
+            rec.needs[Need::Rest.index()] = 80;
+        }
+        // Curfew: the Dark is Rest whatever the row; Dim still works
+        c.charter.authority = 1;
+        c.sign(&defs, &mat, LawFile::shipped().get("curfew").unwrap()).unwrap();
+        c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert!(c.assign_jobs(&defs, &r, &t, 1).is_empty(), "Curfew: nobody works Dark");
+        assert!(!c.assign_jobs(&defs, &r, &t, 0).is_empty());
+        // a row set to Work in Dark obeys the Curfew too
         let id = r.records[0].id;
         r.get_mut(id).unwrap().schedule[1] = people::Duty::Work;
-        r.get_mut(id).unwrap().needs[Need::Rest.index()] = 80;
-        assert_eq!(c.assign_jobs(&defs, &r, &t, 1).iter().map(|j| j.0).collect::<Vec<_>>(), vec![id]);
+        assert!(c.assign_jobs(&defs, &r, &t, 1).is_empty());
     }
 
     #[test]

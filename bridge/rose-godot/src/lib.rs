@@ -29,6 +29,8 @@ pub struct RoseSim {
     defs: Option<colony::StructureFile>,
     /// the last shift's assignments: (slimo, job, structure), for the HUD
     last_jobs: Vec<(u32, ::people::Job, u32)>,
+    /// the Charter's eight laws (data/laws.toml)
+    laws: Option<colony::LawFile>,
 }
 
 #[godot_api]
@@ -419,9 +421,102 @@ impl RoseSim {
     }
 
     #[func]
-    fn districts(&self, people: Gd<RosePeople>) -> VarArray {
+    fn districts(&mut self, people: Gd<RosePeople>) -> VarArray {
+        let defs = self.defs().clone();
         let p = people.bind();
-        colony_bridge::districts_array(&self.colony, Some(&p))
+        colony_bridge::districts_array(&self.colony, Some(&p), Some(&defs))
+    }
+
+    // ------------------------------------------------------------ the Charter (Full Design v3.10)
+
+    fn law_file(&mut self) -> &colony::LawFile {
+        if self.laws.is_none() {
+            self.laws = Some(colony::LawFile::from_toml(&data_text("laws.toml", colony::charter::LAWS_TOML)).unwrap_or_else(|_| colony::LawFile::shipped()));
+        }
+        self.laws.as_ref().unwrap()
+    }
+
+    /// The eight laws and their state on the Charter.
+    #[func]
+    fn laws(&mut self) -> VarArray {
+        let laws = self.law_file().clone();
+        if self.colony.heart_dist.is_empty() {
+            if let Some(c) = &self.city {
+                self.colony.refresh_heart_dist(&c.sim);
+            }
+        }
+        match &self.city {
+            Some(c) => colony_bridge::laws_array(&self.colony, &laws, &c.sim),
+            None => VarArray::new(),
+        }
+    }
+
+    #[func]
+    fn authority(&self) -> i64 {
+        self.colony.charter.authority as i64
+    }
+
+    /// Ivan's Authority state 1-4 (from the Authority earned over the run).
+    #[func]
+    fn ivan_state(&self) -> i64 {
+        self.colony.charter.ivan_state() as i64
+    }
+
+    /// Cords the wave walks a shift (16 + 32 × Conductance).
+    #[func]
+    fn wave_speed(&self) -> i64 {
+        self.city.as_ref().map(|c| colony::charter::wave_speed(&c.sim) as i64).unwrap_or(0)
+    }
+
+    /// The board at the Heart: every signing, repeal and refusal with its shift.
+    #[func]
+    fn charter_history(&self) -> PackedStringArray {
+        PackedStringArray::from(self.colony.charter.history.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice())
+    }
+
+    /// Sign a law; "" or why not.
+    #[func]
+    fn sign_law(&mut self, id: GString) -> GString {
+        let defs = self.defs().clone();
+        let laws = self.law_file().clone();
+        let Some(def) = laws.get(&id.to_string()).cloned() else { return GString::from("no such law") };
+        let Some(c) = &self.city else { return GString::from("no city") };
+        match self.colony.sign(&defs, &c.sim, &def) {
+            Ok(()) => GString::new(),
+            Err(e) => GString::from(e.as_str()),
+        }
+    }
+
+    /// Repeal a law; "" or why not.
+    #[func]
+    fn repeal_law(&mut self, id: GString) -> GString {
+        let Some(c) = &self.city else { return GString::from("no city") };
+        match self.colony.repeal(&c.sim, &id.to_string()) {
+            Ok(()) => GString::new(),
+            Err(e) => GString::from(e.as_str()),
+        }
+    }
+
+    /// Refuse a district's petition: "refused", "dissolved" or why not.
+    #[func]
+    fn refuse_petition(&mut self, district: i64) -> GString {
+        match self.colony.refuse_petition(district as u32) {
+            Ok(true) => GString::from("dissolved"),
+            Ok(false) => GString::from("refused"),
+            Err(e) => GString::from(e.as_str()),
+        }
+    }
+
+    /// Dissolve a D5 into the Heart's Pit; the line for the report, or why not.
+    #[func]
+    fn dissolve(&mut self, people: Gd<RosePeople>, slimo: i64) -> GString {
+        let mut people = people;
+        let Some(c) = self.city.as_mut() else { return GString::from("no city") };
+        let mut p = people.bind_mut();
+        match self.colony.dissolve(&mut p.roster, &mut c.sim, slimo as u32) {
+            Ok(line) => GString::from(line.as_str()),
+            Err(e) => GString::from(e.as_str()),
+        }
     }
 
     /// A district's job priority (the foreman's, over its members' where higher).

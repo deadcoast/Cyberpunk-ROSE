@@ -236,7 +236,19 @@ func _draw_card() -> void:
 			Sim.launch = {"runner_id": selected}
 			Screens.show_screen("route"))
 	else:
-		make_label(card_frame, "cannot run: " + ("out already" if String(rec.status) != "idle" and String(rec.status) != "resting" and not String(rec.status).begins_with("working") else "the depth keeps them on the Mat"), Vector2(300, 286), UiTheme.DUST)
+		make_label(card_frame, "cannot run: " + ("out already" if String(rec.status) != "idle" and String(rec.status) != "resting" and not String(rec.status).begins_with("working") else "the depth keeps them on the Mat"), Vector2(300, 270), UiTheme.DUST)
+	# a D5 cannot act: the card shows its feed value and the Dissolution (Pass 2)
+	if String(rec.depth) == "D5":
+		var rite := false
+		for l in Sim.ensure().laws():
+			if String(l.id) == "dissolution_rite" and String(l.state) in ["signed", "spreading"]:
+				rite = true
+		make_button(card_frame, "DISSOLVE: 0.30 NUTRIENT", Vector2(300, 282), func():
+			Sim.people_lines = PackedStringArray([String(Sim.ensure().dissolve(people, selected))])
+			_reload()
+			selected = ids[0] if not ids.is_empty() else -1
+			_redraw())
+		make_label(card_frame, "under the Rite" if rite else "Mood -10 city-wide", Vector2(420, 286), UiTheme.OOZE_GLOW if rite else UiTheme.HOT_PINK)
 
 func _draw_memorial() -> void:
 	make_label(card_frame, "THE MEMORIAL", Vector2(8, 4), UiTheme.CYAN)

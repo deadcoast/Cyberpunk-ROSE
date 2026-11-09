@@ -112,3 +112,54 @@ who is a member, and the Runner with no job on the shift they ran.
 Known gaps: haulers do not yet carry Stash items to stockpiles by filter, and a foreman's cargo demand waits for
 the routing pass (PAC-043); unrest lines are read off the gauge but strike, defection and the Charter are PAC-042;
 structures take no damage until floods and raiders (Phase D); the Heart's tier does not yet grow the Stash grid.
+
+## PAC-042 — the Charter and unrest (2026-11-09)
+
+The source: `docs/02/Pass 2 (pillars).md` holds the Charter's eight laws with their effects and costs, the unrest
+lines, Authority and the Dissolution row. FullDesign had compressed all of it into one line and lost it (the Phase A
+placeholder's law effects were Pass 2's; the plan I had started from was not). Full Design v3.10 carries Pass 2's
+table in full with numbers and a column saying which effects are live now and which wait for their system, the wave
+(16 + 32 × Conductance cords a shift), Authority (a district formed +1; first law costs 1, so the first district pays
+for the first law inside Pass 2's 20–40 minute beat; the Authority column is this design's, Pass 2 gives none), the
+vote (each district with a Board votes through its foreman), Ivan's four states from Authority earned, Dissolution
+(0.30 nutrient, −10 city-wide without the Rite, this design's number) and the unrest lines by district Mood. Research
+15 (Frostpunk's Book of Laws) decided no signing cooldown (Authority already paces), no exclusive pairs, the
+promise is the petition, and repeal is free without refund. Pass 2 corrected three of PAC-041's calls, written back:
+a district reaches 12 cords along the Mat, not 8 tiles in a straight line; the default schedule is Any / Any / Any (my
+Work / Rest / Any had already sent the city to bed in Dark and left Curfew nothing to do); and laws reach every district
+by the wave — the Charter Board is the district's voice (its vote and its petitions), not a gate on the law.
+
+`data/laws.toml` holds the eight with typed flags (an unknown flag is refused). `colony::charter`: `LawFile`,
+`Charter` (sign, repeal, advance, in force at a cord distance, Ivan's state), `cord_distances` / `cord_reach`. The
+colony now forms districts by cords, pays Authority for a district formed, reads unrest at the start of each shift
+(strike after two shifts under 30, ready to defect under 20, the foreman's petition under 10 naming the costliest law,
+two refusals dissolving the district and barring its Node for ten shifts), applies the laws that have reached each
+slimo (Rationing halves the meal's draw and the paste and costs 5, Curfew empties the Dark shift, the Rite removes
+Dissolution's hit for a standing 3), and announces each law once per district as the wave arrives. Save v8 carries
+the Charter.
+
+The game: the Charter screen draws the eight cards from the crate with their state (open, spreading, signed,
+repealing, locked with the reason), where the wave has reached, the vote, SIGN and REPEAL; the districts with Mood,
+strike and defection lines and their petitions (ANSWER repeals the law asked, or arms the Build tool with the
+structure; REFUSE); the board's history; Ivan's portrait in his state. A D5's Slimo card shows its feed value and
+DISSOLVE.
+
+Reviewed by eye (`docs/shots/charter.png`): the effect lines lost their third line and the "waits for" notes were
+cut mid-word — effect and cost now share four lines and the notes are short in the data; the buttons sat on the cards'
+border and Ivan's portrait overran its frame — moved; a law signed between shifts read "in force: the Heart" while the
+district's hub was inside the wave — the card now shows where the wave stands, the shift announces arrivals. The
+smoke caught the Charter without art when I first dropped Ivan's portrait.
+
+Tests: 2 in `colony::charter` (the eight from Pass 2 and a bad flag refused; a signed law walks out a shift at a time
+and its repeal after it, without refund), 7 new in `colony` (a district holds what stands within 12 cords and its
+forming pays the first law; Rationing halves the draw, costs 5 and reaches the Heart at once, and its repeal is free;
+strike, defection, the petition at 10 naming Rationing, two refusals dissolving; answering a repeal petition; a D5
+dissolved with and without the Rite; Any works while rested and Curfew empties the Dark), the save round trip carries
+a signed law; 113 in the workspace. The smoke signs Rationing on the Charter screen once a district has paid the
+Authority, checks Tithe refuses outside the accord, and after the run finds Rationing in force in the Heart's
+district.
+
+Known gaps: defection has no destination until feral strains and Patrols at the colony (Phase D), so the line shows
+and nobody leaves; Open Grates, Conscription, Quarantine Protocol, Foreman's Cut and Tithe sign, cost and travel but
+their effects arrive with their systems (named on each card); a Bunkhouse or Pod sleeper's defection pause needs
+defection first; Ferality, named in Pass 2 and once in the design, is still undefined.

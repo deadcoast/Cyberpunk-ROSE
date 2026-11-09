@@ -1,0 +1,92 @@
+# The Charter's eight laws (Full Design v3.10, The Charter; Pass 2's table). authority: to sign. mood: the Mood
+# target lean on every slimo the law has reached. effect / cost: Pass 2's words. live: "" when the effect works now,
+# else the system it waits for. flags: the typed effects the crates read —
+#   meal_draw_half     a meal takes half its nutrient from the Mat and half the paste eddies
+#   curfew             Dark is Rest whatever the row; nobody asleep defects
+#   dissolution_rite   dissolving a D5 costs no Mood
+#   any_faction_plus_1 / attention_x1_5      (the factions and Attention)
+#   d2_militia / scav_alarm_minus_20         (Patrols at the colony)
+#   relay_auto_sever / false_positive_sever  (Blooms)
+#   tithe_t1_10        (the accord)
+#   foreman_cut_5 / self_repair_x2 / quotas_slower   (quotas, damage)
+
+[[law]]
+id = "rationing"
+name = "Rationing"
+authority = 1
+mood = -5
+effect = "Slimo nutrient draw halved: a meal takes 0.025 from the Mat, paste costs 1 e."
+cost = "Mood -5 while active."
+live = ""
+flags = ["meal_draw_half"]
+
+[[law]]
+id = "open_grates"
+name = "Open Grates"
+authority = 1
+mood = 0
+effect = "Markets trade with any faction at +1 reputation."
+cost = "Attention +50% at every claimed grate."
+live = "Phase D: factions, Attention"
+flags = ["any_faction_plus_1", "attention_x1_5"]
+
+[[law]]
+id = "conscription"
+name = "Conscription"
+authority = 2
+mood = 0
+effect = "Every D2 is militia during a Patrol or worse."
+cost = "Scav yield -20% during alarms."
+live = "Phase D: Patrols"
+flags = ["d2_militia", "scav_alarm_minus_20"]
+
+[[law]]
+id = "quarantine"
+name = "Quarantine Protocol"
+authority = 2
+mood = 0
+effect = "Relays auto-sever any region that loses signal for a shift."
+cost = "Loses outlying cords to false positives."
+live = "Phase D: Blooms, ferals"
+flags = ["relay_auto_sever", "false_positive_sever"]
+
+[[law]]
+id = "dissolution_rite"
+name = "Dissolution Rite"
+authority = 2
+mood = -3
+effect = "D5 feeding allowed without the per-event Mood hit."
+cost = "A standing Mood -3; Ivan's barks change for the run."
+live = ""
+flags = ["dissolution_rite"]
+
+[[law]]
+id = "tithe"
+name = "Tithe"
+authority = 0
+mood = 0
+effect = "The chapter-3 accord: 10% of T1 to the Oathkeepers each shift."
+cost = "They map the Heart."
+live = "Phase E: the chapter-3 accord"
+offered_by = "accord"
+flags = ["tithe_t1_10"]
+
+[[law]]
+id = "curfew"
+name = "Curfew"
+authority = 1
+mood = 0
+effect = "Slimos stay in Pods during Dark shift; nobody asleep defects."
+cost = "Output down; flood damage down."
+live = ""
+flags = ["curfew"]
+
+[[law]]
+id = "foremans_cut"
+name = "Foreman's Cut"
+authority = 2
+mood = 0
+effect = "Foremen take 5% of district cargo as discretionary stock."
+cost = "Districts self-repair faster; your quotas fill slower."
+live = "PAC-043 quotas, D damage"
+flags = ["foreman_cut_5", "self_repair_x2", "quotas_slower"]

@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city (PAC-020–028, PAC-040–041 done).
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city (PAC-020–028, PAC-040–042 done).
 
     ./run.sh /path/to/godot4.5
 
@@ -18,8 +18,8 @@ Layout
     tools/             `rose-tools`: manifest -> placeholders, validate, prompts, contact sheet
     game/              Godot 4.5 project: Main, autoloads (Assets, Screens, Sim), ui/, modes/<screen>/, tests/
     game/assets/       palette/ manifest/ placeholders/ anchors/ art/   (read as files at runtime; .gdignore)
-    data/              items.toml (164 items), chunks.toml (19 run chunks), loot.toml, creatures.toml, recipes.toml (60), traits.toml (40), names.toml, structures.toml (24), strings.toml
-    docs/              design · art bible · research/ (01-14) · telemetry/ · pixellab-prompts.md · shots/ · todo.PACER.csv · VERIFICATION-*
+    data/              items.toml (164 items), chunks.toml (19 run chunks), loot.toml, creatures.toml, recipes.toml (60), traits.toml (40), names.toml, structures.toml (24), laws.toml (8), strings.toml
+    docs/              design · art bible · research/ (01-15) · telemetry/ · pixellab-prompts.md · shots/ · todo.PACER.csv · VERIFICATION-*
     src/, history/     the Python prototypes and the M1 archive
 
 Where things come from
@@ -36,7 +36,9 @@ Controls in the shell
 ESC menu · nav bar on every screen · Colony: LMB apply tool, BUILD places the structure armed on the Build menu
 (the ghost shows why a tile refuses), RMB cancels an unpaid ghost, TAB view (Street / District / Stack; District
 shows each district's reach, foreman and petition), SPACE pause, 1/2/3 speed, WASD pan, wheel zoom · Build: the 24
-structures with their costs and per-tier numbers, PLACE ON THE COLONY · Slimo: the schedule row cycles Work / Rest / Any · Stash: filter buttons select the view, SORT re-packs the grid; click an item for
+structures with their costs and per-tier numbers, PLACE ON THE COLONY · Slimo: the schedule row cycles Work / Rest / Any;
+a D5's card can DISSOLVE it into the Heart · Charter: SIGN and REPEAL the eight laws with Authority; ANSWER or REFUSE a
+district's petition (two refusals dissolve the district) · Stash: filter buttons select the view, SORT re-packs the grid; click an item for
 its card and the four verbs (Sell to a grate market, Feed to a Pit, Craft to the Bench, Keep pins); SELL ALL / FEED
 ALL act on the unpinned view; BACK pulls a queued item out; queues resolve when the shift ends after a run · Bench:
 pick a recipe, click a slot then a Stash item that carries its tag, CRAFT queues (parts leave the Stash), CANCEL

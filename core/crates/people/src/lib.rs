@@ -544,8 +544,8 @@ impl Duty {
     }
 }
 
-/// The default row: Work in Dim, Rest in Dark, Any in Flood.
-pub const DEFAULT_SCHEDULE: [Duty; 3] = [Duty::Work, Duty::Rest, Duty::Any];
+/// The default row: Any in every shift — a city works until it is tired (Curfew sends it home in Dark).
+pub const DEFAULT_SCHEDULE: [Duty; 3] = [Duty::Any, Duty::Any, Duty::Any];
 
 /// What the run needs from a record (Full Design: Technical architecture).
 #[derive(Clone, Debug, PartialEq)]
@@ -1219,6 +1219,18 @@ impl Roster {
     }
 
     /// The Voice lost this shift for a record: the sum of the dead's Voice, doubled for a bonded partner.
+    /// Dissolve a slimo into the Heart (Full Design, Dissolution): off the roster, onto the Memorial.
+    pub fn dissolve(&mut self, id: u32) -> Option<Record> {
+        let i = self.records.iter().position(|r| r.id == id)?;
+        let mut r = self.records.remove(i);
+        r.status = Status::Dead;
+        for other in self.records.iter_mut() {
+            other.bonds.retain(|b| b.with != id);
+        }
+        self.memorial.push(r.clone());
+        Some(r)
+    }
+
     pub fn death_voice_for(&self, record: &Record, died: &[Record]) -> i32 {
         died.iter().map(|d| d.stat(Stat::Voice) * if record.bonds.iter().any(|b| b.with == d.id && b.bonded) { 2 } else { 1 }).sum()
     }

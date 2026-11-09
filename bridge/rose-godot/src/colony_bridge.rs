@@ -111,7 +111,7 @@ pub fn zones_array(colony: &Colony) -> VarArray {
     out
 }
 
-pub fn districts_array(colony: &Colony, people: Option<&RosePeople>) -> VarArray {
+pub fn districts_array(colony: &Colony, people: Option<&RosePeople>, defs: Option<&StructureFile>) -> VarArray {
     let mut out = VarArray::new();
     for d in &colony.districts {
         let mut e = VarDictionary::new();
@@ -127,10 +127,17 @@ pub fn districts_array(colony: &Colony, people: Option<&RosePeople>) -> VarArray
         e.set("priorities", &PackedInt32Array::from(d.priorities.iter().map(|p| *p as i32).collect::<Vec<_>>().as_slice()));
         e.set("boon_shifts", d.boon_shifts as i64);
         e.set("wake", d.wake);
+        e.set("mood", d.mood as i64);
+        e.set("strike", d.strike);
+        e.set("ready_to_defect", d.ready_to_defect);
+        e.set("refusals", d.refusals as i64);
+        e.set("board", defs.is_some_and(|defs| colony.has_board(defs, d)));
         let mut p = VarDictionary::new();
         if let Some(pet) = &d.petition {
             p.set("need", pet.need.name());
             p.set("asks", &PackedStringArray::from(pet.asks.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
+            p.set("repeal", pet.repeal.clone().unwrap_or_default().as_str());
+            p.set("repeal_name", pet.repeal.as_deref().and_then(|l| colony.charter.law(l)).map(|l| l.name.as_str()).unwrap_or(""));
             p.set("shifts_left", pet.shifts_left as i64);
             p.set("missed", pet.missed);
         }
@@ -201,7 +208,58 @@ pub fn outcome_dict(o: &ShiftOutcome, people_lines: &[String], report: VarDictio
     d.set("petitions_raised", &pr);
     d.set("petitions_met", &ints(&o.petitions_met));
     d.set("petitions_missed", &ints(&o.petitions_missed));
+    d.set("strikes", &ints(&o.strikes));
+    d.set("ready_to_defect", &ints(&o.ready_to_defect));
+    d.set("authority_gained", o.authority_gained as i64);
+    let mut la = VarArray::new();
+    for (law, did) in &o.laws_arrived {
+        let mut e = VarDictionary::new();
+        e.set("law", law.as_str());
+        e.set("district", *did as i64);
+        la.push(&e.to_variant());
+    }
+    d.set("laws_arrived", &la);
     d
+}
+
+/// The eight laws with their state on the Charter: {id, name, authority, mood, effect, cost, live, offered_by,
+/// state: "signed" | "spreading" | "repealing" | "open" | "locked", why (when it cannot be signed), shift, votes,
+/// reached (district names)}.
+pub fn laws_array(colony: &Colony, laws: &colony::LawFile, mat: &mat::MatSim) -> VarArray {
+    let mat_farthest = colony.heart_dist.iter().copied().filter(|d| *d != u32::MAX).max().unwrap_or(0);
+    let mut out = VarArray::new();
+    for l in &laws.law {
+        let mut e = VarDictionary::new();
+        e.set("id", l.id.as_str());
+        e.set("name", l.name.as_str());
+        e.set("authority", l.authority as i64);
+        e.set("mood", l.mood as i64);
+        e.set("effect", l.effect.as_str());
+        e.set("cost", l.cost.as_str());
+        e.set("live", l.live.as_str());
+        e.set("offered_by", l.offered_by.as_str());
+        let why = colony.charter.cannot_sign(l);
+        let state = match colony.charter.law(&l.id) {
+            Some(s) if s.repeal_reach.is_some() => "repealing",
+            Some(s) if s.reach >= mat_farthest => "signed",
+            Some(_) => "spreading",
+            None if why.is_none() => "open",
+            None => "locked",
+        };
+        e.set("state", state);
+        e.set("why", why.unwrap_or_default().as_str());
+        if let Some(s) = colony.charter.law(&l.id) {
+            e.set("shift", s.shift as i64);
+            e.set("votes_for", s.votes_for as i64);
+            e.set("votes_against", s.votes_against as i64);
+            e.set("reach", s.reach as i64);
+            // where the wave stands now, whether or not the shift has announced it yet
+            let names: Vec<GString> = colony.districts.iter().filter(|d| s.at(colony.district_dist(mat, d))).map(|d| GString::from(d.name.as_str())).collect();
+            e.set("reached", &PackedStringArray::from(names.as_slice()));
+        }
+        out.push(&e.to_variant());
+    }
+    out
 }
 
 /// Apply the shift's Stash-side effects: salt and doses into the grid, identifications, the lanterns' oil and the
@@ -232,7 +290,7 @@ pub fn apply_to_stash(o: &ShiftOutcome, stash: &mut RoseStash) -> Vec<String> {
             lines.push("the Still made nothing: no brine or no Enzyme part".into());
         }
     }
-    let spend = o.upkeep + o.paste_meals * colony::PASTE_EDDIES;
+    let spend = o.upkeep + o.paste_eddies;
     if spend > 0 {
         stash.ledger.eddies = stash.ledger.eddies.saturating_sub(spend);
         lines.push(format!("{} e for oil and paste", spend));
