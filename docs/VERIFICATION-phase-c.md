@@ -218,3 +218,69 @@ Known gaps: stockpile zones hold nothing yet and haulers carry nothing off the M
 screens); Salt, Sever and Relay on the tool bar are still the Phase A verbs without their costs (PAC-044); the Vault
 takes cargo when Attention exists (Phase D); Patrols do not yet path toward a white trunk (Phase D); the founding is
 the scale proof's stratum until chapter 1 (Phase E); the Stack view shows one stratum, not the stack of six.
+
+## PAC-044 — the Colony screens live, the shift in core, `rose city` (2026-11-09)
+
+The source: Pass 2's UI rows for the Colony HUD, the Build menu and the Job grid, its stockpiles and haulers ("haulers
+carry what cords cannot"), Pass 1's costs for Salt, Sever and the Relay, Pass 1's newcomer flushes, and the Build
+plan's Phase C proof, carried into Full Design v3.12 with numbers (Colony mode: Stockpiles, The steering tools,
+Orders, Alerts, Overlays; Stash; Recruitment; The city's log; UI and screens) and research 17 (RimWorld's storage
+priority). Decisions written back: a stockpile is a zone against a built Rack or Cold Store and a room of the Stash
+(1–4 on a job's scale, the Heart's grid between 2 and 3; a new Rack 2, a new Cold Store 3 with an Organic filter);
+cargo lands on its Mat cells, a hauler shelves its Body in items a shift onto the rest; Organics spoil 2 a shift
+outside a Cold Store; Salt is a bag per eight tiles, Sever a cut of 8 Build points, the Relay a 6 Chrome / 16 point
+structure, Bait a Common Chrome; orders, alerts (a jam that has stood 120 ticks), overlays, bookmarks and follow;
+the Heart's tier is the city's and the grid follows it; build work is taken first asked, first done, and a crew whose
+ghost the Stash cannot pay goes on to the next.
+
+The core: the whole shift moved out of the bridge into a `game` crate — `end_shift` (the colony's work, the Stash's
+side, the cargo, the haulers, the settling, the roster), `run_home`, `alerts`, the city's log, `World` (the city owned
+in one place) and `city` (`rose city`). The bridge calls the same functions with its parts. `inventory` has the rooms
+(`Room`, `SHELF`), the Heart's floor (`FLOOR`) and every verb across them; `colony` has cuts, salt, orders, turned
+footprints, stockpile painting, zone priorities and filters, the Relay as a structure; `logistics` sends cargo only
+toward a consumer it can reach and lets head-on packets trade places; `people` has the flush.
+
+The game: the Colony HUD per the UI table — the clock and city line, the tool bar (PIT, BAIT, SALT, SEVER, RELAY,
+BUILD, ZONE, OVERLAY) with each verb's answer on a hint line that fades, the alert queue on the right edge (one new
+line a second, click to jump), the minimap of the Stack view with the camera's frame, the selected thing's card above
+the tool bar (a structure's upgrade, cancel, quota, stockpile priority and filter, its slots and who works them; a
+slimo's job, needs, order and FOLLOW; a tile's Mat, signal, traffic, zone, salt and cut) and the same card small under
+the cursor; right-click orders, cancels or puts the tool down; R turns a footprint; 1–9 and Ctrl + 1–9 bookmarks,
+F follow, + / − speed, Tab view. The Stack view now frames the whole stratum at three pixels a tile with the district
+names. The Build menu pages by category with costs against what the Stash holds; the Job grid is the roster's
+priorities (click cycles, a drag paints, the foreman's mark, a district filter); the Stash pages between the grid,
+the Heart's floor and each stockpile; the Strain Lab reads the genome and every Pit's quota (organs and the
+Strainbook say PAC-080). The city's log is written to `user://telemetry/city.log`.
+
+Reviewed by eye (`docs/shots/colony*.png`, `build.png`, `jobs.png`, `stash.png`, `strain.png`): every gauge in the
+game drew full whatever its value — a Control clips its children, not its own drawing — the fill is now a strip
+inside a clip (the Strain Lab's genes, the Run's stamina); the Stack view at one pixel a tile was a 192 × 48 stamp in
+the middle of the screen, the same picture as the minimap — three pixels a tile now, the stratum across the screen;
+the Build card's build-points line ran off the frame; a verb's answer stood on the hint line forever; the
+Job grid's status read as Rust's debug text; the Stash's free UPGRADE ignored that the grid is the Heart's tier —
+gone. The Phase A free verbs (free salt, free sever, free Relay, free feed) left the bridge.
+
+`rose city` (`docs/telemetry/city.md`): twenty shifts in 7 s, played twice and compared. What it found and what
+changed: the city parted from its replay (the haul took the backpack in its map's order, and build crews were paid
+in a hash map's order) — ordered now, bit-exact; a bot stood on a source it could not take from for forty minutes —
+it gives one up after five seconds; four sales for a grate the Mat had cut off sat on the Heart's tile and every
+cargo after them waited behind (cargo now leaves only toward a consumer it can reach, else it is the Stash's again);
+feeds riding from the Rack and its overflow riding to it held one cord shut for good (head-on packets trade places);
+no home ever ate from the Mat, because the tissue round a fed Heart holds 0.13–0.19 and the meal wanted 0.2 (the meal
+is now its own threshold); the run's overflow, two hundred items, sat out of the economy (the Heart's floor: the
+quotas pull it, the verbs and the stockpiles reach it); and with a Runner dying one run in five the six founders
+were two (the flush, Pass 1's numbers). Now the city replays, its cargo lands, the plan stands, the Heart keeps its
+signal and the merged landing gap is 7.7 s against the bot band of 3.3–10 s. It still fails: the founding Mat
+recedes, the cord to the first grate goes at the fifth shift with or without a steward, income stops, and four
+slimos starve from the eighteenth shift — registered as PAC-045, where Phase C closes.
+
+Tests: 8 in `game` (a full Rack's overflow and a Cold Store's Organics; haulers shelve off the Mat for Scav XP; salt,
+cut and Relay take their costs; an order beats priorities; alerts name a waiting ghost, a petition and the floor; the
+log; a stockpile's filter and priority are the zone's; two shifts of `rose city` replay bit-exact with their cargo
+landed), and the ledger's, the colony's and the save's updated for the rooms, the floor and v10. The smoke drives
+the HUD's verbs (select, the quota, bait's and salt's costs, sever and unmark, RELAY arms Build, right-click puts the
+tool down, the overlays cycle, the alerts) and checks the Stash founds from core's haul.
+
+Known gaps: the city does not yet hold twenty shifts (PAC-045); noise and danger overlays wait for the threats
+(Phase D); rescued bodies, defectors and hires arrive with their systems (Phase D); a stockpile is painted whole
+against its store and cannot be extended (erase and repaint); the organs, classes and Strainbook are PAC-080's.

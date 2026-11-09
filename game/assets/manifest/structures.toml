@@ -108,7 +108,21 @@ ramp = "industrial"
 silhouette = "rect"
 tag = "RLY"
 anchor = "anchor.tile"
-prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Relay Shrine: a pole of chrome with an ooze bulb at the top, a built nerve"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Relay: a pole of chrome with an ooze bulb at the top, a built nerve"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.shrine"
+kind = "sprite"
+size = [32, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "SHR"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Relay Shrine: chrome plates scratched with the Nerve's rules hung around a Relay's pole, a small ooze bulb lit above them"
 negative = "green, outline on every edge, gradient"
 status = "placeholder"
 

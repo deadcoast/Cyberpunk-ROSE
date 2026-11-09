@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 9;
+pub const SAVE_VERSION: u16 = 10;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -92,7 +92,8 @@ pub struct SaveFile {
     /// the slimos: records, the memorial (v6)
     pub roster: people::Roster,
     /// the city: structures, zones, districts, homes (v7); the Charter, unrest, barred hubs (v8); quotas, the foreman's
-    /// cut (v9). The ledger carries what is on the Mat, the Stills' stores and what waits at the Heart (v9)
+    /// cut (v9); cuts, salt, orders, zone priorities, turned footprints (v10). The ledger carries what is on the Mat, the Stills'
+    /// stores and what waits at the Heart (v9); the Stash its stockpile rooms (v10)
     pub colony: colony::Colony,
 }
 
@@ -297,12 +298,12 @@ mod tests {
         save.corpses.push(CorpseRecord { seed: 11, stratum: 1, x: 40, y: 13, chunk: "sump_culvert".into(), day: 3, runner: "Pell".into(), rig: vec![1, 2, 3], raided: false });
         // the roster rides along (v6): six founders with their records
         save.roster.found(&people::TraitFile::shipped(), &people::NameFile::shipped(), 7, 1);
-        save.colony.zones.push(colony::Zone { id: 9, kind: colony::ZoneKind::Stockpile, cells: vec![1, 2, 3], filter: colony::Filter { categories: vec!["chrome".into()], min_tier: 1, min_condition: 20 }, anchor: None });
+        save.colony.zones.push(colony::Zone { id: 9, kind: colony::ZoneKind::Stockpile, cells: vec![1, 2, 3], filter: colony::Filter { categories: vec!["chrome".into()], min_tier: 1, min_condition: 20 }, anchor: None, priority: 2 });
         save.colony.charter.earn(1);
         save.colony.charter.sign(colony::LawFile::shipped().get("rationing").unwrap(), 4, 42, (0, 1)).unwrap();
         save.colony.barred_hubs.push((10, 12, 30));
         // cargo on the Mat and a quota (v9)
-        save.colony.structures.push(colony::Structure { id: 3, def: 1, x: 4, y: 5, tier: 1, hp: 100, built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: Some(colony::QuotaSet { target: 2.5, ceiling: 1 }) });
+        save.colony.structures.push(colony::Structure { id: 3, def: 1, x: 4, y: 5, tier: 1, hp: 100, built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: Some(colony::QuotaSet { target: 2.5, ceiling: 1 }), rotated: true });
         save.ledger.ship(items::ItemInstance::new(items::ItemId(0)), inventory::Dest::Pit(1));
         save.ledger.stores.push((3, vec![items::ItemInstance::new(items::ItemId(1))]));
         let back = SaveFile::decode(&save.encode()).unwrap();

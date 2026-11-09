@@ -213,6 +213,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "game"
+version = "0.2.0"
+dependencies = [
+ "bench",
+ "colony",
+ "inventory",
+ "items",
+ "logistics",
+ "mat",
+ "people",
+ "run",
+ "serde",
+]
+
+[[package]]
 name = "gdextension-api"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -500,6 +515,7 @@ name = "rose-cli"
 version = "0.2.0"
 dependencies = [
  "clap",
+ "game",
  "items",
  "logistics",
  "mat",
@@ -513,6 +529,7 @@ version = "0.2.0"
 dependencies = [
  "bench",
  "colony",
+ "game",
  "godot",
  "inventory",
  "items",

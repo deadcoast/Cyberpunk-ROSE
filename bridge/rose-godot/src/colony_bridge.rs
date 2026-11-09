@@ -7,7 +7,6 @@ use godot::prelude::*;
 
 use crate::data_text;
 use crate::people::RosePeople;
-use crate::RoseStash;
 
 pub fn structure_file() -> StructureFile {
     StructureFile::from_toml(&data_text("structures.toml", colony::STRUCTURES_TOML)).unwrap_or_else(|_| StructureFile::shipped())
@@ -33,6 +32,7 @@ pub fn defs_array(defs: &StructureFile) -> VarArray {
         let mut e = VarDictionary::new();
         e.set("id", d.id.as_str());
         e.set("name", d.name.as_str());
+        e.set("category", d.category.as_str());
         e.set("w", d.footprint[0] as i64);
         e.set("h", d.footprint[1] as i64);
         e.set("sigma", d.sigma as f64);
@@ -74,8 +74,10 @@ pub fn structures_array(colony: &Colony, defs: &StructureFile) -> VarArray {
         e.set("name", d.name.as_str());
         e.set("x", s.x as i64);
         e.set("y", s.y as i64);
-        e.set("w", d.footprint[0] as i64);
-        e.set("h", d.footprint[1] as i64);
+        let (w, h) = s.dims(d);
+        e.set("w", w as i64);
+        e.set("h", h as i64);
+        e.set("rotated", s.rotated);
         e.set("tier", s.tier as i64);
         e.set("tiers", d.tiers as i64);
         e.set("hp", s.hp as i64);
@@ -106,6 +108,7 @@ pub fn zones_array(colony: &Colony) -> VarArray {
         e.set("min_tier", z.filter.min_tier as i64);
         e.set("min_condition", z.filter.min_condition as i64);
         e.set("anchor", z.anchor.map(|a| a as i64).unwrap_or(-1));
+        e.set("priority", z.priority as i64);
         out.push(&e.to_variant());
     }
     out
@@ -278,20 +281,3 @@ pub fn laws_array(colony: &Colony, laws: &colony::LawFile, mat: &mat::MatSim) ->
     out
 }
 
-/// Apply the shift's Stash-side effects: identifications, the lanterns' oil and the paste from the ledger. What the
-/// Stills and Salt Works make rides home as cargo (cargo_bridge::dispatch_shift). Returns the lines.
-pub fn apply_to_stash(o: &ShiftOutcome, stash: &mut RoseStash) -> Vec<String> {
-    let mut lines = Vec::new();
-    if o.identifies > 0 {
-        let n = stash.identify_n(o.identifies as usize);
-        if n > 0 {
-            lines.push(format!("the Appraisal Table named {n} item{}", if n == 1 { "" } else { "s" }));
-        }
-    }
-    let spend = o.upkeep + o.paste_eddies;
-    if spend > 0 {
-        stash.ledger.eddies = stash.ledger.eddies.saturating_sub(spend);
-        lines.push(format!("{} e for oil and paste", spend));
-    }
-    lines
-}

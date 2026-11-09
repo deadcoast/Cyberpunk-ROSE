@@ -9,6 +9,7 @@ use logistics::City;
 use mat::MatSim;
 
 mod cargo_bridge;
+mod hud_bridge;
 mod colony_bridge;
 mod people;
 
@@ -34,6 +35,13 @@ pub struct RoseSim {
     laws: Option<colony::LawFile>,
     /// the city's one Stash, bound so cargo can land as it arrives (Full Design v3.11, Cargo)
     stash: Option<Gd<RoseStash>>,
+    /// the city's log (landings, losses, decisions) and the last shift's outcome, for the alerts (v3.12)
+    log: game::CityLog,
+    last_outcome: Option<colony::ShiftOutcome>,
+    /// the tick a jam began, while one stands
+    jam_since: Option<u64>,
+    /// the plan for the shift being worked: (slimo, job, structure), the movers' and the Job grid's
+    plan: Vec<(u32, ::people::Job, u32)>,
 }
 
 #[godot_api]
@@ -68,7 +76,7 @@ impl RoseSim {
             if let Some(heart) = c.heart_cell() {
                 let riding: std::collections::HashSet<u32> = c.in_transit().iter().map(|t| t.0).collect();
                 for s in stash.bind().ledger.in_flight.iter().filter(|s| !riding.contains(&s.id)) {
-                    let (kind, key) = cargo_bridge::kind_of(s.to);
+                    let (kind, key) = game::cargo::kind_of(s.to);
                     c.dispatch(heart, s.id, kind, key);
                 }
             }
@@ -84,13 +92,17 @@ impl RoseSim {
         let changed = match self.city.as_mut() {
             Some(c) => {
                 c.step();
+                // a jam's standing time, for its alert
+                self.jam_since = if c.last_jam > 0 { Some(self.jam_since.unwrap_or(c.tick)) } else { None };
                 if let Some(st) = self.stash.as_mut() {
                     let mut st = st.bind_mut();
                     st.ensure();
+                    let st = &mut *st;
+                    let (stash, table) = (st.stash.as_mut().unwrap(), st.table.as_ref().unwrap());
                     if c.tick % logistics::city::REBUILD_EVERY == 0 && !c.synthetic() {
-                        cargo_bridge::refresh_demands(&self.colony, &defs, c, &st);
+                        game::cargo::refresh_demands(&self.colony, &defs, c, stash, &st.ledger, table);
                     }
-                    cargo_bridge::land(c, &mut self.colony, &defs, &mut st);
+                    game::cargo::land(c, &mut self.colony, &defs, stash, &mut st.ledger, table, &mut self.log);
                 }
                 c.sim.changed.len() as i64
             }
@@ -186,7 +198,7 @@ impl RoseSim {
         let v: Vec<u8> = c
             .pk_cargo
             .iter()
-            .map(|id| st.ledger.in_flight.iter().find(|s| s.id == *id).map_or(0, |s| cargo_bridge::TIERS.iter().position(|x| *x == t.def(s.item.def).tier).unwrap_or(0) as u8))
+            .map(|id| st.ledger.in_flight.iter().find(|s| s.id == *id).map_or(0, |s| game::cargo::TIERS.iter().position(|x| *x == t.def(s.item.def).tier).unwrap_or(0) as u8))
             .collect();
         PackedByteArray::from(v.as_slice())
     }
@@ -227,18 +239,9 @@ impl RoseSim {
     }
 
     // ------------------------------------------------------------ player verbs
-    #[func]
-    fn feed(&mut self, x: i64, y: i64, amount: f64) {
-        if let Some(c) = self.city.as_mut() {
-            if Self::inside(c, x, y) {
-                c.sim.feed(x as usize, y as usize, amount as f32);
-            }
-        }
-    }
-
-    /// Bait from the Stash (Full Design v3.11, The city's clock): the cheapest unpinned Common item with a feed value
-    /// is smeared onto the 3 × 3 around the tile, its nutrient spread over the nine, so the Mat grows toward it and
-    /// nothing is fed that the Stash did not give. "" or why not.
+    /// Bait from the Stash (Full Design v3.12, The steering tools): the cheapest Common Chrome in any room is
+    /// smeared onto the 3 × 3 around the tile, its nutrient spread over the nine (game::store::take_bait). "" or why
+    /// not.
     #[func]
     fn bait_from_stash(&mut self, x: i64, y: i64) -> GString {
         let Some(c) = self.city.as_mut() else { return GString::from("no city") };
@@ -249,56 +252,11 @@ impl RoseSim {
         let mut st = st.bind_mut();
         st.ensure();
         let t = st.table.clone().unwrap();
-        let stash = st.stash.as_mut().unwrap();
-        let pick = stash
-            .grid
-            .placed()
-            .into_iter()
-            .filter(|(_, p)| !p.item.pinned && t.def(p.item.def).feed > 0.0 && t.def(p.item.def).tier == items::Tier::Common)
-            .map(|(h, p)| (items::price(t.def(p.item.def), &p.item, PriceContext::default()), h))
-            .min();
-        let Some((_, h)) = pick else { return GString::from("bait takes a Common Chrome from the Stash: none") };
-        let item = stash.grid.remove(h).unwrap();
-        let n = items::feed_value(t.def(item.def), &item).0;
+        let Some(n) = game::store::take_bait(st.stash.as_mut().unwrap(), &t) else { return GString::from("bait takes a Common Chrome from the Stash: none") };
         c.sim.bait(x as usize, y as usize, n / 9.0);
+        drop(st);
+        self.decide(format!("bait at {x},{y}"));
         GString::new()
-    }
-
-    #[func]
-    fn bait(&mut self, x: i64, y: i64, amount: f64) {
-        if let Some(c) = self.city.as_mut() {
-            if Self::inside(c, x, y) {
-                c.sim.bait(x as usize, y as usize, amount as f32);
-            }
-        }
-    }
-
-    #[func]
-    fn sever(&mut self, x: i64, y: i64) {
-        if let Some(c) = self.city.as_mut() {
-            if Self::inside(c, x, y) {
-                c.sim.sever(x as usize, y as usize);
-            }
-        }
-    }
-
-    #[func]
-    fn salt(&mut self, x: i64, y: i64, on: bool) {
-        if let Some(c) = self.city.as_mut() {
-            if Self::inside(c, x, y) {
-                c.sim.salt_tile(x as usize, y as usize, on);
-            }
-        }
-    }
-
-    #[func]
-    fn place_relay(&mut self, x: i64, y: i64) {
-        if let Some(c) = self.city.as_mut() {
-            if Self::inside(c, x, y) {
-                c.sim.place_relay(x as usize, y as usize);
-                c.rebuild_fields();
-            }
-        }
     }
 
     /// The colony strain's gene value (0..1) by index (mat::genome constants); the Run reads Lume (4).
@@ -311,18 +269,6 @@ impl RoseSim {
     #[func]
     fn genes(&self) -> PackedFloat32Array {
         self.city.as_ref().map_or_else(PackedFloat32Array::new, |c| PackedFloat32Array::from(c.sim.genome.0.as_slice()))
-    }
-
-    /// Fed Chrome: drift every gene by the delivered amount (bias × tier drift), clamped.
-    #[func]
-    fn drift_genome(&mut self, drift: PackedFloat32Array) {
-        if let Some(c) = self.city.as_mut() {
-            let mut d = [0.0f32; 10];
-            for (i, v) in drift.as_slice().iter().take(10).enumerate() {
-                d[i] = *v;
-            }
-            c.sim.drift_genome(d);
-        }
     }
 
     /// Stock sitting in a Pit (nutrient units), by index among the city's Pits (0 is the Heart).
@@ -367,6 +313,12 @@ impl RoseSim {
             let _ = (hy::EMPTY, sub::ROCK, state::HOME);
         }
         d
+    }
+
+    /// A decision for the city's log (Full Design v3.12, The city's log): every verb that changes the city says so.
+    pub(crate) fn decide(&mut self, what: String) {
+        let t = self.city.as_ref().map_or(0, |c| c.tick);
+        self.log.push(t, game::Class::Decision, what);
     }
 
     fn inside(c: &City, x: i64, y: i64) -> bool {
@@ -437,7 +389,11 @@ impl RoseSim {
         if x < 0 || y < 0 {
             return -1;
         }
-        self.colony.place(&defs, &c.sim, &def_id.to_string(), x as u16, y as u16).map(|id| id as i64).unwrap_or(-1)
+        let id = self.colony.place(&defs, &c.sim, &def_id.to_string(), x as u16, y as u16).map(|id| id as i64).unwrap_or(-1);
+        if id >= 0 {
+            self.decide(format!("{} placed at {x},{y}", defs.get(&def_id.to_string()).map_or("?", |d| d.name.as_str())));
+        }
+        id
     }
 
     /// Cancel an unpaid ghost (a paid one is cut and welded already).
@@ -455,7 +411,11 @@ impl RoseSim {
     fn upgrade(&mut self, id: i64, population: i64) -> GString {
         let defs = self.defs().clone();
         match self.colony.upgrade(&defs, id as u32, colony::Colony::city_tier(population.max(0) as usize)) {
-            Ok(_) => GString::new(),
+            Ok(_) => {
+                let name = self.colony.get(id as u32).map_or("?".into(), |s| defs.structure[s.def].name.clone());
+                self.decide(format!("{name} to be upgraded"));
+                GString::new()
+            }
             Err(e) => GString::from(e.as_str()),
         }
     }
@@ -499,12 +459,21 @@ impl RoseSim {
         let Some(k) = colony_bridge::parse_zone(&kind.to_string()) else { return -1 };
         let Some(c) = &self.city else { return -1 };
         let cells: Vec<u32> = cells.as_slice().iter().filter(|x| **x >= 0).map(|x| *x as u32).collect();
-        self.colony.paint_zone(&c.sim, k, &cells, colony_bridge::filter_from(&categories, min_tier, min_condition), if anchor >= 0 { Some(anchor as u32) } else { None }).map(|id| id as i64).unwrap_or(-1)
+        let id = self.colony.paint_zone(&c.sim, k, &cells, colony_bridge::filter_from(&categories, min_tier, min_condition), if anchor >= 0 { Some(anchor as u32) } else { None }).map(|id| id as i64).unwrap_or(-1);
+        if id >= 0 {
+            self.decide(format!("{} zone {id} painted", kind));
+        }
+        id
     }
 
     #[func]
     fn erase_zone(&mut self, id: i64) -> bool {
-        self.colony.erase_zone(id as u32)
+        let ok = self.colony.erase_zone(id as u32);
+        if ok {
+            self.decide(format!("zone {id} erased"));
+            self.republish();
+        }
+        ok
     }
 
     /// Whether a cell may hold a zone.
@@ -575,7 +544,10 @@ impl RoseSim {
         let Some(def) = laws.get(&id.to_string()).cloned() else { return GString::from("no such law") };
         let Some(c) = &self.city else { return GString::from("no city") };
         match self.colony.sign(&defs, &c.sim, &def) {
-            Ok(()) => GString::new(),
+            Ok(()) => {
+                self.decide(format!("{} signed", def.name));
+                GString::new()
+            }
             Err(e) => GString::from(e.as_str()),
         }
     }
@@ -585,7 +557,10 @@ impl RoseSim {
     fn repeal_law(&mut self, id: GString) -> GString {
         let Some(c) = &self.city else { return GString::from("no city") };
         match self.colony.repeal(&c.sim, &id.to_string()) {
-            Ok(()) => GString::new(),
+            Ok(()) => {
+                self.decide(format!("{id} repealed"));
+                GString::new()
+            }
             Err(e) => GString::from(e.as_str()),
         }
     }
@@ -594,8 +569,14 @@ impl RoseSim {
     #[func]
     fn refuse_petition(&mut self, district: i64) -> GString {
         match self.colony.refuse_petition(district as u32) {
-            Ok(true) => GString::from("dissolved"),
-            Ok(false) => GString::from("refused"),
+            Ok(true) => {
+                self.decide(format!("district {district}'s petition refused; it dissolved"));
+                GString::from("dissolved")
+            }
+            Ok(false) => {
+                self.decide(format!("district {district}'s petition refused"));
+                GString::from("refused")
+            }
             Err(e) => GString::from(e.as_str()),
         }
     }
@@ -638,10 +619,9 @@ impl RoseSim {
         out
     }
 
-    /// The shift, whole: the colony plans the jobs and pays the ghosts out of the Stash, the Bench's slots finish,
-    /// what the Stills and Salt Works made rides home, the Stash's queue and the quotas' pulls leave the Heart as
-    /// cargo, the roster takes the work and the contexts, and the movers take the next shift's plan. `day` picks the
-    /// shift of the day (Dim / Dark / Flood). The report is what landed since the last shift end and what just left.
+    /// The shift, whole (game::end_shift): the colony works and pays, the Stash's side, the cargo, the stockpiles,
+    /// the roster's records; then the movers take the next shift's plan. `day` picks the shift of the day (Dim / Dark
+    /// / Flood). The report is what landed since the last shift end and what just left.
     #[func]
     fn colony_end_shift(&mut self, people: Gd<RosePeople>, stash: Gd<RoseStash>, day: i64) -> VarDictionary {
         let defs = self.defs().clone();
@@ -651,31 +631,25 @@ impl RoseSim {
             self.stash = Some(stash.clone());
         }
         let Some(city) = self.city.as_mut() else { return VarDictionary::new() };
-        let shift_of_day = ((day.max(1) - 1) % 3) as u8;
-        let eddies = stash.bind().ledger.eddies;
-        let outcome = {
+        let shift = {
             let mut p = people.bind_mut();
             p.ensure();
+            let p = &mut *p;
             let traits = p.traits.clone().unwrap();
-            let mut st = stash.bind_mut();
-            let mut pay = |cost: colony::Cost| st.take_cost(cost);
-            self.colony.end_shift(&defs, &mut city.sim, &p.roster, &traits, shift_of_day, eddies, &mut pay)
-        };
-        let report = {
+            let names = p.names.clone().unwrap();
             let mut st = stash.bind_mut();
             st.ensure();
-            let mut lines = colony_bridge::apply_to_stash(&outcome, &mut st);
-            lines.extend(cargo_bridge::dispatch_shift(city, &self.colony, &defs, &mut st, &outcome));
-            let mut r = st.close_with_slots(outcome.bench_slots as usize);
-            r.set("stash_lines", &PackedStringArray::from(lines.drain(..).map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
-            r
+            let st = &mut *st;
+            let town = game::Town { city, colony: &mut self.colony, defs: &defs };
+            let store = game::Store { stash: st.stash.as_mut().unwrap(), ledger: &mut st.ledger, bench: &mut st.bench, table: st.table.as_ref().unwrap(), recipes: st.recipes.as_ref().unwrap() };
+            let folk = game::Folk { roster: &mut p.roster, traits: &traits, names: &names, died: &mut p.died_this_shift };
+            game::end_shift(town, store, folk, day.max(1) as u32, &mut self.log)
         };
-        let sold = report.get("sold").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(0) as u32;
-        let crafted = report.get("crafted").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(0) as u32;
-        // the roster: work, contexts, the clinic
-        let people_lines = people.bind_mut().shift_from_colony(&outcome, sold, crafted);
-        self.last_jobs = outcome.assignments.clone();
-        let out = colony_bridge::outcome_dict(&outcome, &people_lines, report, &defs, &self.colony);
+        let mut report = stash.bind().closed_dict(&shift.closed);
+        report.set("stash_lines", &PackedStringArray::from(shift.stash_lines.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
+        self.last_jobs = shift.outcome.assignments.clone();
+        let out = colony_bridge::outcome_dict(&shift.outcome, &shift.people_lines, report, &defs, &self.colony);
+        self.last_outcome = Some(shift.outcome);
         self.refresh_movers(people, day + 1);
         out
     }
@@ -686,16 +660,12 @@ impl RoseSim {
     fn refresh_movers(&mut self, people: Gd<RosePeople>, day: i64) {
         let defs = self.defs().clone();
         let Some(city) = self.city.as_mut() else { return };
-        if city.synthetic() {
-            return;
-        }
         let mut people = people;
         let mut p = people.bind_mut();
         p.ensure();
         let traits = p.traits.clone().unwrap();
-        let plan = self.colony.assign_jobs(&defs, &p.roster, &traits, ((day.max(1) - 1) % 3) as u8);
-        let movers = cargo_bridge::movers(&self.colony, &defs, city, &p.roster, &plan);
-        city.set_movers(&movers);
+        self.plan = self.colony.assign_jobs(&defs, &p.roster, &traits, game::shift_of_day(day.max(1) as u32));
+        game::refresh_movers(city, &self.colony, &defs, &p.roster, &traits, day.max(1) as u32);
     }
 
     // ------------------------------------------------------------ quotas (Full Design v3.11, Cargo: Quotas)
@@ -734,6 +704,9 @@ impl RoseSim {
         let defs = self.defs().clone();
         let ok = self.colony.set_quota(&defs, structure as u32, Some(colony::QuotaSet { target: target.max(0.0) as f32, ceiling: ceiling.clamp(0, 4) as u8 }));
         self.republish();
+        if ok {
+            self.decide(format!("quota at structure {structure}: keep {target:.1}"));
+        }
         ok
     }
 
@@ -751,7 +724,8 @@ impl RoseSim {
         if let (Some(c), Some(st)) = (self.city.as_mut(), self.stash.as_ref()) {
             let mut st = st.clone();
             st.bind_mut().ensure();
-            let consumers = cargo_bridge::consumers(&self.colony, &defs, c, &st.bind());
+            let st = st.bind();
+            let consumers = game::cargo::consumers(&self.colony, &defs, c, st.stash.as_ref().unwrap(), &st.ledger, st.table.as_ref().unwrap());
             c.set_consumers(consumers);
         }
     }
@@ -858,81 +832,50 @@ pub struct RoseStash {
 }
 
 impl RoseStash {
-    /// Can the Stash pay this cost: unpinned Parts and Chrome items by count, eddies from the ledger. Pays when it
-    /// can (the cheapest items first) and says so.
-    pub(crate) fn take_cost(&mut self, cost: colony::Cost) -> bool {
-        self.ensure();
-        let t = self.table.as_ref().unwrap().clone();
-        let stash = self.stash.as_mut().unwrap();
-        let pick = |stash: &Stash, cat: items::Category| -> Vec<(u32, u32)> {
-            let mut v: Vec<(u32, u32)> = stash
-                .grid
-                .placed()
-                .into_iter()
-                .filter(|(_, p)| !p.item.pinned && t.def(p.item.def).category == cat)
-                .map(|(h, p)| (items::price(t.def(p.item.def), &p.item, items::PriceContext::default()), h))
-                .collect();
-            v.sort();
-            v
-        };
-        let parts = pick(stash, items::Category::Part);
-        let chrome = pick(stash, items::Category::Chrome);
-        if (parts.len() as u32) < cost.parts || (chrome.len() as u32) < cost.chrome || self.ledger.eddies < cost.eddies {
-            return false;
+    /// One item as the Stash screen and the pickers read it (no placement: the caller adds x, y, w, h).
+    pub(crate) fn item_dict(&self, t: &ItemTable, h: u32, item: &ItemInstance) -> VarDictionary {
+        let d = t.def(item.def);
+        let mut e = VarDictionary::new();
+        e.set("handle", h as i64);
+        e.set("index", item.def.0 as i64);
+        e.set("id", d.id.as_str());
+        e.set("name", d.name.as_str());
+        e.set("tier", format!("{:?}", d.tier).to_lowercase().as_str());
+        e.set("condition", item.condition as i64);
+        e.set("identified", item.ident == items::Ident::Full);
+        e.set("pinned", item.pinned);
+        e.set("sell", items::price(d, item, PriceContext::default()) as i64);
+        e.set("feed", items::feed_value(d, item).0 as f64);
+        e.set("category", format!("{:?}", d.category).to_lowercase().as_str());
+        e.set("weight", d.weight as f64);
+        e.set("found", item.found_in_run);
+        e.set("spored", item.spored);
+        if let Some(c) = &item.crafted {
+            e.set("crafted_by", format!("{} on day {}", c.by, c.day).as_str());
+            e.set("crafted_from", &PackedStringArray::from(c.parts.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
         }
-        for (_, h) in parts.iter().take(cost.parts as usize).chain(chrome.iter().take(cost.chrome as usize)) {
-            stash.grid.remove(*h);
+        if let Some(st) = item.gear_stats(d) {
+            let mut sd = VarDictionary::new();
+            sd.set("dmg", st.dmg as i64);
+            sd.set("armour", st.armour as i64);
+            sd.set("noise", st.noise as i64);
+            sd.set("light", st.light as i64);
+            sd.set("mag", st.mag as i64);
+            e.set("stats", &sd);
         }
-        self.ledger.eddies -= cost.eddies;
-        true
+        e.set("tags", &PackedStringArray::from(d.tags.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
+        e.set("codex", d.codex.as_str());
+        e
     }
 
-    /// Identify up to `n` unidentified items (the Appraisal Table's shift). Returns how many.
-    pub(crate) fn identify_n(&mut self, n: usize) -> usize {
-        self.ensure();
-        let stash = self.stash.as_mut().unwrap();
-        let handles: Vec<u32> = stash.grid.placed().into_iter().filter(|(_, p)| p.item.ident != items::Ident::Full).map(|(h, _)| h).take(n).collect();
-        let mut done = 0;
-        for h in handles {
-            if let Some(it) = stash.grid.remove(h) {
-                let mut it = it;
-                it.ident = items::Ident::Full;
-                let def = self.table.as_ref().unwrap().def(it.def);
-                if stash.grid.auto_place(def, it).is_ok() {
-                    done += 1;
-                }
-            }
-        }
-        done
-    }
-
-    /// Shift end on the Stash's side, after the cargo left: the Bench's Tweak slots finish (a slot finishes one job a
-    /// shift) and the ledger closes the shift. The report is what landed since the last shift end (sold, earned,
-    /// fed, stored, home, spilled, cut, deliveries) and what just left.
-    pub(crate) fn close_with_slots(&mut self, bench_slots: usize) -> VarDictionary {
-        self.ensure();
-        let t = self.table.as_ref().unwrap().clone();
-        let products = self.bench.end_shift_slots(&t, self.recipes.as_ref().unwrap(), bench_slots);
-        let mut crafted = 0i64;
-        let mut crafted_names = Vec::new();
-        {
-            let stash = self.stash.as_mut().unwrap();
-            for p in products {
-                crafted_names.push(GString::from(t.def(p.def).name.as_str()));
-                if stash.grid.auto_place(t.def(p.def), p.clone()).is_err() {
-                    self.bench.waiting.push(p);
-                } else {
-                    crafted += 1;
-                }
-            }
-        }
-        let r = self.ledger.close_shift(self.stash.as_mut().unwrap(), &t);
-        let mut d = Self::report_dict(&r);
-        d.set("crafted", crafted);
-        d.set("crafted_names", &PackedStringArray::from(crafted_names.as_slice()));
-        d.set("waiting", self.bench.waiting.len() as i64);
+    /// The Stash's side of a closed shift as the report the screens read.
+    pub(crate) fn closed_dict(&self, c: &game::store::Closed) -> VarDictionary {
+        let mut d = Self::report_dict(&c.report);
+        d.set("crafted", c.placed as i64);
+        d.set("crafted_names", &PackedStringArray::from(c.crafted.iter().map(|n| GString::from(n.as_str())).collect::<Vec<_>>().as_slice()));
+        d.set("waiting", c.waiting as i64);
         d.set("eddies", self.ledger.eddies as i64);
-        d.set("bench_slots", bench_slots.min(i64::MAX as usize) as i64);
+        d.set("held", self.stash.as_ref().map_or(0, |s| s.floor.len()) as i64);
         d
     }
 
@@ -1041,7 +984,7 @@ impl RoseStash {
         let stash = self.stash.as_ref()?;
         let mut parts = Vec::new();
         for h in handles.as_slice() {
-            parts.push(stash.grid.get(*h as u32)?.item.clone());
+            parts.push(stash.get_any(*h as u32)?.clone());
         }
         Some(parts)
     }
@@ -1127,7 +1070,7 @@ impl RoseStash {
         }
         let stash = self.stash.as_mut().unwrap();
         for h in handles.as_slice() {
-            stash.grid.remove(*h as u32);
+            stash.take(*h as u32);
         }
         let f = self.recipes.as_ref().unwrap();
         self.bench.queue(f, &r, parts, &by.to_string(), day.max(0) as u32);
@@ -1160,14 +1103,14 @@ impl RoseStash {
         self.ensure();
         let mut out = VarDictionary::new();
         let t = self.table.as_ref().unwrap();
-        let Some(p) = self.stash.as_ref().unwrap().grid.get(handle as u32) else { return out };
-        let d = t.def(p.item.def);
+        let Some(item) = self.stash.as_ref().unwrap().get_any(handle as u32) else { return out };
+        let d = t.def(item.def);
         let mut best: Option<(&bench::Recipe, &bench::Slot, u32)> = None;
         for r in &self.recipes.as_ref().unwrap().recipe {
             if !self.bench.is_open(r) {
                 continue;
             }
-            let Some(slot) = r.slots.iter().find(|s| bench::accepts(s, d, &p.item)) else { continue };
+            let Some(slot) = r.slots.iter().find(|s| bench::accepts(s, d, item)) else { continue };
             let value = t.get(&r.product).map(|pd| pd.value).unwrap_or(d.value);
             if best.is_none_or(|(_, _, v)| value > v) {
                 best = Some((r, slot, value));
@@ -1227,8 +1170,8 @@ impl RoseStash {
         self.ensure();
         let t = self.table.as_ref().unwrap();
         let stash = self.stash.as_mut().unwrap();
-        let Some(p) = stash.grid.get(handle as u32) else { return false };
-        if t.def(p.item.def).feed <= 0.0 {
+        let Some(item) = stash.get_any(handle as u32) else { return false };
+        if t.def(item.def).feed <= 0.0 {
             return false;
         }
         self.ledger.queue(stash, handle as u32, inventory::Verb::Feed { pit: pit.clamp(0, 255) as u8 }, day.max(0) as u32)
@@ -1288,7 +1231,7 @@ impl RoseStash {
         self.ensure();
         let t = self.table.as_ref().unwrap();
         let stash = self.stash.as_ref().unwrap();
-        stash.grid.get(handle as u32).map_or(0, |p| self.ledger.quote(t, &p.item, market.clamp(0, 255) as u8) as i64)
+        stash.get_any(handle as u32).map_or(0, |it| self.ledger.quote(t, it, market.clamp(0, 255) as u8) as i64)
     }
 
     #[func]
@@ -1341,7 +1284,7 @@ impl RoseStash {
     fn landed(&self) -> VarDictionary {
         let mut d = Self::report_dict(&self.ledger.landed);
         d.set("riding", self.ledger.in_flight.len() as i64);
-        d.set("held", self.ledger.held.len() as i64);
+        d.set("held", self.stash.as_ref().map_or(0, |s| s.floor.len()) as i64);
         d
     }
 
@@ -1361,12 +1304,6 @@ impl RoseStash {
     fn tier(&mut self) -> i64 {
         self.ensure();
         self.stash.as_ref().unwrap().tier as i64
-    }
-
-    #[func]
-    fn upgrade(&mut self) -> bool {
-        self.ensure();
-        self.stash.as_mut().unwrap().upgrade()
     }
 
     /// Auto-place one item by table index; returns the handle or -1.
@@ -1393,14 +1330,14 @@ impl RoseStash {
     #[func]
     fn remove(&mut self, handle: i64) -> bool {
         self.ensure();
-        self.stash.as_mut().unwrap().grid.remove(handle as u32).is_some()
+        self.stash.as_mut().unwrap().take(handle as u32).is_some()
     }
 
     #[func]
     fn pin(&mut self, handle: i64, on: bool) {
         self.ensure();
-        if let Some(p) = self.stash.as_mut().unwrap().grid.get_mut(handle as u32) {
-            p.item.pinned = on;
+        if let Some(it) = self.stash.as_mut().unwrap().get_any_mut(handle as u32) {
+            it.pinned = on;
         }
     }
 
@@ -1408,45 +1345,16 @@ impl RoseStash {
     #[func]
     fn items(&mut self) -> VarArray {
         self.ensure();
-        let t = self.table.as_ref().unwrap();
-        let s = self.stash.as_ref().unwrap();
+        let t = self.table.clone().unwrap();
+        let placed: Vec<(u32, inventory::Placed)> = self.stash.as_ref().unwrap().grid.placed().into_iter().map(|(h, p)| (h, p.clone())).collect();
         let mut out = VarArray::new();
-        for (h, p) in s.grid.placed() {
-            let d = t.def(p.item.def);
-            let mut e = VarDictionary::new();
-            e.set("handle", h as i64);
+        for (h, p) in placed {
+            let mut e = self.item_dict(&t, h, &p.item);
             e.set("x", p.x as i64);
             e.set("y", p.y as i64);
             e.set("w", p.w as i64);
             e.set("h", p.h as i64);
             e.set("rotated", p.rotated);
-            e.set("index", p.item.def.0 as i64);
-            e.set("id", d.id.as_str());
-            e.set("name", d.name.as_str());
-            e.set("tier", format!("{:?}", d.tier).to_lowercase().as_str());
-            e.set("condition", p.item.condition as i64);
-            e.set("identified", p.item.ident == items::Ident::Full);
-            e.set("pinned", p.item.pinned);
-            e.set("sell", items::price(d, &p.item, PriceContext::default()) as i64);
-            e.set("feed", items::feed_value(d, &p.item).0 as f64);
-            e.set("category", format!("{:?}", d.category).to_lowercase().as_str());
-            e.set("weight", d.weight as f64);
-            e.set("found", p.item.found_in_run);
-            e.set("spored", p.item.spored);
-            if let Some(c) = &p.item.crafted {
-                e.set("crafted_by", format!("{} on day {}", c.by, c.day).as_str());
-                e.set("crafted_from", &PackedStringArray::from(c.parts.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
-            }
-            if let Some(st) = p.item.gear_stats(d) {
-                let mut sd = VarDictionary::new();
-                sd.set("dmg", st.dmg as i64);
-                sd.set("armour", st.armour as i64);
-                sd.set("noise", st.noise as i64);
-                sd.set("light", st.light as i64);
-                sd.set("mag", st.mag as i64);
-                e.set("stats", &sd);
-            }
-            e.set("tags", &PackedStringArray::from(d.tags.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
             out.push(&e.to_variant());
         }
         out
@@ -1469,39 +1377,22 @@ impl RoseStash {
     fn import_rig(&mut self, bytes: PackedByteArray) -> i64 {
         self.ensure();
         let Ok(rig) = postcard::from_bytes::<inventory::Rig>(bytes.to_vec().as_slice()) else { return -1 };
-        let t = self.table.as_ref().unwrap();
-        let mut items: Vec<ItemInstance> = rig.backpack.items().cloned().collect();
-        items.extend(rig.quick.iter().flatten().cloned());
-        let g = &rig.gear;
-        items.extend([&g.head, &g.body, &g.feet, &g.back].into_iter().flatten().cloned());
-        items.extend(g.hands.iter().flatten().cloned());
-        items.sort_by_key(|it| std::cmp::Reverse(t.def(it.def).value));
-        let stash = self.stash.as_mut().unwrap();
-        let mut left = 0i64;
-        for it in items {
-            let def = t.def(it.def);
-            if stash.grid.auto_place(def, it).is_err() {
-                left += 1;
-            }
-        }
-        left
+        let t = self.table.clone().unwrap();
+        let items = game::store::rig_items(&rig, &t);
+        // what the grid cannot hold lies on the Heart's floor (game::store::take_haul)
+        let (_, held) = game::store::take_haul(self.stash.as_mut().unwrap(), &t, items);
+        held as i64
     }
 
-    /// Take loose items (postcard Vec<ItemInstance>: a Mat haul, regrown gear) into the Stash. Returns how many did
-    /// not fit.
+    /// Take loose items (postcard Vec<ItemInstance>: a Mat haul, regrown gear) into the Stash; what the grid cannot
+    /// hold lies on the Heart's floor (game::store::take_haul). Returns how many.
     #[func]
     fn import_items(&mut self, bytes: PackedByteArray) -> i64 {
         self.ensure();
         let Ok(items) = postcard::from_bytes::<Vec<ItemInstance>>(bytes.to_vec().as_slice()) else { return -1 };
-        let t = self.table.as_ref().unwrap();
-        let stash = self.stash.as_mut().unwrap();
-        let mut left = 0i64;
-        for it in items {
-            if stash.grid.auto_place(t.def(it.def), it).is_err() {
-                left += 1;
-            }
-        }
-        left
+        let t = self.table.clone().unwrap();
+        let (_, held) = game::store::take_haul(self.stash.as_mut().unwrap(), &t, items);
+        held as i64
     }
 
     /// Pack a Runner's rig from the Stash: the hand weapon by handle (-1 for none), up to four quick slots and any

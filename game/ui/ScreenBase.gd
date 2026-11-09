@@ -10,7 +10,7 @@ var content: Control
 var title_label: Label
 var nav: HBoxContainer
 
-const NAV := ["colony", "route", "slimo", "stash", "bench", "market", "strain", "charter", "codex", "settings"]
+const NAV := ["colony", "route", "slimo", "jobs", "stash", "bench", "market", "strain", "charter", "codex", "settings"]
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -98,17 +98,20 @@ func make_slot(parent: Control, slot_id: String, pos: Vector2, frame_w: int = 0,
 	parent.add_child(s)
 	return s
 
-## A gauge from a strip slot: the fill is a cropped copy of the same texture.
+## A gauge from a strip slot: the track dimmed, the fill the same strip seen through a clip its share wide (a
+## Control's clip_contents clips its children, not its own drawing, so the strip sits inside the clip).
 func make_gauge(parent: Control, slot_id: String, pos: Vector2, fill: float, label: String = "") -> Control:
 	var holder := Control.new()
 	holder.position = pos
 	parent.add_child(holder)
 	var track := make_slot(holder, slot_id, Vector2.ZERO)
 	track.modulate = Color(0.35, 0.35, 0.35)
-	var fill_slot := make_slot(holder, slot_id, Vector2.ZERO)
-	fill_slot.clip_contents = true
-	fill_slot.size = Vector2(96 * clampf(fill, 0.0, 1.0), 8)
-	fill_slot.custom_minimum_size = fill_slot.size
+	var clip := Control.new()
+	clip.clip_contents = true
+	clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	clip.size = Vector2(round(96 * clampf(fill, 0.0, 1.0)), 8)
+	holder.add_child(clip)
+	make_slot(clip, slot_id, Vector2.ZERO)
 	if label != "":
 		make_label(holder, label, Vector2(100, -2), UiTheme.DUST)
 	return holder

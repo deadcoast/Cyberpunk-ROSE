@@ -1,17 +1,19 @@
 extends ScreenBase
-## The Build menu (Full Design v3.9, The 24 structures): every def from data/structures.toml through
-## RoseSim.structure_defs, with its footprint, cost and build points, the job it hosts and its slots, its per-tier
-## numbers and what the city has of it. PLACE arms the Colony's build tool with the def; the Colony screen puts the
-## ghost on the Mat. The list scrolls in pages of eight.
+## The Build menu (Full Design v3.12, UI and screens: Build menu): the defs of data/structures.toml through
+## RoseSim.structure_defs in tabs by their category (Homes, Work, Mat, Stores, Order; the Heart and the Route Board
+## are founded, never built), each with its footprint, its cost against what the Stash holds now (red where short),
+## its build points, the job it hosts and its slots, its per-tier numbers and what the city has of it. PLACE arms the
+## Colony's build tool with the def; R turns it there.
 
-const PER_PAGE := 8
+const TABS := [["homes", "HOMES"], ["work", "WORK"], ["mat", "MAT"], ["stores", "STORES"], ["order", "ORDER"]]
 
 var defs: Array = []
-var page := 0
+var tab := "homes"
 var chosen := ""
 var list_frame: Panel
 var card_frame: Panel
 var sim: RoseSim
+var holds := {}
 
 func _ready() -> void:
 	screen_title = "BUILD"
@@ -20,16 +22,20 @@ func _ready() -> void:
 func _build_content(c: Control) -> void:
 	sim = Sim.ensure()
 	defs = sim.structure_defs()
+	holds = Sim.ensure_stash().holds()
 	list_frame = make_frame(c, Vector2(0, 0), Vector2(300, 306))
 	card_frame = make_frame(c, Vector2(306, 0), Vector2(326, 306))
 	if Sim.build_tool != "":
 		chosen = Sim.build_tool
-	elif defs.size() > 0:
-		chosen = String(defs[0].id)
-	for i in defs.size():
-		if String(defs[i].id) == chosen:
-			page = i / PER_PAGE
+	var d := _def(chosen)
+	if d.is_empty() or String(d.category) == "city":
+		chosen = String(_in_tab(tab)[0].id)
+	else:
+		tab = String(d.category)
 	_redraw()
+
+func _in_tab(cat: String) -> Array:
+	return defs.filter(func(x): return String(x.category) == cat)
 
 ## Lines of at most `width` characters, broken at spaces.
 func _wrap(text: String, width: int) -> Array:
@@ -72,25 +78,27 @@ func _redraw() -> void:
 func _draw_list() -> void:
 	for ch in list_frame.get_children():
 		ch.queue_free()
-	var pages := int(ceil(float(defs.size()) / PER_PAGE))
-	make_label(list_frame, "STRUCTURES   %d   page %d/%d" % [defs.size(), page + 1, pages], Vector2(6, 4), UiTheme.CYAN)
+	var x := 4
+	for t in TABS:
+		var b := make_button(list_frame, t[1], Vector2(x, 3), func():
+			tab = t[0]
+			chosen = String(_in_tab(tab)[0].id)
+			_redraw())
+		b.add_theme_color_override("font_color", UiTheme.ACID if tab == t[0] else UiTheme.CHALK)
+		x += t[1].length() * 4 + 14
 	var pop: int = Sim.ensure_people().count()
-	make_label(list_frame, "%s of %d   tier %d" % [String(sim.city_tier_name(pop)).to_upper(), pop, int(sim.city_tier(pop))], Vector2(190, 4), UiTheme.DUST)
-	var y := 18
-	for i in range(page * PER_PAGE, mini(defs.size(), (page + 1) * PER_PAGE)):
-		var d: Dictionary = defs[i]
+	make_label(list_frame, "%s of %d   tier %d   the Stash holds %d Parts, %d Chrome, %d e" % [String(sim.city_tier_name(pop)).to_upper(), pop, int(sim.city_tier(pop)), int(holds.parts), int(holds.chrome), int(holds.eddies)], Vector2(6, 22), UiTheme.DUST)
+	var y := 36
+	for d in _in_tab(tab):
 		var id := String(d.id)
 		var row := Control.new()
 		row.position = Vector2(0, y)
 		list_frame.add_child(row)
 		_thumb(row, String(d.art), "t1", Vector2(6, 0), Vector2(24, 30))
 		var n := _count(id)
-		var col: Color = UiTheme.CYAN if id == chosen else UiTheme.CHALK
-		make_label(row, String(d.name).to_upper(), Vector2(36, 1), col)
-		var line := "%dx%d   %s   %d pts" % [int(d.w), int(d.h), String(d.cost.text), int(d.build)]
-		if bool(d.prebuilt):
-			line = "%dx%d   prebuilt" % [int(d.w), int(d.h)]
-		make_label(row, line, Vector2(36, 11), UiTheme.DUST)
+		make_label(row, String(d.name).to_upper(), Vector2(36, 1), UiTheme.CYAN if id == chosen else UiTheme.CHALK)
+		make_label(row, "%dx%d   %d pts" % [int(d.w), int(d.h), int(d.build)], Vector2(36, 11), UiTheme.DUST)
+		_cost_label(row, d.cost, Vector2(110, 11))
 		var have := []
 		if n[0] > 0:
 			have.append("%d built" % n[0])
@@ -106,15 +114,23 @@ func _draw_list() -> void:
 			chosen = id
 			_redraw())
 		row.add_child(b)
-		y += 34
-	if page > 0:
-		make_button(list_frame, "PREV", Vector2(6, 288), func():
-			page -= 1
-			_redraw())
-	if page + 1 < pages:
-		make_button(list_frame, "NEXT", Vector2(250, 288), func():
-			page += 1
-			_redraw())
+		y += 40
+
+## A cost against what the Stash holds: each part of it Hot Pink where the Stash is short.
+func _cost_label(parent: Control, cost: Dictionary, pos: Vector2) -> void:
+	var x := pos.x
+	var parts := [["parts", "Parts"], ["chrome", "Chrome"], ["eddies", "e"]]
+	var any := false
+	for p in parts:
+		var need := int(cost.get(p[0], 0))
+		if need <= 0:
+			continue
+		any = true
+		var text := "%d %s" % [need, p[1]]
+		make_label(parent, text, Vector2(x, pos.y), UiTheme.ACID if int(holds.get(p[0], 0)) >= need else UiTheme.HOT_PINK)
+		x += text.length() * 4 + 8
+	if not any:
+		make_label(parent, "free", Vector2(x, pos.y), UiTheme.DUST)
 
 func _def(id: String) -> Dictionary:
 	for d in defs:
@@ -160,7 +176,10 @@ func _draw_card() -> void:
 	if bool(d.prebuilt):
 		make_label(card_frame, "prebuilt at the founding", Vector2(8, y), UiTheme.DUST)
 	else:
-		make_label(card_frame, "costs %s   %d build points (a builder adds Hands a shift)" % [String(d.cost.text), int(d.build)], Vector2(8, y), UiTheme.ACID)
+		make_label(card_frame, "costs", Vector2(8, y), UiTheme.DUST)
+		_cost_label(card_frame, d.cost, Vector2(34, y))
+		y += 11
+		make_label(card_frame, "%d build points: a builder adds its Hands a shift" % int(d.build), Vector2(8, y), UiTheme.DUST)
 	y += 11
 	if int(d.heart_tier) > 0:
 		make_label(card_frame, "needs the Heart at tier %d" % int(d.heart_tier), Vector2(8, y), UiTheme.HOT_PINK)
@@ -183,7 +202,7 @@ func _draw_card() -> void:
 	var n := _count(chosen)
 	make_label(card_frame, "in the city: %d built, %d ghost%s" % [n[0], n[1], "" if n[1] == 1 else "s"], Vector2(8, 260), UiTheme.OOZE_GLOW)
 	if not bool(d.prebuilt):
-		make_button(card_frame, "PLACE ON THE COLONY", Vector2(170, 282), func():
+		make_button(card_frame, "PLACE ON THE COLONY (R TURNS)", Vector2(160, 282), func():
 			Sim.build_tool = chosen
 			Screens.show_screen("colony"))
 	make_label(card_frame, "HP %d per tier" % int(d.hp), Vector2(8, 286), UiTheme.DUST)

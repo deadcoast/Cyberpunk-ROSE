@@ -4,7 +4,9 @@ extends ScreenBase
 ## outgrows the screen; right column: the item card with the three numbers and the four verbs (Sell, Feed, Craft,
 ## Keep), the bulk bar that applies Sell or Feed to the filtered view, and the queue panel with the ledger. At the
 ## shift end (Sim.end_shift, after a run) the queue leaves the Heart as cargo and each item pays or feeds when it
-## lands (Full Design v3.11, Cargo); the report shows what landed and what left on the way back.
+## lands (Full Design v3.11, Cargo); the report shows what landed and what left on the way back. The tabs over the
+## grid page between the Heart's grid and each stockpile (v3.12, Stockpiles): a room shows its cells in order, the
+## items waiting on the store's footprint for a hauler marked, and every verb works on an item where it lies.
 
 const CELL := 32
 const CATEGORIES := ["", "chrome", "part", "organic", "tech", "gear", "contraband", "key", "curio", "relic"]
@@ -35,6 +37,8 @@ var cond_button: Button
 var unid_button: Button
 var sort_button: Button
 var status: Label
+var room := -1            # the zone of the stockpile shown; -1 the Heart's grid, -2 the Heart's floor
+var tabs: Control
 
 func _ready() -> void:
 	screen_title = "STASH"
@@ -65,10 +69,13 @@ func _build_content(c: Control) -> void:
 		stash.sort_by(SORTS[sort_key])
 		_redraw())
 	# ---- the grid, scrolling
-	grid_frame = make_frame(c, Vector2(0, 20), Vector2(392, 286))
+	tabs = Control.new()
+	tabs.position = Vector2(0, 19)
+	c.add_child(tabs)
+	grid_frame = make_frame(c, Vector2(0, 34), Vector2(392, 272))
 	scroll = ScrollContainer.new()
 	scroll.position = Vector2(4, 4)
-	scroll.size = Vector2(384, 278)
+	scroll.size = Vector2(384, 264)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	grid_frame.add_child(scroll)
@@ -81,19 +88,9 @@ func _build_content(c: Control) -> void:
 	status = make_label(c, "", Vector2(0, 0), UiTheme.DUST)
 	status.visible = false
 	# a Runner's rig handed over by the Run on extraction
-	if not Sim.pending_haul.is_empty():
-		var before: int = stash.count()
-		var left: int = stash.import_rig(Sim.pending_haul)
-		Sim.pending_haul = PackedByteArray()
-		haul_note = "haul from %s: %d in%s" % [Sim.pending_haul_from, stash.count() - before, ("   %d left at the Mat edge: no room" % left) if left > 0 else ""]
-	# what the Mat hauled and what regrew at the Heart
-	if not Sim.pending_items.is_empty():
-		var before2: int = stash.count()
-		var left2 := 0
-		for b in Sim.pending_items:
-			left2 += maxi(0, stash.import_items(b))
-		Sim.pending_items.clear()
-		haul_note += "   the Mat brought %d home%s" % [stash.count() - before2, ("   %d would not fit" % left2) if left2 > 0 else ""]
+	if Sim.haul_note != "":
+		haul_note = Sim.haul_note
+		Sim.haul_note = ""
 	_redraw()
 
 func _set_cat(i: int) -> void:
@@ -112,11 +109,64 @@ func _passes(it: Dictionary) -> bool:
 		return false
 	return true
 
+## The items of the room shown: the Heart's grid, or a stockpile's in its cells' order.
+func _view_items() -> Array:
+	if room == -2:
+		return stash.floor_items()
+	return stash.items() if room < 0 else stash.room_items(room)
+
+func _room() -> Dictionary:
+	for r in stash.rooms():
+		if int(r.zone) == room:
+			return r
+	return {}
+
+func _draw_tabs() -> void:
+	for ch in tabs.get_children():
+		ch.queue_free()
+	var x := 0
+	var heart := make_button(tabs, "HEART %d" % stash.count_grid(), Vector2(x, 0), func():
+		room = -1
+		selected = -1
+		_redraw())
+	heart.add_theme_color_override("font_color", UiTheme.ACID if room == -1 else UiTheme.CHALK)
+	x += 56
+	var on_floor: int = stash.floor_items().size()
+	if on_floor > 0 or room == -2:
+		var fl := make_button(tabs, "FLOOR %d" % on_floor, Vector2(x, 0), func():
+			room = -2
+			selected = -1
+			_redraw())
+		fl.add_theme_color_override("font_color", UiTheme.ACID if room == -2 else UiTheme.HOT_PINK)
+		x += 56
+	for r in stash.rooms():
+		var z := int(r.zone)
+		var label := "%s %d/%d" % [String(r.name), int(r.count), int(r.cap)]
+		var b := make_button(tabs, label, Vector2(x, 0), func():
+			room = z
+			selected = -1
+			_redraw())
+		b.add_theme_color_override("font_color", UiTheme.ACID if room == z else UiTheme.CHALK)
+		x += label.length() * 4 + 14
+	if stash.rooms().is_empty():
+		make_label(tabs, "no stockpiles: paint one against a Rack or Cold Store", Vector2(x + 4, 3), UiTheme.DUST)
+
 func _redraw() -> void:
 	for ch in cells.get_children():
 		ch.queue_free()
+	if room >= 0 and _room().is_empty():
+		room = -1
+	if room == -2 and stash.floor_items().is_empty():
+		room = -1
+	_draw_tabs()
 	var w: int = stash.width()
 	var h: int = stash.height()
+	if room >= 0:
+		w = 8
+		h = maxi(1, int(ceil(float(int(_room().cap)) / 8.0)))
+	elif room == -2:
+		w = 8
+		h = maxi(1, int(ceil(float(stash.floor_items().size()) / 8.0)))
 	cells.custom_minimum_size = Vector2(w * CELL, h * CELL)
 	cells.size = cells.custom_minimum_size
 	for y in h:
@@ -127,7 +177,7 @@ func _redraw() -> void:
 			cell.size = Vector2(CELL - 1, CELL - 1)
 			cells.add_child(cell)
 	var shown := 0
-	for it in stash.items():
+	for it in _view_items():
 		var hnd: int = it.handle
 		var tile := make_item_tile(cells, Vector2(it.x * CELL, it.y * CELL), int(it.w), int(it.h), String(it.tier), String(it.id), bool(it.identified), CELL)
 		var passes := _passes(it)
@@ -135,6 +185,13 @@ func _redraw() -> void:
 			shown += 1
 		else:
 			tile.modulate = Color(0.45, 0.45, 0.5, 0.6)
+		if int(it.get("cell", 0)) == -1:
+			# on the store's footprint, waiting for a hauler to carry it to its cell
+			var wait := ColorRect.new()
+			wait.color = UiTheme.OOZE_GLOW
+			wait.position = Vector2(1, tile.size.y - 5)
+			wait.size = Vector2(tile.size.x - 3, 3)
+			tile.add_child(wait)
 		if bool(it.pinned):
 			var pin := ColorRect.new()
 			pin.color = UiTheme.ACID
@@ -164,7 +221,7 @@ func _redraw() -> void:
 	_draw_queue()
 
 func _item(handle: int) -> Dictionary:
-	for it in stash.items():
+	for it in _view_items():
 		if int(it.handle) == handle:
 			return it
 	return {}
@@ -178,19 +235,38 @@ func _draw_card() -> void:
 		ch.queue_free()
 	var it := _item(selected)
 	if it.is_empty():
+		if room == -2:
+			make_label(card, "THE HEART'S FLOOR   %d items" % stash.floor_items().size(), Vector2(6, 4), UiTheme.HOT_PINK)
+			make_label(card, "what the grid has no room for: a haul's overflow,", Vector2(6, 18), UiTheme.DUST)
+			make_label(card, "a product home to a full grid", Vector2(6, 30), UiTheme.DUST)
+			make_label(card, "it tries the grid again at shift end; a stockpile", Vector2(6, 42), UiTheme.DUST)
+			make_label(card, "at priority 1-2 takes it; sell or feed it here", Vector2(6, 54), UiTheme.DUST)
+			return
+		if room >= 0:
+			var r := _room()
+			make_label(card, "%s   %d of %d cells" % [String(r.name), int(r.count), int(r.cap)], Vector2(6, 4), UiTheme.CYAN)
+			var cats: PackedStringArray = r.categories
+			make_label(card, "takes %s%s%s" % ["any category" if cats.is_empty() else ", ".join(cats), ("   tier %d+" % int(r.min_tier)) if int(r.min_tier) > 0 else "", ("   condition %d+" % int(r.min_condition)) if int(r.min_condition) > 0 else ""], Vector2(6, 18), UiTheme.DUST)
+			make_label(card, "priority %d: %s" % [int(r.priority), "draws from the Heart" if int(r.priority) >= 3 else "takes the Heart's overflow"], Vector2(6, 30), UiTheme.DUST)
+			make_label(card, "%d waiting on the store for a hauler%s" % [int(r.waiting), "   cold: no spoiling" if bool(r.cold) else ""], Vector2(6, 42), UiTheme.OOZE_GLOW if int(r.waiting) > 0 else UiTheme.DUST)
+			make_label(card, "set its filter and priority on its card in the Colony", Vector2(6, 54), UiTheme.DUST)
+			return
 		make_label(card, "STASH   tier %d   %d items   %d free" % [stash.tier(), stash.count(), stash.free_cells()], Vector2(6, 4), UiTheme.CYAN)
 		make_label(card, "click an item for its card", Vector2(6, 18), UiTheme.DUST)
 		make_label(card, "filters select the view; bulk acts on it", Vector2(6, 30), UiTheme.DUST)
 		make_label(card, "sells and feeds ride the Mat at shift end", Vector2(6, 42), UiTheme.DUST)
-		make_button(card, "UPGRADE STASH", Vector2(6, 104), func():
-			if stash.upgrade():
-				_redraw())
+		make_label(card, "the grid grows with the Heart's tier", Vector2(6, 54), UiTheme.DUST)
 		return
 	var d: Dictionary = items.get(int(it.index))
 	make_item_tile(card, Vector2(6, 6), 1, 1, String(it.tier), String(it.id), bool(it.identified), 32)
 	make_label(card, (String(it.name) if bool(it.identified) else "UNIDENTIFIED").to_upper(), Vector2(44, 6), UiTheme.CYAN)
 	make_label(card, "%s %s   %dx%d   %.1f kg" % [String(it.tier), String(it.category), int(it.w), int(it.h), float(it.weight)], Vector2(44, 18), UiTheme.DUST)
-	make_label(card, "condition %d   %s%s" % [int(it.condition), "found in run" if bool(it.found) else "from the city", "   PINNED" if bool(it.pinned) else ""], Vector2(44, 30), UiTheme.DUST)
+	var where := "found in run" if bool(it.found) else "from the city"
+	if room >= 0:
+		where = ("in " if int(it.cell) >= 0 else "waits at ") + String(_room().name)
+	elif room == -2:
+		where = "on the Heart's floor"
+	make_label(card, "condition %d   %s%s" % [int(it.condition), where, "   PINNED" if bool(it.pinned) else ""], Vector2(44, 30), UiTheme.DUST)
 	# the three numbers
 	var y := 46
 	var can_sell := Sim.markets().size() > 0 and int(d.value) > 0
@@ -248,6 +324,11 @@ func _draw_bulk(shown: int) -> void:
 	for ch in bulk.get_children():
 		ch.queue_free()
 	var handles: PackedInt32Array = stash.bulk_handles(CATEGORIES[filter_cat], TIERS[filter_tier], CONDS[filter_cond], filter_unid)
+	if room != -1:
+		handles = PackedInt32Array()
+		for it in _view_items():
+			if _passes(it) and not bool(it.pinned):
+				handles.append(int(it.handle))
 	var total_e := 0
 	var total_n := 0.0
 	var feedable := 0

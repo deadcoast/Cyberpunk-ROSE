@@ -91,6 +91,20 @@ enum Cmd {
         #[arg(long)]
         logs: Option<PathBuf>,
     },
+    /// Play the whole game headless: a bot run each shift, the steward's standing orders, the city's shift in core;
+    /// assert the Phase C proof and judge the merged run-and-city landing cadence.
+    City {
+        #[arg(long, default_value_t = 11)]
+        seed: u64,
+        #[arg(long, default_value_t = 20)]
+        shifts: u32,
+        /// the report (markdown)
+        #[arg(long, default_value = "docs/telemetry/city.md")]
+        report: PathBuf,
+        /// the merged log, every event of every shift on one clock
+        #[arg(long, default_value = "out/city.log")]
+        log: PathBuf,
+    },
 }
 
 // ---------------------------------------------------------------- terminal
@@ -448,6 +462,7 @@ fn main() {
         Cmd::Bench { seed, ticks } => cmd_bench(&t, seed, ticks),
         Cmd::Route { seed, stratum, chunks, sweep, loot } => cmd_route(&t, &cli.out, seed, stratum, chunks, sweep, loot),
         Cmd::Cadence { runs, strata, seed, report, logs } => cmd_cadence(&t, runs, &strata, seed, &report, logs.as_deref()),
+        Cmd::City { seed, shifts, report, log } => cmd_city(&t, seed, shifts, &report, &log),
     }
     println!();
 }
@@ -536,6 +551,68 @@ fn cmd_cadence(t: &Term, runs: u64, strata: &str, seed0: u64, report_path: &Path
     }
     std::fs::write(report_path, md).expect("report");
     println!("  {} {}", t.dim("wrote"), report_path.display());
+}
+
+// ---------------------------------------------------------------- city
+fn cmd_city(t: &Term, seed: u64, shifts: u32, report_path: &Path, log_path: &Path) {
+    use run::telemetry::{bot_bands, BOT_FACTOR, LANDING_GAP_S};
+    let (_, bl, _) = bot_bands();
+    t.head("city", &format!("{shifts} shifts from seed {seed}: a bot run each shift on S1's first route card, the steward's standing orders, the shift in core  |  landing gap: player {}-{} s, bot band (/{}) {:.1}-{:.1} s", LANDING_GAP_S.0, LANDING_GAP_S.1, BOT_FACTOR, bl.0, bl.1));
+    t.hrow(&[("shift", 5), ("runner", 22), ("run", 10), ("length", 6), ("run land", 8), ("city land", 9), ("run gap", 7), ("merged", 7), ("pop", 3), ("stash", 5), ("rooms", 5), ("e", 5), ("late", 4), ("built", 26)]);
+    let started = Instant::now();
+    let row = |k: usize, r: &game::city::ShiftRecord| {
+        let len = format!("{}:{:02}", (r.seconds / 60.0) as u32, r.seconds as u32 % 60);
+        t.row(&[(&format!("{}", k + 1), 5), (&r.runner.chars().take(22).collect::<String>(), 22), (&r.result, 10), (&len, 6), (&format!("{}", r.run_landings), 8), (&format!("{}", r.city_landings), 9), (&format!("{:.1} s", r.run_gap), 7), (&format!("{:.1} s", r.merged_gap), 7), (&format!("{}", r.population), 3), (&format!("{}", r.stash), 5), (&format!("{}", r.in_rooms), 5), (&format!("{}", r.eddies), 5), (&format!("{}", r.late), 4), (&r.built.join(", ").chars().take(26).collect::<String>(), 26)]);
+    };
+    let (run_, replay) = match game::city::replays(seed, shifts, &mut |k, r| row(k, r)) {
+        Ok(c) => (c, "the city replays bit-exact".to_string()),
+        Err(e) => (game::city::play(seed, shifts, &mut |_, _| {}), e),
+    };
+    let secs = started.elapsed().as_secs_f32();
+    let mut run_gaps: Vec<f32> = run_.shifts.iter().filter(|r| r.run_landings >= 2).map(|r| r.run_gap).collect();
+    let mut merged: Vec<f32> = run_.shifts.iter().filter(|r| r.run_landings + r.city_landings >= 2).map(|r| r.merged_gap).collect();
+    let (rg, mg) = (median(&mut run_gaps), median(&mut merged));
+    let verdict = in_band(mg, bl.0, bl.1);
+    let deaths = run_.shifts.iter().filter(|r| r.result == "died").count();
+    let mut failures = run_.failures.clone();
+    if !replay.contains("bit-exact") {
+        failures.insert(0, replay.clone());
+    }
+    println!();
+    println!("  landing gap median: run alone {rg:.1} s, run and city merged {mg:.1} s against the bot band {:.1}-{:.1} s: {verdict}  (bot factor {BOT_FACTOR}, an assumption until Phase F)", bl.0, bl.1);
+    println!("  build plan {}/{}   deaths {deaths}/{}   {replay}   {:.0} s", run_.plan_built, game::city::BUILD_PLAN.len(), run_.shifts.len(), secs);
+    for f in &failures {
+        println!("  {} {f}", t.hi("FAIL"));
+    }
+    if failures.is_empty() {
+        println!("  {}", t.hi("PASS"));
+    }
+    // the report
+    let mut md = String::new();
+    md.push_str("# The city, twenty shifts headless\n\n");
+    md.push_str(&format!("Written by `rose city --seed {seed} --shifts {shifts}` on {} (Full Design v3.12, The city's log; Recruitment; Build plan, Phase C). Each shift the steward gives its standing orders — the Heart's Pit kept at {:.0} nutrient with Uncommon its ceiling, every Curio and Tech sold at the first grate while the Mat reaches it, the build plan ({}) placed one ghost at a time at the nearest anchor to the Heart but the Pit, which goes at the nearest anchor to the first grate and keeps 2 nutrient too (Pass 2's first session), with eight stockpile cells painted at the Rack, every petition answered by placing what it asks — then the eligible slimo of best Scav runs the first route card of S1 as the bot, alone, with the bot's kit packed from the Stash where the Stash has it; the city ticks through the run at 2 Hz (the run's clock and the city's are one), the haul comes home, and the shift ends in `game`. The steward is this design's stand-in for a player, not a strategy the game recommends; the bot does not go back for its dead.\n\n", chrono_free_date(), game::city::HEART_KEEP.target, game::city::BUILD_PLAN.join(", ")));
+    md.push_str(&format!("**Assertions**: the city replays bit-exact (two plays of the seed, compared shift by shift); every shift's cargo lands within the next shift; the build plan stands by the end; nobody starves (Fed under 10); the Heart's core keeps signal 0.3. **Result**: {}.\n\n", if failures.is_empty() { "all hold".to_string() } else { format!("{} (the founding Mat recedes and takes the cord to the first grate with it; PAC-045)", failures.join("; ")) }));
+    md.push_str(&format!("**The landing cadence** (research 02's whole-game budget of something landing every {}–{} s, the bot's band {:.1}–{:.1} s at the bot factor {BOT_FACTOR}, an assumption until the Phase F playtest): the run alone lands every {rg:.1} s (median of the shifts' medians), the run and the city merged every {mg:.1} s — **{verdict}**. Landings a second apart count as one moment, as the run's report counts them. Deaths: {deaths} of {} runs.\n\n", LANDING_GAP_S.0, LANDING_GAP_S.1, bl.0, bl.1, run_.shifts.len()));
+    md.push_str("| shift | day | runner | run | length | run landings | city landings | run gap | merged gap | population | Stash | in stockpiles | on the Heart's floor | e (+earned −spent) | paste meals | Mat cells | Mat nutrient | late cargo | built |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    for (k, r) in run_.shifts.iter().enumerate() {
+        md.push_str(&format!("| {} | {} | {} | {} | {}:{:02} | {} | {} | {:.1} s | {:.1} s | {} | {} | {} | {} | {} (+{} −{}) | {} | {} | {:.1} | {} | {} |\n", k + 1, r.day, if r.runner.is_empty() { "-" } else { &r.runner }, r.result, (r.seconds / 60.0) as u32, r.seconds as u32 % 60, r.run_landings, r.city_landings, r.run_gap, r.merged_gap, r.population, r.stash, r.in_rooms, r.floor, r.eddies, r.earned, r.spent, r.paste_meals, r.mat_cells, r.mat_nutrient, r.late, if r.built.is_empty() { "-".to_string() } else { r.built.join(", ") }));
+    }
+    md.push_str("\n**Alerts standing at the last shift's end**: ");
+    let last_alerts = run_.shifts.last().map(|r| r.alerts.clone()).unwrap_or_default();
+    md.push_str(&if last_alerts.is_empty() { "none".to_string() } else { last_alerts.join("; ") });
+    md.push_str(&format!("\n\nThe merged log, every run and city event on one clock, is `{}` (not committed).\n", log_path.display()));
+    if let Some(parent) = report_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(report_path, md).expect("report");
+    if let Some(parent) = log_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(log_path, &run_.log).expect("log");
+    println!("  {} {}  {}", t.dim("wrote"), report_path.display(), log_path.display());
+    if !failures.is_empty() {
+        std::process::exit(1);
+    }
 }
 
 /// Today as YYYY-MM-DD from the system clock, without a date crate.

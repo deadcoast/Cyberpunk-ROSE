@@ -393,7 +393,14 @@ structures.toml
 
 - kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
-- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Relay Shrine: a pole of chrome with an ooze bulb at the top, a built nerve
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Relay: a pole of chrome with an ooze bulb at the top, a built nerve
+- negative: green, outline on every edge, gradient
+
+### struct.shrine
+
+- kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Relay Shrine: chrome plates scratched with the Nerve's rules hung around a Relay's pole, a small ooze bulb lit above them
 - negative: green, outline on every edge, gradient
 
 ### struct.bunkhouse

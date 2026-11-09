@@ -76,7 +76,8 @@ func _verify_current() -> void:
 	var scr: Node = screens.current
 	_check(scr != null and scr.has_method("_build_content"), "%s: did not instantiate as a ScreenBase" % id)
 	var slots := _count_slots(scr)
-	_check(slots > 0, "%s: no AssetSlot resolved a texture" % id)
+	# the Colony's art is the world's tiles (checked below) and the Job grid is a table; the rest draw AssetSlots
+	_check(slots > 0 or id in ["colony", "jobs"], "%s: no AssetSlot resolved a texture" % id)
 	match id:
 		"colony":
 			var s: Dictionary = sim.ensure().stats()
@@ -88,10 +89,10 @@ func _verify_current() -> void:
 					wv = ch
 			_check(wv != null and wv.substrate.get_used_cells().size() > 1000, "colony: world tiles not painted")
 			_check(wv != null and wv.matlayer.get_used_cells().size() > 300, "colony: Mat tiles not painted")
-			# the city founded on the Mat: the Heart, the Route Board, a Bench, a Pit per Relay; 24 defs
+			# the city founded on the Mat: the Heart, the Route Board, a Bench, a Pit per Relay; 25 defs
 			var rs: RoseSim = sim.ensure()
 			var defs: Array = rs.structure_defs()
-			_check(defs.size() == 24, "colony: %d structure defs" % defs.size())
+			_check(defs.size() == 25, "colony: %d structure defs" % defs.size())
 			var founded: Array = rs.structures()
 			_check(founded.size() >= 4 and String(founded[0].def) == "heart" and String(founded[1].def) == "route_board" and String(founded[2].def) == "bench", "colony: founding %s" % str(founded.map(func(x): return x.def)))
 			# the build tool: a Lantern Post ghost on the first tile near the Heart that takes it; two cheap Parts in
@@ -117,25 +118,58 @@ func _verify_current() -> void:
 						if smoke_ghost >= 0:
 							break
 			_check(smoke_ghost >= 0, "colony: no tile near the Heart takes a lantern (%s)" % scr.cursor_reason)
+			sim.build_tool = ""
+			scr.tool = ""
 			_check(String(rs.can_place("vault", hx, hy)) != "", "colony: a Vault should refuse without the Heart at tier 2")
 			_check(rs.structures().size() == founded.size() + 1 and not bool(rs.structures()[-1].built), "colony: the ghost is not a ghost")
 			sim.build_tool = ""
 			# the city has no phantoms (Full Design v3.11): the movers are the roster, one each
 			var ids: PackedInt32Array = rs.agent_ids()
 			_check(ids.size() == sim.ensure_people().count() and int(rs.stats().agents) == ids.size(), "colony: %d movers for a roster of %d" % [ids.size(), sim.ensure_people().count()])
-			# SELECT on the Heart opens its quota card; a quota set stands as yours, DEFAULT restores the default
-			scr.tool = "select"
-			scr.apply_tool(hx, hy)
-			_check(scr.quota_panel.visible and scr.quota_id == int(founded[0].id), "colony: selecting the Heart did not open its quota")
-			_check(rs.set_quota(scr.quota_id, 1.5, 1) and is_equal_approx(float(rs.quota(scr.quota_id).target), 1.5) and String(rs.quota(scr.quota_id).from) == "yours", "colony: quota %s" % str(rs.quota(scr.quota_id)))
-			_check(rs.clear_quota(scr.quota_id) and String(rs.quota(scr.quota_id).from) != "yours", "colony: the default did not come back")
+			# selecting the Heart opens its card with the quota; a quota set stands as yours, DEFAULT restores it
+			var heart := int(founded[0].id)
+			var hs := Vector2i(-1, -1)
+			for y in range(int(founded[0].y), int(founded[0].y) + int(founded[0].h)):
+				for x in range(int(founded[0].x), int(founded[0].x) + int(founded[0].w)):
+					if hs.x < 0 and scr._slimo_at(x, y) < 0:
+						hs = Vector2i(x, y)
+			scr.drop_tool()
+			scr.apply_tool(hs.x, hs.y)
+			_check(scr.card.visible and String(scr.selected.get("kind", "")) == "structure" and int(scr.selected.id) == heart, "colony: selecting the Heart did not open its card (%s)" % str(scr.selected))
+			_check(rs.set_quota(heart, 1.5, 1) and is_equal_approx(float(rs.quota(heart).target), 1.5) and String(rs.quota(heart).from) == "yours", "colony: quota %s" % str(rs.quota(heart)))
+			_check(rs.clear_quota(heart) and String(rs.quota(heart).from) != "yours", "colony: the default did not come back")
 			_check(int(rs.consumer_at(int(founded[1].x), int(founded[1].y))) == -1, "colony: the Route Board is not a consumer")
-			# bait costs a Common Chrome from the Stash: the starting haul has none, so it says so and the Mat keeps
-			scr.tool = "bait"
+			# the steering tools take their costs (Full Design v3.12): bait a Common Chrome (the starting haul has
+			# none, so it says so), salt a bag of road salt (the haul has one: eight tiles), sever a mark for Build
+			scr.pick_tool("bait")
 			scr.apply_tool(hx + 3, hy)
-			_check(scr.cursor_reason.contains("Common Chrome"), "colony: bait without Common Chrome said '%s'" % scr.cursor_reason)
+			_check(scr.answer.contains("Common Chrome"), "colony: bait without Common Chrome said '%s'" % scr.answer)
+			st0.add(RoseItems.new().find("prt_salt"), 30, false)   # its own bag: the founding haul's goes on the run
+			scr.pick_tool("salt")
+			scr.apply_tool(hx + 6, hy + 6)
+			_check(scr.answer_ok and int(rs.salt_left()) == 7 and rs.salt_cells().size() == 1, "colony: salt said '%s', %d left" % [scr.answer, int(rs.salt_left())])
+			scr.pick_tool("sever")
+			var cut_at := Vector2i(-1, -1)
+			for dx in range(3, 30):
+				if String(rs.tile_info(hx + dx, hy).mat) == "cord":
+					cut_at = Vector2i(hx + dx, hy)
+					break
+			scr.apply_tool(cut_at.x, cut_at.y)
+			_check(rs.cuts().size() == 1 and bool(rs.tile_info(cut_at.x, cut_at.y).cut), "colony: sever did not mark a cut (%s)" % scr.answer)
+			scr.right_click(cut_at.x, cut_at.y)
+			_check(rs.cuts().size() == 0, "colony: right-click with Sever did not unmark")
+			scr.pick_tool("relay")
+			_check(scr.tool == "build" and sim.build_tool == "relay", "colony: RELAY did not arm Build with the Relay")
+			scr.right_click(hx, hy)
+			_check(scr.tool == "" and sim.build_tool == "", "colony: right-click did not put the tool down")
+			# the overlay cycles; the alerts are the crates'
+			scr.pick_tool("overlay")
+			_check(sim.overlay == "nutrient" and scr.world.overlay_sprite.visible, "colony: the nutrient overlay did not draw")
+			for k in 5:
+				scr.pick_tool("overlay")
+			_check(sim.overlay == "" and not scr.world.overlay_sprite.visible, "colony: the overlays did not cycle back to none")
+			_check(rs.alerts(sim.ensure_people()) is Array, "colony: no alerts")
 			# the Stack view is the core's circuit board, one pixel a tile
-			scr.tool = "select"
 			scr.set_view(2)
 			_check(rs.stack_image().size() == rs.width() * rs.height() * 3 and scr.world.traffic_sprite.visible and not scr.world.matlayer.visible, "colony: the Stack view did not draw the core's image")
 		"stash":
@@ -208,7 +242,7 @@ func _verify_current() -> void:
 			ticks = _ride(st, "sold", 2)
 			_check(st.eddies() > e0 and int(st.landed().sold) == 2, "stash: selling earned nothing on arrival (%d -> %d after %d ticks)" % [e0, st.eddies(), ticks])
 			_check(st.save_round_trip(), "stash: save round trip with a ledger failed")
-			_check(st.upgrade() and st.width() == 16, "stash: upgrade failed")
+			_check(st.tier() == 1 and st.width() == 12, "stash: the grid is not the Hamlet Heart's (tier %d, %d wide)" % [st.tier(), st.width()])
 			# Craft hands the Bench an item
 			sim.bench_slot = scr._item(chrome2)
 			sim_sent_handle = chrome2
@@ -507,16 +541,15 @@ func _verify_current() -> void:
 			_check(scr.cadence_path != "" and FileAccess.file_exists(scr.cadence_path), "run: cadence log not written (%s)" % scr.cadence_path)
 			var log_text := FileAccess.get_file_as_string(scr.cadence_path)
 			_check(log_text.contains("LAND") and log_text.contains("budget"), "run: cadence log lacks entries or the report")
-			_check(not sim.pending_haul.is_empty(), "run: rig not handed to the Stash")
-			var probe := RoseStash.new()
-			var left: int = probe.import_rig(sim.pending_haul)
+			# the rig went into the Stash before the shift ended: what the grid could not hold waits at the Heart
 			var kit_items := 0
 			for q in r.quick_slots():
 				if q != "":
 					kit_items += 1
 			var hand_items := 1 if String(r.runner().hand) != "" else 0
-			var expected: int = int(r.runner().rig_count) + kit_items + hand_items - left
-			_check(left >= 0 and probe.count() == expected, "run: stash import %d, expected %d (rig %d + kit %d + hand %d - left %d)" % [probe.count(), expected, int(r.runner().rig_count), kit_items, hand_items, left])
+			var expected: int = int(r.runner().rig_count) + kit_items + hand_items
+			var got: int = int(sim.last_haul.get("placed", -1)) + int(sim.last_haul.get("held", 0))
+			_check(got == expected, "run: the haul into the Stash %s, expected %d (rig %d + kit %d + hand %d)" % [str(sim.last_haul), expected, int(r.runner().rig_count), kit_items, hand_items])
 			scr.over = ""
 	print("[smoke] %-9s ok  slots %d" % [id, slots])
 

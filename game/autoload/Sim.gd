@@ -28,6 +28,7 @@ func _process(delta: float) -> void:
 	if ticks_per_frame > 0:
 		for i in ticks_per_frame:
 			sim.step()
+		_write_city_log()
 		ticked.emit()
 		return
 	if paused:
@@ -40,7 +41,37 @@ func _process(delta: float) -> void:
 		sim.step()
 		n += 1
 	if n > 0:
+		_write_city_log()
 		ticked.emit()
+
+# ---------------------------------------------------------------- what the Colony HUD keeps between screens
+## Bookmarks 1–9: {n: {pos, view}}; the camera and the overlay as the player left them; the alerts already shown
+## (so coming back does not replay the queue); the slimo the Slimo card opens on.
+var bookmarks := {}
+var colony_cam := {}
+var overlay := ""
+var alerts_shown: Array = []
+var focus_slimo := -1
+
+## The city's log (Full Design v3.12, The city's log) goes to the save folder beside the runs' cadence logs: one
+## line an event, the city's clock in seconds, its class, what happened.
+var city_log_path := "user://telemetry/city.log"
+var _city_log: FileAccess
+
+func _write_city_log() -> void:
+	var events: Array = sim.city_log_new()
+	if events.is_empty():
+		return
+	if _city_log == null:
+		DirAccess.make_dir_recursive_absolute("user://telemetry")
+		_city_log = FileAccess.open(city_log_path, FileAccess.WRITE)
+		if _city_log == null:
+			return
+		_city_log.store_line("city  seed %d  founded day %d" % [seed_value, day])
+	for e in events:
+		var t := float(e.t)
+		_city_log.store_line("%3d:%04.1f  %-8s %s" % [int(t / 60.0), fmod(t, 60.0), String(e["class"]), String(e.what)])
+	_city_log.flush()
 
 func set_speed(hz: float) -> void:
 	tick_hz = hz
@@ -50,11 +81,10 @@ func set_speed(hz: float) -> void:
 var day := 1
 ## How many runs each route (key "s<stratum>:<seed>") has had: first-run generosity reads 0.
 var route_runs := {}
-## A Runner's rig handed from the Run to the Stash on extraction (RoseRun.rig_export bytes), consumed once.
-var pending_haul := PackedByteArray()
-var pending_haul_from := ""
-## Loose items coming home with or without the Runner: the Mat haul and Spored regrowth (postcard Vec<ItemInstance>).
-var pending_items: Array[PackedByteArray] = []
+## The last run's haul as it went into the Stash — the rig, the Mat's haul, Spored regrowth: {placed, held, from};
+## the Stash screen shows haul_note once
+var last_haul := {}
+var haul_note := ""
 ## Our dead on the routes: [{seed, stratum, x, y, chunk, day, runner, rig: PackedByteArray, raided}] (save v3 corpses).
 var corpses: Array = []
 ## Followers stranded at an extraction tile, by route key -> [ids].
@@ -131,13 +161,12 @@ func slimo_name(id: int) -> String:
 		return "#%d" % id
 	return String(rec.full_name)
 
-## The Stash, created once for the session with its starting haul.
+## The Stash, created once for the session with its starting haul (game::world::STARTING_HAUL, the same one
+## `rose city` founds with).
 func ensure_stash() -> RoseStash:
 	if stash == null:
 		stash = RoseStash.new()
-		var items := RoseItems.new()
-		for id in ["chr_street_eye", "prt_pipe", "ger_nail_rifle", "org_paste", "cur_ooze_toy", "chr_lamp_core", "prt_plate", "tec_shard_corpo", "ger_pipe", "ger_lantern", "ger_pry_bar", "org_antiseptic", "prt_salt", "org_stim"]:
-			stash.add(items.find(id), 60 + (hash(id) % 40), false)
+		stash.found()
 	return stash
 
 ## A route's seed is fixed by the save and the stratum, so a route can be re-run and learned.
@@ -179,16 +208,25 @@ func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Diction
 			"injuries": o.get("injuries", PackedStringArray()),
 		}
 		last_outcome["record_lines"] = ensure_people().apply_run(rep)
+	# the haul into the Stash before the shift ends (game::store::take_haul): the rig on extraction, and either way
+	# what the Mat hauled home and what regrew at the Heart; what the grid cannot hold waits at the Heart for a
+	# stockpile, and the shift's quotas and settling see it
+	var st: RoseStash = ensure_stash()
+	var before: int = st.count()
+	var held := 0
 	if String(o.get("result", "")) == "extracted":
-		pending_haul = o.get("rig", PackedByteArray())
-		pending_haul_from = "S%d route %d" % [stratum, seed_value]
-	elif o.has("corpse"):
-		var c: Dictionary = o.corpse
-		corpses.append({"seed": seed_value, "stratum": stratum, "x": int(c.x), "y": int(c.y), "chunk": String(c.chunk), "day": int(c.day), "runner": runner_name, "rig": c.rig, "raided": bool(c.raided)})
+		var rig: PackedByteArray = o.get("rig", PackedByteArray())
+		held += maxi(0, st.import_rig(rig)) if not rig.is_empty() else 0
 	for key in ["mat_haul", "regrown"]:
 		var b: PackedByteArray = o.get(key, PackedByteArray())
 		if int(o.get(key + "_count", 0)) > 0 and not b.is_empty():
-			pending_items.append(b)
+			held += maxi(0, st.import_items(b))
+	last_haul = {"placed": st.count() - before, "held": held, "from": "S%d route %d" % [stratum, seed_value]}
+	if int(last_haul.placed) + held > 0:
+		haul_note = "haul from %s: %d in%s" % [last_haul.from, int(last_haul.placed), ("   %d waiting at the Heart for room" % held) if held > 0 else ""]
+	if o.has("corpse"):
+		var c: Dictionary = o.corpse
+		corpses.append({"seed": seed_value, "stratum": stratum, "x": int(c.x), "y": int(c.y), "chunk": String(c.chunk), "day": int(c.day), "runner": runner_name, "rig": c.rig, "raided": bool(c.raided)})
 	var stranded_ids: PackedInt32Array = o.get("followers_stranded", PackedInt32Array())
 	if stranded_ids.size() > 0:
 		stranded[route_key(stratum, seed_value)] = Array(stranded_ids)

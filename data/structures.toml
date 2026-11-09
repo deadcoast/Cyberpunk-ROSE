@@ -1,12 +1,13 @@
-# The 24 structures (Full Design v3.9, Colony mode: Building and The 24 structures). footprint [w, h] in tiles on
+# The 25 structures (Full Design v3.12, Colony mode: Building and The 25 structures). footprint [w, h] in tiles on
 # Cord or Node; sigma: signal the footprint needs; node: a Node under the anchor; grate: a grate within 2 tiles;
 # relay: on a Relay. cost is tier 1 (tier 2 x2, tier 3 x3); build: points (a builder adds Hands per shift).
 # hosts: the job the structure gives slots to, slots per tier; gate: the level of that job's skill a slimo needs for the slot. Per-tier numbers are arrays indexed by tier - 1
-# (the Heart has four). hp is per tier. art: the manifest slot.
+# (the Heart has four). hp is per tier. art: the manifest slot. category: the Build menu's tab (city: prebuilt).
 
 [[structure]]
 id = "heart"
 name = "Heart"
+category = "city"
 footprint = [3, 3]
 sigma = 0.0
 node = true
@@ -17,13 +18,14 @@ build = 0
 hp = 200
 light = [4, 4, 4, 4]
 stock = [40, 80, 160, 320]
-stash_grid = [[10, 6], [12, 8], [14, 10], [16, 12]]
+stash_grid = [[12, 10], [16, 14], [20, 18], [24, 22]]
 text = "The first node grown into a chamber. The Stash lives here; the city's tier is its tier."
 art = "struct.heart"
 
 [[structure]]
 id = "pit"
 name = "Pit"
+category = "mat"
 footprint = [1, 1]
 sigma = 0.3
 cost = { parts = 4, chrome = 0, eddies = 0 }
@@ -38,6 +40,7 @@ art = "struct.pit"
 [[structure]]
 id = "pod"
 name = "Hab-Pod"
+category = "homes"
 footprint = [2, 2]
 sigma = 0.3
 cost = { parts = 6, chrome = 0, eddies = 0 }
@@ -51,6 +54,7 @@ art = "struct.pod"
 [[structure]]
 id = "bunkhouse"
 name = "Bunkhouse"
+category = "homes"
 footprint = [3, 2]
 sigma = 0.3
 cost = { parts = 10, chrome = 0, eddies = 0 }
@@ -64,6 +68,7 @@ art = "struct.bunkhouse"
 [[structure]]
 id = "forge"
 name = "Scrap Forge"
+category = "work"
 footprint = [2, 2]
 sigma = 0.3
 cost = { parts = 8, chrome = 2, eddies = 0 }
@@ -77,6 +82,7 @@ art = "struct.forge"
 [[structure]]
 id = "bench"
 name = "Tweaker Bench"
+category = "work"
 footprint = [2, 2]
 sigma = 0.3
 cost = { parts = 8, chrome = 2, eddies = 0 }
@@ -91,6 +97,7 @@ art = "struct.bench"
 [[structure]]
 id = "lume_farm"
 name = "Lume Farm"
+category = "mat"
 footprint = [2, 2]
 sigma = 0.5
 node = true
@@ -107,6 +114,7 @@ art = "struct.lume_farm"
 [[structure]]
 id = "lung"
 name = "Lung Housing"
+category = "mat"
 footprint = [2, 2]
 sigma = 0.5
 node = true
@@ -124,6 +132,7 @@ art = "struct.lung"
 [[structure]]
 id = "market"
 name = "Seep Market"
+category = "work"
 footprint = [2, 2]
 sigma = 0.3
 grate = true
@@ -139,6 +148,7 @@ art = "struct.market"
 [[structure]]
 id = "gate"
 name = "Sphincter Gate"
+category = "order"
 footprint = [1, 1]
 sigma = 0.3
 cost = { parts = 4, chrome = 2, eddies = 0 }
@@ -152,6 +162,7 @@ art = "struct.gate"
 [[structure]]
 id = "pen"
 name = "Sewerat Pen"
+category = "order"
 footprint = [2, 2]
 sigma = 0.3
 cost = { parts = 6, chrome = 0, eddies = 0 }
@@ -166,6 +177,7 @@ art = "struct.pen"
 [[structure]]
 id = "still"
 name = "Downer Still"
+category = "work"
 footprint = [2, 2]
 sigma = 0.3
 cost = { parts = 10, chrome = 4, eddies = 20 }
@@ -180,6 +192,7 @@ art = "struct.still"
 [[structure]]
 id = "vault"
 name = "Reliquary Vault"
+category = "stores"
 footprint = [2, 2]
 sigma = 0.5
 node = true
@@ -192,8 +205,22 @@ text = "A sealed ooze chamber. Relics and Blackline inside show nothing at the g
 art = "struct.vault"
 
 [[structure]]
+id = "relay"
+name = "Relay"
+category = "mat"
+footprint = [1, 1]
+sigma = 0.3
+node = true
+cost = { parts = 0, chrome = 6, eddies = 0 }
+build = 16
+hp = 100
+text = "A built nerve: a signal source that never starves, its reach the strain's. A Relay Shrine stands on one."
+art = "struct.relay"
+
+[[structure]]
 id = "shrine"
 name = "Relay Shrine"
+category = "mat"
 footprint = [1, 1]
 sigma = 0.3
 relay = true
@@ -202,35 +229,42 @@ build = 10
 hp = 100
 mood = [5, 5, 5]
 text = "The Relay's rules board and the hub of its district. Members hold their Mood target 5 higher."
-art = "struct.relay"
+art = "struct.shrine"
 
 [[structure]]
 id = "rack"
 name = "Stockpile Rack"
+category = "stores"
 footprint = [2, 1]
 sigma = 0.3
 cost = { parts = 4, chrome = 0, eddies = 0 }
 build = 6
 hp = 100
+hosts = "haul"
+slots = [1, 2, 3]
 cells = [8, 12, 16]
-text = "Shelving on a cord. Anchors a stockpile zone with a filter."
+text = "Shelving on a cord. Anchors a stockpile: the Stash's overflow by default. A hauler shelves its Body in items a shift onto the zone's cells off the Mat."
 art = "struct.rack"
 
 [[structure]]
 id = "cold_store"
 name = "Cold Store"
+category = "stores"
 footprint = [2, 2]
 sigma = 0.3
 cost = { parts = 8, chrome = 2, eddies = 0 }
 build = 12
 hp = 100
+hosts = "haul"
+slots = [1, 2, 3]
 cells = [8, 12, 16]
-text = "A chilled housing. Organics inside lose no condition."
+text = "A chilled housing and its stockpile. Organics inside do not spoil; it draws them out of the Heart by default."
 art = "struct.cold_store"
 
 [[structure]]
 id = "turret"
 name = "Scrap Turret"
+category = "order"
 footprint = [1, 1]
 sigma = 0.5
 cost = { parts = 6, chrome = 4, eddies = 0 }
@@ -246,6 +280,7 @@ art = "struct.turret"
 [[structure]]
 id = "watch_post"
 name = "Watch Post"
+category = "order"
 footprint = [1, 1]
 sigma = 0.3
 cost = { parts = 4, chrome = 0, eddies = 0 }
@@ -260,6 +295,7 @@ art = "struct.watch_post"
 [[structure]]
 id = "memorial"
 name = "Memorial"
+category = "homes"
 footprint = [2, 1]
 sigma = 0.3
 cost = { parts = 4, chrome = 0, eddies = 0 }
@@ -272,6 +308,7 @@ art = "struct.memorial"
 [[structure]]
 id = "charter_board"
 name = "Charter Board"
+category = "order"
 footprint = [2, 1]
 sigma = 0.3
 cost = { parts = 6, chrome = 0, eddies = 0 }
@@ -283,6 +320,7 @@ art = "struct.charter_board"
 [[structure]]
 id = "appraisal"
 name = "Appraisal Table"
+category = "work"
 footprint = [2, 1]
 sigma = 0.3
 cost = { parts = 6, chrome = 2, eddies = 0 }
@@ -298,6 +336,7 @@ art = "struct.appraisal"
 [[structure]]
 id = "route_board"
 name = "Route Board"
+category = "city"
 footprint = [2, 1]
 sigma = 0.0
 prebuilt = true
@@ -311,6 +350,7 @@ art = "struct.route_board"
 [[structure]]
 id = "lantern"
 name = "Lantern Post"
+category = "homes"
 footprint = [1, 1]
 sigma = 0.3
 cost = { parts = 2, chrome = 0, eddies = 0 }
@@ -324,6 +364,7 @@ art = "struct.lantern"
 [[structure]]
 id = "salt_works"
 name = "Salt Works"
+category = "work"
 footprint = [2, 2]
 sigma = 0.3
 cost = { parts = 8, chrome = 0, eddies = 0 }

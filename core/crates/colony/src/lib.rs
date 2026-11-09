@@ -30,7 +30,8 @@ pub const PETITION_SHIFTS: u8 = 5;
 /// Shifts of a need under 30 before the foreman petitions.
 pub const PETITION_AFTER: u8 = 2;
 /// Nutrient a cell needs for a meal, and what the meal takes.
-pub const MEAL_NUTRIENT: f32 = 0.2;
+/// A meal from the Mat: the tissue under the home must hold it, and it takes it (v3.12: `rose city` measured the
+/// tissue round a fed Heart at 0.13–0.19, so the 0.2 floor this replaced starved a fed city onto paste).
 pub const MEAL_TAKES: f32 = 0.05;
 pub const PASTE_EDDIES: u32 = 2;
 /// City tiers by population: Hamlet, Quarter, City, Empire.
@@ -83,6 +84,9 @@ fn default_hp() -> i32 {
 pub struct StructureDef {
     pub id: String,
     pub name: String,
+    /// the Build menu's tab (homes, work, mat, stores, order; city for the prebuilt)
+    #[serde(default)]
+    pub category: String,
     pub footprint: [u8; 2],
     #[serde(default)]
     pub sigma: f32,
@@ -253,8 +257,8 @@ pub struct StructureFile {
 impl StructureFile {
     pub fn from_toml(s: &str) -> Result<Self, String> {
         let f: StructureFile = toml::from_str(s).map_err(|e| e.to_string())?;
-        if f.structure.len() != 24 {
-            return Err(format!("{} structures, the design has 24", f.structure.len()));
+        if f.structure.len() != 25 {
+            return Err(format!("{} structures, the design has 25", f.structure.len()));
         }
         let mut ids = std::collections::HashSet::new();
         for d in &f.structure {
@@ -279,8 +283,11 @@ impl StructureFile {
             if d.tiers < 1 || d.tiers > 4 {
                 return Err(format!("{}: {} tiers", d.id, d.tiers));
             }
+            if !["city", "homes", "work", "mat", "stores", "order"].contains(&d.category.as_str()) {
+                return Err(format!("{}: category '{}'", d.id, d.category));
+            }
         }
-        for want in ["heart", "pit", "pod", "bunkhouse", "bench", "route_board", "lume_farm", "lung", "shrine", "lantern", "forge"] {
+        for want in ["heart", "pit", "pod", "bunkhouse", "bench", "route_board", "lume_farm", "lung", "relay", "shrine", "lantern", "forge", "rack", "cold_store", "still", "salt_works"] {
             if !ids.contains(want) {
                 return Err(format!("structure {want} missing"));
             }
@@ -320,7 +327,38 @@ pub struct Structure {
     /// a Pit's or Still's quota as the player set it; None is the default (Full Design v3.11, Quotas)
     #[serde(default)]
     pub quota: Option<QuotaSet>,
+    /// turned before it was placed: the footprint's width and height swap (v3.12)
+    #[serde(default)]
+    pub rotated: bool,
 }
+
+impl Structure {
+    /// The footprint as it stands (turned or not).
+    pub fn dims(&self, d: &StructureDef) -> (u16, u16) {
+        if self.rotated { (d.footprint[1] as u16, d.footprint[0] as u16) } else { (d.footprint[0] as u16, d.footprint[1] as u16) }
+    }
+    pub fn covers(&self, d: &StructureDef, x: u16, y: u16) -> bool {
+        let (w, h) = self.dims(d);
+        x >= self.x && x < self.x + w && y >= self.y && y < self.y + h
+    }
+}
+
+/// A tile of Mat marked to be cut (Full Design v3.12, The steering tools): 8 build points, taken by Build.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Cut {
+    pub id: u32,
+    pub x: u16,
+    pub y: u16,
+    pub progress: u32,
+}
+
+/// A cut is one tweaker-shift: the eight points a Pit prices one at (Pass 1).
+pub const CUT_POINTS: u32 = 8;
+/// A bag of road salt lays eight tiles (Pass 1).
+pub const SALT_PER_BAG: u8 = 8;
+/// A new Rack's stockpile priority (overflow) and a new Cold Store's (draws Organics out of the Heart).
+pub const RACK_PRIORITY: u8 = 2;
+pub const COLD_PRIORITY: u8 = 3;
 
 /// A standing cargo policy: for a Pit, keep `target` nutrient taking no tier above `ceiling` (0 Common … 4 Relic);
 /// for a Still, keep `target` Enzyme-tag Parts in its store. A target of 0 is off.
@@ -397,6 +435,13 @@ pub struct Zone {
     pub filter: Filter,
     /// the Rack or Cold Store a stockpile hangs on
     pub anchor: Option<u32>,
+    /// a stockpile's priority, 1–4 on a job's scale (4 wanted first); the Heart's grid stands between 2 and 3 (v3.12)
+    #[serde(default = "default_zone_priority")]
+    pub priority: u8,
+}
+
+fn default_zone_priority() -> u8 {
+    RACK_PRIORITY
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -507,6 +552,11 @@ pub struct ShiftOutcome {
     pub paste_eddies: u32,
     /// who worked the market, for the sales' Trade XP
     pub sellers: Vec<u32>,
+    /// who hauled at a stockpile: (slimo, store, Body: items it shelves)
+    pub haulers: Vec<(u32, u32, i32)>,
+    /// tiles cut this shift, and Relays raised
+    pub cut: Vec<(u16, u16)>,
+    pub relays: Vec<(u16, u16)>,
     pub contexts: HashMap<u32, ShiftContext>,
     pub work: ShiftWork,
     pub districts_formed: Vec<u32>,
@@ -540,6 +590,15 @@ pub struct Colony {
     pub barred_hubs: Vec<(u16, u16, u32)>,
     /// structures that lost signal priority with their district (read by the routing, PAC-043)
     pub low_priority: Vec<u32>,
+    /// tiles marked to be cut (v3.12)
+    #[serde(default)]
+    pub cuts: Vec<Cut>,
+    /// tiles left in the open bag of road salt
+    #[serde(default)]
+    pub salt_left: u8,
+    /// slimo -> structure: worked the next shift over its priorities, spent with the shift (v3.12)
+    #[serde(default)]
+    pub orders: HashMap<u32, u32>,
     /// cord distance from the Heart per tile, refreshed each shift
     #[serde(skip)]
     pub heart_dist: Vec<u32>,
@@ -576,6 +635,9 @@ impl Colony {
             charter: Charter::default(),
             barred_hubs: Vec::new(),
             low_priority: Vec::new(),
+            cuts: Vec::new(),
+            salt_left: 0,
+            orders: HashMap::new(),
             heart_dist: Vec::new(),
             wave: HashMap::new(),
         }
@@ -602,34 +664,41 @@ impl Colony {
 
     /// Footprint cells of a def anchored at (x, y) (the anchor is the top-left tile).
     pub fn footprint(def: &StructureDef, x: u16, y: u16) -> Vec<(u16, u16)> {
+        Self::footprint_r(def, x, y, false)
+    }
+
+    /// The same, turned when `rotated` (width and height swap; the anchor stays top-left).
+    pub fn footprint_r(def: &StructureDef, x: u16, y: u16, rotated: bool) -> Vec<(u16, u16)> {
+        let (w, h) = if rotated { (def.footprint[1], def.footprint[0]) } else { (def.footprint[0], def.footprint[1]) };
         let mut v = Vec::new();
-        for dy in 0..def.footprint[1] {
-            for dx in 0..def.footprint[0] {
+        for dy in 0..h {
+            for dx in 0..w {
                 v.push((x + dx as u16, y + dy as u16));
             }
         }
         v
     }
 
-    fn occupied(&self, defs: &StructureFile, x: u16, y: u16) -> Option<u32> {
-        for s in &self.structures {
-            let d = &defs.structure[s.def];
-            if x >= s.x && x < s.x + d.footprint[0] as u16 && y >= s.y && y < s.y + d.footprint[1] as u16 {
-                return Some(s.id);
-            }
-        }
-        None
+    /// The structure standing on a tile.
+    pub fn occupied(&self, defs: &StructureFile, x: u16, y: u16) -> Option<u32> {
+        self.structures.iter().find(|s| s.covers(&defs.structure[s.def], x, y)).map(|s| s.id)
     }
 
     /// May this def stand here (Full Design, Building)?
     pub fn can_place(&self, defs: &StructureFile, mat: &MatSim, def_id: &str, x: u16, y: u16) -> Result<(), PlaceError> {
+        self.can_place_r(defs, mat, def_id, x, y, false)
+    }
+
+    /// May this def stand here turned (or not)?
+    pub fn can_place_r(&self, defs: &StructureFile, mat: &MatSim, def_id: &str, x: u16, y: u16, rotated: bool) -> Result<(), PlaceError> {
         let di = defs.index(def_id).ok_or(PlaceError::Unknown)?;
         let def = &defs.structure[di];
         if def.heart_tier > 0 && self.heart_tier(defs) < def.heart_tier {
             return Err(PlaceError::HeartTier(def.heart_tier));
         }
         let (w, h) = (mat.w as u16, mat.h as u16);
-        if x + def.footprint[0] as u16 > w || y + def.footprint[1] as u16 > h {
+        let (fw, fh) = if rotated { (def.footprint[1], def.footprint[0]) } else { (def.footprint[0], def.footprint[1]) };
+        if x + fw as u16 > w || y + fh as u16 > h {
             return Err(PlaceError::OffMap);
         }
         // the anchor stands on the Mat with signal; the rest of the footprint on walkable floor or more Mat
@@ -640,7 +709,7 @@ impl Colony {
         if mat.sig[ai] < def.sigma {
             return Err(PlaceError::Signal(x, y));
         }
-        for (cx, cy) in Self::footprint(def, x, y) {
+        for (cx, cy) in Self::footprint_r(def, x, y, rotated) {
             let i = cy as usize * mat.w + cx as usize;
             let on_mat = mat.hy[i] == hy::CORD || mat.hy[i] == hy::NODE;
             let floor = matches!(mat.sub[i], sub::OPEN | sub::PIPE | sub::BRICK | sub::GRATE | sub::DEPOSIT);
@@ -676,11 +745,16 @@ impl Colony {
 
     /// Place a ghost; `prebuilt` stands it at once at the tier given.
     pub fn place(&mut self, defs: &StructureFile, mat: &MatSim, def_id: &str, x: u16, y: u16) -> Result<u32, PlaceError> {
-        self.can_place(defs, mat, def_id, x, y)?;
+        self.place_r(defs, mat, def_id, x, y, false)
+    }
+
+    /// Place a ghost turned (or not).
+    pub fn place_r(&mut self, defs: &StructureFile, mat: &MatSim, def_id: &str, x: u16, y: u16, rotated: bool) -> Result<u32, PlaceError> {
+        self.can_place_r(defs, mat, def_id, x, y, rotated)?;
         let di = defs.index(def_id).ok_or(PlaceError::Unknown)?;
         let id = self.next_id;
         self.next_id += 1;
-        self.structures.push(Structure { id, def: di, x, y, tier: 1, hp: defs.structure[di].hp_at(1), built: false, progress: 0, paid: false, upgrading_to: None, district: None, quota: None });
+        self.structures.push(Structure { id, def: di, x, y, tier: 1, hp: defs.structure[di].hp_at(1), built: false, progress: 0, paid: false, upgrading_to: None, district: None, quota: None, rotated });
         Ok(id)
     }
 
@@ -824,7 +898,7 @@ impl Colony {
         let di = defs.index("heart").ok_or("no heart def")?;
         let id = self.next_id;
         self.next_id += 1;
-        self.structures.push(Structure { id, def: di, x: ax, y: ay, tier: 1, hp: defs.structure[di].hp_at(1), built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: None });
+        self.structures.push(Structure { id, def: di, x: ax, y: ay, tier: 1, hp: defs.structure[di].hp_at(1), built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: None, rotated: false });
         // the Route Board and the Bench on the nearest tissue that takes them
         for (what, tier) in [("route_board", 1u8), ("bench", 1u8)] {
             let mut placed = false;
@@ -890,7 +964,7 @@ impl Colony {
         }
         let id = self.next_id;
         self.next_id += 1;
-        self.zones.push(Zone { id, kind, cells: good, filter, anchor });
+        self.zones.push(Zone { id, kind, cells: good, filter, anchor, priority: RACK_PRIORITY });
         Some(id)
     }
 
@@ -976,7 +1050,8 @@ impl Colony {
                 if r == 0 || (d.id == "lantern" && !lanterns_lit) {
                     None
                 } else {
-                    Some((s.x as i32 + d.footprint[0] as i32 / 2, s.y as i32 + d.footprint[1] as i32 / 2, r))
+                    let (w, h) = s.dims(d);
+                    Some((s.x as i32 + w as i32 / 2, s.y as i32 + h as i32 / 2, r))
                 }
             })
             .collect()
@@ -984,6 +1059,12 @@ impl Colony {
 
     fn lit_at(lights: &[(i32, i32, i32)], x: i32, y: i32) -> bool {
         lights.iter().any(|&(lx, ly, r)| cheb((lx, ly), (x, y)) <= r)
+    }
+
+    /// Every tile's light for the overlay: the Heart's, the Lantern Posts' (while there is oil) and the Lume Farms'.
+    pub fn lit_cells(&self, defs: &StructureFile, w: usize, h: usize, lanterns_lit: bool) -> Vec<bool> {
+        let lights = self.lights(defs, lanterns_lit);
+        (0..w * h).map(|i| Self::lit_at(&lights, (i % w) as i32, (i / w) as i32)).collect()
     }
 
     fn dry_at(&self, defs: &StructureFile, mat: &MatSim, x: i32, y: i32) -> bool {
@@ -1012,7 +1093,7 @@ impl Colony {
 
     /// The tiles of a structure's footprint that are on the Mat (its anchor at least).
     fn mat_tiles(defs: &StructureFile, mat: &MatSim, s: &Structure) -> Vec<usize> {
-        Self::footprint(&defs.structure[s.def], s.x, s.y)
+        Self::footprint_r(&defs.structure[s.def], s.x, s.y, s.rotated)
             .into_iter()
             .map(|(x, y)| y as usize * mat.w + x as usize)
             .filter(|&i| i < mat.hy.len() && (mat.hy[i] == hy::CORD || mat.hy[i] == hy::NODE))
@@ -1409,23 +1490,30 @@ impl Colony {
 
     // ------------------------------------------------------------ the shift
 
-    /// Open job slots: (job, structure id) for every built structure that hosts one, and two Build slots per ghost.
+    /// Open job slots: (job, structure id) for every built structure that hosts one, then the Build work in the
+    /// order it was asked for (v3.12, Building): two slots a ghost or an upgrade, one a marked cut.
     pub fn slots(&self, defs: &StructureFile) -> Vec<(Job, u32)> {
         let mut v = Vec::new();
-        for s in &self.structures {
-            let d = &defs.structure[s.def];
-            if !s.built || s.upgrading_to.is_some() {
-                v.push((Job::Build, s.id));
-                v.push((Job::Build, s.id));
-                continue;
-            }
-            if let Some(job) = d.job() {
-                for _ in 0..d.slots_at(s.tier) {
+        for s in self.structures.iter().filter(|s| s.built && s.upgrading_to.is_none()) {
+            if let Some(job) = defs.structure[s.def].job() {
+                for _ in 0..defs.structure[s.def].slots_at(s.tier) {
                     v.push((job, s.id));
                 }
             }
         }
+        for (id, n) in self.build_work() {
+            for _ in 0..n {
+                v.push((Job::Build, id));
+            }
+        }
         v
+    }
+
+    /// The Build work standing, first asked first (ghosts, upgrades and cuts share one id counter): (id, slots).
+    pub fn build_work(&self) -> Vec<(u32, usize)> {
+        let mut w: Vec<(u32, usize)> = self.structures.iter().filter(|s| !s.built || s.upgrading_to.is_some()).map(|s| (s.id, 2)).chain(self.cuts.iter().map(|c| (c.id, 1))).collect();
+        w.sort_unstable();
+        w
     }
 
     /// Hand the open slots to the highest utilities (Full Design, Jobs by utility): one slot per slimo on duty this
@@ -1459,6 +1547,22 @@ impl Colony {
         let mut taken_slot = vec![false; slots.len()];
         let mut taken_slimo = std::collections::HashSet::new();
         let mut out = Vec::new();
+        // the player's orders first (Full Design v3.12, Orders): over priorities and Any, never over a Rest row, a
+        // strike, a wake or a run
+        let mut ordered: Vec<(u32, u32)> = self.orders.iter().map(|(a, b)| (*a, *b)).collect();
+        ordered.sort_unstable();
+        for (slimo, sid) in ordered {
+            let Some(r) = roster.get(slimo) else { continue };
+            let rest_row = r.schedule[(shift_of_day % 3) as usize] == people::Duty::Rest;
+            if out_.contains(&slimo) || r.shift_job.is_some() || rest_row || !r.is_up() {
+                continue;
+            }
+            if let Some(k) = (0..slots.len()).find(|&k| !taken_slot[k] && slots[k].1 == sid) {
+                taken_slot[k] = true;
+                taken_slimo.insert(slimo);
+                out.push((slimo, slots[k].0, sid));
+            }
+        }
         for (_, slimo, k) in pairs {
             if taken_slot[k] || taken_slimo.contains(&slimo) {
                 continue;
@@ -1504,8 +1608,13 @@ impl Colony {
         let mut eddies_left = ledger_eddies;
         let mut builders: HashMap<u32, Vec<(i32, bool)>> = HashMap::new(); // ghost -> (hands, forge in district)
         let forge_districts: std::collections::HashSet<u32> = self.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "forge").filter_map(|s| s.district).collect();
+        let mut cutters: HashMap<u32, i32> = HashMap::new();
         for &(slimo, job, sid) in &jobs {
             let Some(r) = roster.get(slimo) else { continue };
+            if job == Job::Build && self.cuts.iter().any(|c| c.id == sid) {
+                *cutters.entry(sid).or_insert(0) += r.stat(Stat::Hands);
+                continue;
+            }
             let Some(s) = self.get(sid) else { continue };
             let d = &defs.structure[s.def];
             match job {
@@ -1518,7 +1627,13 @@ impl Colony {
                     out.identifies += d.value_at("identify", s.tier).max(0) as u32;
                     out.work.identified_by.push(slimo);
                 }
-                Job::Haul => out.sellers.push(slimo),
+                Job::Haul => {
+                    if d.id == "market" {
+                        out.sellers.push(slimo);
+                    } else {
+                        out.haulers.push((slimo, sid, r.stat(Stat::Body)));
+                    }
+                }
                 Job::Tend => out.work.tend_shifts_by.push(slimo),
                 Job::Cook => match d.id.as_str() {
                     "still" => {
@@ -1546,8 +1661,32 @@ impl Colony {
         let medics = out.treated.len();
         out.work.treatments_by = out.treated.clone();
         out.treated = patients.into_iter().take(medics).collect();
-        // building: pay, then points
-        for (sid, crew) in builders {
+        // building, first asked first: a ghost is paid by its first Build shift; the crew of one the Stash cannot pay
+        // for goes on to the next work in the order, so builders are never idle while there is work they can do
+        let mut spare: Vec<(i32, bool)> = Vec::new();
+        let mut done = Vec::new();
+        for (sid, _) in self.build_work() {
+            if let Some(h) = cutters.get(&sid) {
+                spare.push((*h, false));
+            }
+            if let Some(ci) = self.cuts.iter().position(|c| c.id == sid) {
+                // the cuts: eight points a tile, then the Mat is severed there
+                let points: i32 = std::mem::take(&mut spare).iter().map(|(h, _)| *h).sum();
+                let c = &mut self.cuts[ci];
+                c.progress += points.max(0) as u32;
+                if c.progress >= CUT_POINTS {
+                    mat.sever(c.x as usize, c.y as usize);
+                    out.cut.push((c.x, c.y));
+                    out.lines.push(format!("a cord cut at {},{}", c.x, c.y));
+                    done.push(c.id);
+                }
+                continue;
+            }
+            let mut crew = builders.remove(&sid).unwrap_or_default();
+            crew.append(&mut spare);
+            if crew.is_empty() {
+                continue;
+            }
             let Some(idx) = self.structures.iter().position(|s| s.id == sid) else { continue };
             let def = defs.structure[self.structures[idx].def].clone();
             let to = self.structures[idx].upgrading_to.unwrap_or(1);
@@ -1557,6 +1696,7 @@ impl Colony {
                     self.structures[idx].paid = true;
                 } else {
                     out.waiting.push((sid, cost));
+                    spare = crew;
                     continue;
                 }
             }
@@ -1575,10 +1715,17 @@ impl Colony {
                     s.hp = def.hp_at(1);
                     out.built.push(sid);
                     out.lines.push(format!("{} built at {},{}", def.name, s.x, s.y));
+                    // a Relay raised is a nerve: a signal source that never starves
+                    if def.id == "relay" {
+                        let (rx, ry) = (s.x, s.y);
+                        mat.place_relay(rx as usize, ry as usize);
+                        out.relays.push((rx, ry));
+                    }
                 }
                 s.progress = 0;
             }
         }
+        self.cuts.retain(|c| !done.contains(&c.id));
         // lanterns burn oil
         let lanterns = self.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "lantern").map(|s| defs.structure[s.def].value_at("upkeep", s.tier).max(0) as u32).sum::<u32>();
         let lanterns_lit = lanterns <= eddies_left;
@@ -1610,7 +1757,7 @@ impl Colony {
             // a meal: the Mat's nutrient at the home, else paste; Rationing halves the draw
             let (takes, paste) = if rationed { (MEAL_TAKES * 0.5, PASTE_EDDIES / 2) } else { (MEAL_TAKES, PASTE_EDDIES) };
             let mut fed = false;
-            if signalled && mat.n[i] >= MEAL_NUTRIENT {
+            if signalled && mat.n[i] >= takes {
                 mat.n[i] -= takes;
                 fed = true;
                 if let Some(d) = self.district_of(r.id).map(|d| d.id) {
@@ -1708,8 +1855,116 @@ impl Colony {
         }
         let farthest = self.heart_dist.iter().copied().filter(|d| *d != u32::MAX).max().unwrap_or(0);
         self.charter.advance(charter::wave_speed(mat), farthest);
+        // the orders are spent with the shift; the Heart's tier is the city's
+        self.orders.clear();
+        if let Some(hi) = defs.index("heart") {
+            if let Some(h) = self.structures.iter_mut().find(|s| s.def == hi) {
+                if h.tier < city_tier {
+                    h.tier = city_tier;
+                    h.hp = defs.structure[hi].hp_at(city_tier);
+                    out.lines.push(format!("the Heart is a {} now", CITY_TIER_NAMES[(city_tier as usize - 1).min(3)]));
+                }
+            }
+        }
         out.assignments = jobs;
         out
+    }
+
+    // ------------------------------------------------------------ the steering tools and orders (v3.12)
+
+    /// Mark a tile of Mat to be cut. Returns the cut's id.
+    pub fn mark_cut(&mut self, mat: &MatSim, x: u16, y: u16) -> Result<u32, &'static str> {
+        let i = y as usize * mat.w + x as usize;
+        if i >= mat.hy.len() || !mat::sim::is_hyphal(mat.hy[i]) {
+            return Err("no Mat to cut");
+        }
+        if mat.heart.is_some_and(|(hx, hy)| hx.abs_diff(x as usize) <= 1 && hy.abs_diff(y as usize) <= 1) {
+            return Err("not the Heart");
+        }
+        if self.cuts.iter().any(|c| c.x == x && c.y == y) {
+            return Err("already marked");
+        }
+        let id = self.next_id;
+        self.next_id += 1;
+        self.cuts.push(Cut { id, x, y, progress: 0 });
+        Ok(id)
+    }
+
+    /// Unmark the cut on a tile. True when there was one.
+    pub fn unmark_cut(&mut self, x: u16, y: u16) -> bool {
+        let n = self.cuts.len();
+        self.cuts.retain(|c| !(c.x == x && c.y == y));
+        self.cuts.len() < n
+    }
+
+    /// Lay one tile of salt: the open bag's next tile, or a new bag from the Stash (`take_bag` says whether it had
+    /// one). The Mat will not enter a salted tile.
+    pub fn lay_salt(&mut self, mat: &mut MatSim, x: u16, y: u16, take_bag: &mut dyn FnMut() -> bool) -> Result<u8, &'static str> {
+        let i = y as usize * mat.w + x as usize;
+        if i >= mat.n.len() {
+            return Err("off the map");
+        }
+        if mat.salt.get(i).copied().unwrap_or(false) {
+            return Err("already salted");
+        }
+        if self.salt_left == 0 {
+            if !take_bag() {
+                return Err("salt takes a bag of road salt from the Stash: none");
+            }
+            self.salt_left = SALT_PER_BAG;
+        }
+        mat.salt_tile(x as usize, y as usize, true);
+        self.salt_left -= 1;
+        Ok(self.salt_left)
+    }
+
+    /// Order a slimo to work a structure the next shift. A structure with no slot it could take refuses.
+    pub fn order(&mut self, defs: &StructureFile, slimo: u32, sid: u32) -> Result<(), String> {
+        let slots = self.slots(defs);
+        if !slots.iter().any(|(_, s)| *s == sid) {
+            return Err("no work there".into());
+        }
+        self.orders.insert(slimo, sid);
+        Ok(())
+    }
+
+    /// Paint a stockpile against a built Rack or Cold Store: its default priority and filter by the store.
+    pub fn paint_stockpile(&mut self, defs: &StructureFile, mat: &MatSim, anchor: u32, cells: &[u32]) -> Result<u32, &'static str> {
+        let a = self.get(anchor).ok_or("no such store")?;
+        let d = &defs.structure[a.def];
+        if !a.built || !matches!(d.id.as_str(), "rack" | "cold_store") {
+            return Err("a stockpile hangs on a built Rack or Cold Store");
+        }
+        if self.zones.iter().any(|z| z.anchor == Some(anchor)) {
+            return Err("this store already has its stockpile");
+        }
+        let cold = d.id == "cold_store";
+        let filter = if cold { Filter { categories: vec!["organic".into()], min_tier: 0, min_condition: 0 } } else { Filter::default() };
+        let id = self.paint_zone(mat, ZoneKind::Stockpile, cells, filter, Some(anchor)).ok_or("no cell there takes a zone")?;
+        if let Some(z) = self.zones.iter_mut().find(|z| z.id == id) {
+            z.priority = if cold { COLD_PRIORITY } else { RACK_PRIORITY };
+        }
+        Ok(id)
+    }
+
+    pub fn set_zone_priority(&mut self, zone: u32, priority: u8) -> bool {
+        match self.zones.iter_mut().find(|z| z.id == zone) {
+            Some(z) => {
+                z.priority = priority.clamp(1, 4);
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub fn set_zone_filter(&mut self, zone: u32, filter: Filter) -> bool {
+        match self.zones.iter_mut().find(|z| z.id == zone) {
+            Some(z) => {
+                z.filter = filter;
+                true
+            }
+            None => false,
+        }
     }
 
 }
@@ -1979,9 +2234,9 @@ mod tests {
     }
 
     #[test]
-    fn the_twenty_four_load_and_the_founding_stands_a_heart_a_board_a_bench_and_pits() {
+    fn the_twenty_five_load_and_the_founding_stands_a_heart_a_board_a_bench_and_pits() {
         let (c, defs, mat, _, _) = city();
-        assert_eq!(defs.structure.len(), 24);
+        assert_eq!(defs.structure.len(), 25);
         let names: Vec<&str> = c.structures.iter().map(|s| defs.structure[s.def].id.as_str()).collect();
         assert_eq!(names[..3], ["heart", "route_board", "bench"]);
         assert_eq!(names.iter().filter(|n| **n == "pit").count(), mat.relays.len());

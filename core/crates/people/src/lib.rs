@@ -344,6 +344,19 @@ pub enum Injury {
 }
 
 impl Injury {
+    /// An injury by the run's status name ("bleeding", "fracture", "chrome shock", "soaked", "blinded",
+    /// "fungal fever").
+    pub fn from_status(s: &str) -> Option<Injury> {
+        match s {
+            "bleeding" => Some(Injury::Bleeding),
+            "fracture" => Some(Injury::Fracture),
+            "chrome shock" => Some(Injury::ChromeShock),
+            "soaked" => Some(Injury::Soaked),
+            "blinded" => Some(Injury::Blinded),
+            "fungal fever" => Some(Injury::FungalFever),
+            _ => None,
+        }
+    }
     pub fn name(self) -> &'static str {
         match self {
             Injury::Bleeding => "Bleeding",
@@ -909,7 +922,19 @@ pub struct Roster {
     pub next_id: u32,
     /// the memorial: dead slimos' records
     pub memorial: Vec<Record>,
+    /// newcomers waiting at a grate to be sheltered, with the shifts they have waited (v10)
+    #[serde(default)]
+    pub waiting: Vec<(Record, u8)>,
+    /// the shift of the day count the next flush comes down on (v10; 0 = the end of the first shift)
+    #[serde(default)]
+    pub next_flush: u32,
 }
+
+/// The flush (Full Design v3.12, Recruitment): a batch of 1–6 every 9–15 shifts; a newcomer not sheltered within
+/// two shifts goes feral.
+pub const FLUSH_SIZE: (u32, u32) = (1, 6);
+pub const FLUSH_EVERY: (u32, u32) = (9, 15);
+pub const FERAL_AFTER: u8 = 2;
 
 /// What a run tells the roster (Full Design: Skills and XP).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -938,6 +963,8 @@ pub struct ShiftWork {
     pub identified_by: Vec<u32>,
     pub treatments_by: Vec<u32>,
     pub tend_shifts_by: Vec<u32>,
+    /// (slimo, items shelved at a stockpile): Haul trains Scav, 1 XP an item (Full Design v3.12, Stockpiles)
+    pub hauls_by: Vec<(u32, u32)>,
 }
 
 impl Default for Roster {
@@ -949,7 +976,7 @@ impl Default for Roster {
 impl Roster {
     /// Empty; ids start at 100 so a record id never reads as a count or an index.
     pub fn new() -> Self {
-        Roster { records: Vec::new(), next_id: 100, memorial: Vec::new() }
+        Roster { records: Vec::new(), next_id: 100, memorial: Vec::new(), waiting: Vec::new(), next_flush: 0 }
     }
 
     pub fn get(&self, id: u32) -> Option<&Record> {
@@ -957,6 +984,49 @@ impl Roster {
     }
     pub fn get_mut(&mut self, id: u32) -> Option<&mut Record> {
         self.records.iter_mut().find(|r| r.id == id)
+    }
+
+    /// A flush comes down at the end of shift `day` when its time has come: the batch joins the waiting list.
+    /// Returns how many came.
+    pub fn flush(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32) -> usize {
+        if day < self.next_flush.max(1) {
+            return 0;
+        }
+        let n = FLUSH_SIZE.0 + rng.below(FLUSH_SIZE.1 - FLUSH_SIZE.0 + 1);
+        for _ in 0..n {
+            let id = self.create(traits, names, rng, day, false);
+            if let Some(k) = self.records.iter().position(|r| r.id == id) {
+                let r = self.records.remove(k);
+                self.waiting.push((r, 0));
+            }
+        }
+        self.next_flush = day + FLUSH_EVERY.0 + rng.below(FLUSH_EVERY.1 - FLUSH_EVERY.0 + 1);
+        n as usize
+    }
+
+    /// Shelter the waiting while beds are free (`beds` of them) and the Mat reaches a grate; the rest wait a shift
+    /// more, and those past FERAL_AFTER go feral. Returns (joined, gone feral) by name.
+    pub fn shelter(&mut self, beds: usize, reached: bool) -> (Vec<String>, Vec<String>) {
+        let (mut joined, mut feral) = (Vec::new(), Vec::new());
+        let mut free = if reached { beds } else { 0 };
+        let mut keep = Vec::new();
+        for (r, waited) in std::mem::take(&mut self.waiting) {
+            if reached && r.depth == Depth::D5 {
+                // a D5 is a body, not a sleeper: it is the Heart's to dissolve and takes no bed
+                joined.push(r.full_name());
+                self.records.push(r);
+            } else if free > 0 {
+                free -= 1;
+                joined.push(r.full_name());
+                self.records.push(r);
+            } else if waited + 1 > FERAL_AFTER {
+                feral.push(r.full_name());
+            } else {
+                keep.push((r, waited + 1));
+            }
+        }
+        self.waiting = keep;
+        (joined, feral)
     }
 
     /// Roll a newcomer (Full Design: Creation). `deep_weights` shifts the depth table toward the deep (chapter 5).
@@ -1209,6 +1279,11 @@ impl Roster {
         for id in &work.tend_shifts_by {
             if let Some(r) = self.get_mut(*id) {
                 r.gain_xp(traits, Skill::Shepherd, 1, mult);
+            }
+        }
+        for (id, n) in &work.hauls_by {
+            if let Some(r) = self.get_mut(*id) {
+                r.gain_xp(traits, Skill::Scav, *n, mult);
             }
         }
         let n = self.records.len();

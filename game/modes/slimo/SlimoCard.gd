@@ -30,6 +30,9 @@ func _reload() -> void:
 		ids.append(int(id))
 	if Sim.launch.has("runner_id"):
 		selected = int(Sim.launch.runner_id)
+	if Sim.focus_slimo >= 0:
+		selected = Sim.focus_slimo
+		Sim.focus_slimo = -1
 
 func _redraw() -> void:
 	_draw_roster()

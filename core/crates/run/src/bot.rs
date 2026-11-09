@@ -166,8 +166,12 @@ impl Bot {
             }
         }
 
-        // ---- standing on a source
+        // ---- standing on a source (five seconds on one that gives nothing more — the rig too heavy for what is
+        // left, a lock it cannot open — and it is skipped)
         if let Some(i) = s.loot.source_at(rt.0 as usize, rt.1 as usize) {
+            if self.stuck > 5 * TICK_HZ as u32 && !self.skip.contains(&i) {
+                self.skip.push(i);
+            }
             let src = &s.loot.sources[i];
             match src.state {
                 SourceState::Closed if !self.skip.contains(&i) => {
@@ -286,6 +290,11 @@ pub fn bot_rig(table: &ItemTable) -> Rig {
 pub fn play(map: RouteMap, table: ItemTable, tables: LootTables, defs: CreatureFile, nonce: u64, route_runs: u16, day: u32, memory: Option<&[u8]>) -> Outcome {
     let rig = bot_rig(&table);
     let setup = RunSetup { mat_lume_gene: 0.5, memory, run_nonce: nonce, route_runs, day, rig, runner: people::RunnerSetup::plain(5), followers: Vec::new(), corpses: Vec::new() };
+    play_setup(map, table, tables, defs, setup)
+}
+
+/// The bot plays a run the city set up: its Runner's record, the rig packed from the Stash (`rose city`).
+pub fn play_setup(map: RouteMap, table: ItemTable, tables: LootTables, defs: CreatureFile, setup: RunSetup) -> Outcome {
     let mut sim = RunSim::new(map, table, tables, defs, setup);
     let mut bot = Bot::new();
     while sim.result.is_none() && sim.tick < MAX_TICKS {

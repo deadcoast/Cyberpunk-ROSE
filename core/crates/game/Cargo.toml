@@ -1,0 +1,17 @@
+[package]
+name = "game"
+description = "Cyberpunk: ROSE - the shift whole, headless: the run home, the colony's shift, the Stash's side, cargo, stockpiles, the roster's records, alerts, the city's log; the twenty-shift city"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mat = { path = "../mat" }
+logistics = { path = "../logistics" }
+items = { path = "../items" }
+inventory = { path = "../inventory" }
+bench = { path = "../bench" }
+people = { path = "../people" }
+colony = { path = "../colony" }
+run = { path = "../run" }
+serde.workspace = true

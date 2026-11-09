@@ -24,6 +24,9 @@ pub struct Queued {
     pub verb: Verb,
     /// the colony day it was queued on
     pub day: u32,
+    /// the stockpile it was queued from (None: the Heart's grid); it rides from there (v10)
+    #[serde(default)]
+    pub from: Option<u32>,
 }
 
 /// Where a shipment is bound.
@@ -37,6 +40,8 @@ pub enum Dest {
     Still(u32),
     /// home to the Stash grid
     Stash,
+    /// into a stockpile (its zone id): the Stash's settling (v10)
+    Room(u32),
 }
 
 /// An item on the Mat.
@@ -79,8 +84,10 @@ pub enum Landing {
     Sold { market: u8, eddies: u32 },
     Fed { pit: u8, nutrient: f32, drift: [f32; 10] },
     Stored { still: u32 },
-    /// into the grid, or held at the Heart while the grid is full
+    /// into the grid, or onto the Heart's floor while the grid is full
     Home { placed: bool },
+    /// onto a stockpile; into the grid or onto the Heart's floor when it had no room left
+    Shelved { zone: u32, placed: bool },
 }
 
 /// A standing feed or Part policy (Full Design v3.11, Quotas), handed to `pull` by the colony's side.
@@ -121,9 +128,6 @@ pub struct Ledger {
     /// Parts landed at a Still, by structure id (v9)
     #[serde(default)]
     pub stores: Vec<(u32, Vec<ItemInstance>)>,
-    /// products at the Heart waiting for room in the grid (v9)
-    #[serde(default)]
-    pub held: Vec<ItemInstance>,
     /// the report so far this shift (v9)
     #[serde(default)]
     pub landed: ShiftReport,
@@ -146,20 +150,21 @@ impl Ledger {
         price(table.def(item.def), item, ctx)
     }
 
-    /// Move an item out of the Stash grid into the queue. Returns false when the handle is missing.
+    /// Move an item out of whichever room of the Stash holds it into the queue. False when the handle is missing.
     pub fn queue(&mut self, stash: &mut Stash, handle: crate::Handle, verb: Verb, day: u32) -> bool {
-        let Some(item) = stash.grid.remove(handle) else { return false };
-        self.queue.push(Queued { item, verb, day });
+        let from = stash.room_of(handle);
+        let Some(item) = stash.take(handle) else { return false };
+        self.queue.push(Queued { item, verb, day, from });
         true
     }
 
-    /// Pull a queued item back into the grid; if the grid has no room it stays queued. Returns the new handle.
+    /// Pull a queued item back to its room (or the grid); with no room left it stays queued. Returns the new handle.
     pub fn unqueue(&mut self, stash: &mut Stash, table: &ItemTable, index: usize) -> Option<crate::Handle> {
         if index >= self.queue.len() {
             return None;
         }
-        let item = self.queue[index].item.clone();
-        match stash.grid.auto_place(table.def(item.def), item) {
+        let q = self.queue[index].clone();
+        match stash.put_back(table, q.item, q.from) {
             Ok(h) => {
                 self.queue.remove(index);
                 Some(h)
@@ -177,15 +182,16 @@ impl Ledger {
         id
     }
 
-    /// Shift end: the queue leaves the Heart. Returns the shipments for the city to dispatch.
-    pub fn dispatch_queue(&mut self) -> Vec<(u32, Dest)> {
+    /// Shift end: the queue leaves the Heart, or the stockpile each item lay in. Returns the shipments for the city
+    /// to dispatch as (id, where to, the room it leaves from).
+    pub fn dispatch_queue(&mut self) -> Vec<(u32, Dest, Option<u32>)> {
         let mut out = Vec::new();
         for q in std::mem::take(&mut self.queue) {
             let to = match q.verb {
                 Verb::Sell { market } => Dest::Market(market),
                 Verb::Feed { pit } => Dest::Pit(pit),
             };
-            out.push((self.ship(q.item, to), to));
+            out.push((self.ship(q.item, to), to, q.from));
         }
         out
     }
@@ -204,7 +210,7 @@ impl Ledger {
     /// The quotas' pull at shift end (Full Design v3.11, Quotas): item by item to the quota with the highest demand
     /// (the share of it not met, counting what rides to it) per tile of distance from the Heart, low priority last,
     /// ties toward the Heart; each takes the lowest tier first and the cheapest within it, never a pinned item.
-    pub fn pull(&mut self, stash: &mut Stash, table: &ItemTable, quotas: &[Quota]) -> Vec<(u32, Dest)> {
+    pub fn pull(&mut self, stash: &mut Stash, table: &ItemTable, quotas: &[Quota]) -> Vec<(u32, Dest, Option<u32>)> {
         let mut have: Vec<f32> = quotas
             .iter()
             .map(|q| match &q.want {
@@ -234,7 +240,7 @@ impl Ledger {
                 if t <= 0.0 || have[k] >= t - 1e-6 {
                     continue;
                 }
-                if !stash.grid.items().any(|it| eligible(q, it)) {
+                if !stash.handles().iter().any(|(_, _, it)| eligible(q, it)) {
                     continue;
                 }
                 let score = (t - have[k]) / t / (1.0 + dist);
@@ -256,21 +262,20 @@ impl Ledger {
             }
             let Some((k, ..)) = best else { break };
             let q = &quotas[k];
-            // the lowest tier, then the cheapest
+            // the lowest tier, then the cheapest, from any room (ties: the Heart's grid first, then the lowest handle)
             let pick = stash
-                .grid
-                .placed()
+                .handles()
                 .into_iter()
-                .filter(|(_, p)| eligible(q, &p.item))
-                .map(|(h, p)| (table.def(p.item.def).tier, price(table.def(p.item.def), &p.item, PriceContext::default()), h))
-                .min();
-            let Some((_, _, h)) = pick else { break };
-            let Some(item) = stash.grid.remove(h) else { break };
+                .filter(|(_, _, it)| eligible(q, it))
+                .map(|(h, room, it)| (table.def(it.def).tier, price(table.def(it.def), it, PriceContext::default()), room.is_some(), h, room))
+                .min_by(|a, b| (a.0, a.1, a.2, a.3).cmp(&(b.0, b.1, b.2, b.3)));
+            let Some((_, _, _, h, room)) = pick else { break };
+            let Some(item) = stash.take(h) else { break };
             have[k] += match &q.want {
                 Want::Nutrient { .. } => feed_value(table.def(item.def), &item).0,
                 Want::Tagged { .. } => 1.0,
             };
-            out.push((self.ship(item, q.to), q.to));
+            out.push((self.ship(item, q.to), q.to, room));
         }
         out
     }
@@ -320,15 +325,17 @@ impl Ledger {
                 self.landed.stored += 1;
                 Landing::Stored { still }
             }
+            Dest::Room(zone) => match stash.shelve(zone, s.item) {
+                Ok(_) => Landing::Shelved { zone, placed: true },
+                Err(item) => {
+                    // the stockpile filled while it rode: the grid takes it, else the Heart's floor
+                    stash.place_or_floor(table, item);
+                    Landing::Shelved { zone, placed: false }
+                }
+            },
             Dest::Stash => {
                 self.landed.home += 1;
-                match stash.grid.auto_place(table.def(s.item.def), s.item.clone()) {
-                    Ok(_) => Landing::Home { placed: true },
-                    Err(_) => {
-                        self.held.push(s.item);
-                        Landing::Home { placed: false }
-                    }
-                }
+                Landing::Home { placed: stash.place_or_floor(table, s.item) }
             }
         })
     }
@@ -360,15 +367,9 @@ impl Ledger {
     }
 
     /// Shift end, after the queue and the pulls have left: the report of what landed since the last shift end and
-    /// what just left; products held at the Heart try the grid again; this shift's glut recovers by 20 %.
+    /// what just left; the Heart's floor tries the grid again; this shift's glut recovers by 20 %.
     pub fn close_shift(&mut self, stash: &mut Stash, table: &ItemTable) -> ShiftReport {
-        let mut keep = Vec::new();
-        for it in std::mem::take(&mut self.held) {
-            if let Err(_) = stash.grid.auto_place(table.def(it.def), it.clone()) {
-                keep.push(it);
-            }
-        }
-        self.held = keep;
+        stash.sweep_floor(table);
         for g in &mut self.glut {
             *g = (*g * (1.0 - GLUT_RECOVERY)).max(0.0);
             if *g < 0.05 {
@@ -408,7 +409,7 @@ mod tests {
         assert_eq!(ledger.eddies, 0);
         let h7 = put(&table, &mut stash, "chr_street_eye", 100);
         assert!(ledger.quote(&table, &stash.grid.get(h7).unwrap().item, 0) < first);
-        for (id, to) in ships {
+        for (id, to, _) in ships {
             assert!(matches!(ledger.land(&mut stash, &table, id, to), Some(Landing::Sold { market: 0, .. })));
         }
         let r = ledger.close_shift(&mut stash, &table);

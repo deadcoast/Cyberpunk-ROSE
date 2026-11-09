@@ -58,11 +58,66 @@ func _process(_delta: float) -> bool:
 			if String(it.category) in ["curio", "tech", "organic"] and not bool(it.pinned):
 				st.queue_sell(int(it.handle), 0, sim.day)
 		rs.set_quota(int(heart.id), 2.0, 1)
+		# a Stockpile Rack beside the Heart, paid with four cheap Parts and built over the shifts; its stockpile at
+		# priority 4 draws the Organics and Parts out of the grid, and they ride the Mat to its cells
+		for k in 10:
+			st.add(RoseItems.new().find("prt_wire"), 40, false)
+		var rack := -1
+		for r in range(3, 14):
+			if rack >= 0:
+				break
+			for dx in range(-r, r + 1):
+				rack = int(rs.place_turned("rack", int(heart.x) + 1 + dx, int(heart.y) + 1 + r, false))
+				if rack < 0:
+					rack = int(rs.place_turned("rack", int(heart.x) + 1 + dx, int(heart.y) + 1 - r, false))
+				if rack >= 0:
+					break
+		for k in 3:
+			sim.end_shift()
+			sim.day += 1
+			var info: Dictionary = rs.structure_info(rack, 0)
+			if bool(info.get("built", false)):
+				break
+		var rinfo: Dictionary = rs.structure_info(rack, 0)
+		for ss in rs.structures():
+			if int(ss.id) == rack and bool(rinfo.get("built", false)):
+				var cells := PackedInt32Array()
+				for yy in range(int(ss.y) - 1, int(ss.y) + 2):
+					for xx in range(int(ss.x) - 2, int(ss.x) + 4):
+						cells.append(yy * rs.width() + xx)
+				if String(rs.paint_stockpile(rack, cells)) == "":
+					var z := int(rs.zone_at(int(ss.x) - 1, int(ss.y)))
+					for zz in rs.zones():
+						if int(zz.anchor) == rack:
+							z = int(zz.id)
+					rs.set_zone_priority(z, 4)
+					rs.set_zone_filter(z, PackedStringArray(["organic", "part"]), 0, 0)
 		sim.end_shift()
+		for t in 80:
+			rs.step()
 		scr.set_view(0)
-		scr.cam.position = Vector2((int(heart.x) + 1) * 32 + 16, (int(heart.y) + 1) * 32 + 16)
-		scr.tool = "select"
-		scr.open_quota(int(heart.id))
+		var focus := heart
+		for ss in rs.structures():
+			if int(ss.id) == rack:
+				focus = ss
+		scr.cam.position = Vector2(int(focus.x) * 32 - 96, int(focus.y) * 32 + 16)
+		scr.drop_tool()
+		# the Rack selected (its stockpile's card: what it holds, its priority and filter), the camera on it with the
+		# card to its left; a cut marked and a line of salt by the Heart
+		var sel := rack if bool(rs.structure_info(rack, 0).get("built", false)) else int(heart.id)
+		scr.selected = {"kind": "structure", "id": sel}
+		scr.card_sig = ""
+		scr._draw_card()
+		var hx := int(heart.x) + 1
+		var hy := int(heart.y) + 1
+		for dx in range(4, 12):
+			if String(rs.tile_info(hx + dx, hy - 2).mat) == "cord":
+				rs.mark_cut(hx + dx, hy - 2)
+				break
+		st.add(RoseItems.new().find("prt_salt"), 30, false)
+		for dy in 3:
+			if rs.lay_salt(hx - 6, hy + 2 + dy) == "":
+				scr.world.paint_salt(hx - 6, hy + 2 + dy)
 	if frames_on_screen == 6 and screen_i >= 0 and screen_ids[screen_i] == "charter":
 		# the Charter under load: Rationing signed with the Authority the Heart's district paid
 		sim.ensure().sign_law("rationing")

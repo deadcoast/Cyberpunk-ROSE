@@ -3,6 +3,8 @@ extends Node2D
 ## The sewer and the Mat as TileMapLayers built from placeholder slots, 32 px per tile, the roster on it and the
 ## cargo riding it (Full Design v3.11, Cargo). Shared by the Colony (bound to the live Sim) and the Run (painted from
 ## a RoseRun route map). The Stack view draws traffic per tile as light and a jam Chalk white (render::stack_view).
+## The Colony's layers (v3.12): salt on the prop layer, the overlay (one number a tile, RoseSim.overlay), zones
+## outlined by kind, the items a stockpile holds on its cells, and the cuts marked for Build.
 
 const TILE := 32
 const SUB := {0: "tile.concrete", 1: "", 2: "tile.pipe", 3: "tile.brick", 4: "tile.deposit", 5: "tile.water", 6: "tile.grate", 7: "tile.concrete", 8: "tile.collapse"}
@@ -16,6 +18,8 @@ var crowd: Node2D
 var cargo: Node2D      # packets as pulses in their tier's colour (Street 8 px, District 4 px)
 var traffic_sprite: Sprite2D   # the Stack view: the core's circuit board, one texel a tile
 var traffic_img: Image
+var overlay_sprite: Sprite2D   # an overlay at one texel a tile over the Street and District views
+var overlay_kind := ""
 var view_level := 0    # 0 Street, 1 District, 2 Stack (set by the Colony)
 var buildings: Node2D  # the colony's structures and ghosts, drawn from RoseSim.structures()
 var districts: Node2D  # hub rings and names, District view
@@ -38,6 +42,12 @@ func _ready() -> void:
 	props = TileMapLayer.new()
 	props.tile_set = tileset
 	add_child(props)
+	overlay_sprite = Sprite2D.new()
+	overlay_sprite.centered = false
+	overlay_sprite.scale = Vector2(TILE, TILE)
+	overlay_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	overlay_sprite.visible = false
+	add_child(overlay_sprite)
 	buildings = Node2D.new()
 	buildings.draw.connect(_draw_buildings)
 	add_child(buildings)
@@ -123,6 +133,9 @@ func full_paint() -> void:
 			var i := y * w + x
 			_put_cell(substrate, x, y, SUB.get(int(sub[i]), ""), "", (x * 7 + y * 13) % 4)
 			_paint_mat(x, y, int(hy[i]), sig[i])
+	props.clear()
+	for i in sim.salt_cells():
+		put_prop(i % w, i / w, "tile.salt", "", i % 2)
 
 func _paint_mat(x: int, y: int, hv: int, sg: float) -> void:
 	if hv == 0:
@@ -146,10 +159,28 @@ func _on_tick() -> void:
 	cargo.queue_redraw()
 	if view_level == 2:
 		paint_traffic()
+	elif overlay_kind != "":
+		paint_overlay()
+
+## The overlay (Full Design v3.12, Overlays): "" none, or nutrient, signal, light, zones, traffic.
+func set_overlay(kind: String) -> void:
+	overlay_kind = kind
+	paint_overlay()
+
+func paint_overlay() -> void:
+	var rgba: PackedByteArray = Sim.ensure().overlay(overlay_kind) if overlay_kind != "" else PackedByteArray()
+	overlay_sprite.visible = view_level < 2 and rgba.size() == w * h * 4
+	if not overlay_sprite.visible:
+		return
+	var img := Image.create_from_data(w, h, false, Image.FORMAT_RGBA8, rgba)
+	if overlay_sprite.texture == null or overlay_sprite.texture.get_width() != w:
+		overlay_sprite.texture = ImageTexture.create_from_image(img)
+	else:
+		(overlay_sprite.texture as ImageTexture).update(img)
 
 ## The Stack view (Full Design v3.11): the stratum as a circuit board at one pixel a tile, drawn by the core
 ## (render::stack_view) — the Mat dim, traffic as light, a jam (a full tile with cargo waiting to enter it) Chalk
-## white, consumers Acid, markets Hot Pink — in place of the tiles, which at a thirty-second zoom would only sample
+## white, consumers Acid, markets Hot Pink — in place of the tiles, which at three pixels a tile would only sample
 ## their own texels.
 func paint_traffic() -> void:
 	var sim: RoseSim = Sim.ensure()
@@ -170,6 +201,8 @@ func set_view_level(i: int) -> void:
 		layer.visible = not stack
 	if stack:
 		paint_traffic()
+	if bind_sim:
+		paint_overlay()
 	cargo.queue_redraw()
 	crowd.queue_redraw()
 
@@ -204,6 +237,7 @@ func _draw_buildings() -> void:
 	if not bind_sim:
 		return
 	var sim: RoseSim = Sim.ensure()
+	_draw_zones(sim)
 	for st in sim.structures():
 		var tex := Assets.texture(String(st.art), "t%d" % int(st.tier))
 		if tex == null:
@@ -223,6 +257,54 @@ func _draw_buildings() -> void:
 		elif int(st.hp) < int(st.hp_max):
 			var frac := float(st.hp) / maxf(1.0, float(st.hp_max))
 			buildings.draw_rect(Rect2(int(st.x) * TILE, int(st.y) * TILE + fh + 2, fw * frac, 2), UiTheme.HOT_PINK)
+	_draw_stockpiles(sim)
+	# a tile marked to be cut: a Hot Pink cross, the Build points done as a bar under it
+	for k in sim.cuts():
+		var r := Rect2(int(k.x) * TILE + 4, int(k.y) * TILE + 4, TILE - 8, TILE - 8)
+		buildings.draw_line(r.position, r.end, UiTheme.HOT_PINK, 2.0)
+		buildings.draw_line(Vector2(r.end.x, r.position.y), Vector2(r.position.x, r.end.y), UiTheme.HOT_PINK, 2.0)
+		if int(k.progress) > 0:
+			buildings.draw_rect(Rect2(r.position.x, r.end.y + 2, r.size.x * clampf(float(k.progress) / 8.0, 0.0, 1.0), 2), UiTheme.ACID)
+
+const ZONE_COLORS := {"stockpile": Color8(25, 230, 255), "hab": Color8(246, 255, 46), "quarantine": Color8(255, 46, 151), "kill": Color8(181, 180, 176)}
+const TIER_COLORS := {"common": Color8(142, 144, 151), "uncommon": Color8(25, 230, 255), "rare": Color8(255, 46, 151), "blackline": Color8(240, 166, 255), "relic": Color8(242, 239, 228)}
+
+## Every zone's cells outlined in its kind's colour (the Zones overlay fills them).
+func _draw_zones(sim: RoseSim) -> void:
+	for z in sim.zones():
+		var col: Color = ZONE_COLORS.get(String(z.kind), UiTheme.DUST)
+		col.a = 0.55
+		for c in z.cells:
+			buildings.draw_rect(Rect2((int(c) % w) * TILE + 1, (int(c) / w) * TILE + 1, TILE - 2, TILE - 2), col, false, 1.0)
+
+## What a stockpile holds: an item on its cell as a pip in its tier's colour, an item waiting for a hauler as a small
+## pip along the store's footprint.
+func _draw_stockpiles(sim: RoseSim) -> void:
+	var stash: RoseStash = Sim.ensure_stash()
+	var stores := {}
+	for st in sim.structures():
+		stores[int(st.id)] = st
+	for room in stash.rooms():
+		var waiting := 0
+		var anchor: Dictionary = stores.get(int(room.anchor), {})
+		for it in stash.room_items(int(room.zone)):
+			var col: Color = TIER_COLORS.get(String(it.tier), UiTheme.DUST)
+			var cell := int(it.cell)
+			var p: Vector2
+			if cell >= 0:
+				p = Vector2((cell % w) * TILE + 10, (cell / w) * TILE + 10)
+			elif not anchor.is_empty():
+				p = Vector2(int(anchor.x) * TILE + 2 + waiting * 8, (int(anchor.y) + int(anchor.h)) * TILE - 8)
+				waiting += 1
+			else:
+				continue
+			var size := 12.0 if cell >= 0 else 6.0
+			buildings.draw_rect(Rect2(p - Vector2.ONE, Vector2(size + 2, size + 2)), UiTheme.VOID)
+			buildings.draw_rect(Rect2(p, Vector2(size, size)), col)
+
+## Salt laid on one tile (the Colony's Salt tool).
+func paint_salt(x: int, y: int) -> void:
+	put_prop(x, y, "tile.salt", "", (y * w + x) % 2)
 
 ## District view: the district's reach (the box of the tiles within 12 cords of its hub), the hub, its name and
 ## foreman, the Foreman's Cut's stock when it holds any, and a standing petition.
@@ -238,6 +320,14 @@ func _draw_districts() -> void:
 		var hy := int(d.hub_y) * TILE + TILE / 2
 		var rc: PackedInt32Array = d.get("reach", PackedInt32Array([int(d.hub_x) - 12, int(d.hub_y) - 12, int(d.hub_x) + 12, int(d.hub_y) + 12]))
 		var box := Rect2(rc[0] * TILE, rc[1] * TILE, (rc[2] - rc[0] + 1) * TILE, (rc[3] - rc[1] + 1) * TILE)
+		if view_level == 2:
+			# the Stack view carries only the district's name, over its hub
+			var label := String(d.name).to_upper()
+			districts.draw_set_transform(Vector2(hx, hy) - Vector2(label.length() * 2, 8) * k, 0.0, Vector2(k, k))
+			districts.draw_rect(Rect2(-2, -6, label.length() * 4 + 3, 8), Color(UiTheme.SUMP, 0.85))
+			districts.draw_string(font, Vector2.ZERO, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.CYAN)
+			districts.draw_set_transform(Vector2.ZERO)
+			continue
 		districts.draw_rect(box, Color(UiTheme.CYAN, 0.7), false, 2.0 * k)
 		districts.draw_circle(Vector2(hx, hy), 3.0 * k, UiTheme.CYAN)
 		var name := String(d.name).to_upper()

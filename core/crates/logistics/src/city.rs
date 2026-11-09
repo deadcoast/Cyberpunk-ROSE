@@ -44,6 +44,8 @@ pub enum Kind {
     Still,
     /// the Stash, at the Heart
     Heart,
+    /// a stockpile (its zone id), at its store's anchor: the Stash's settling
+    Room,
 }
 
 impl Kind {
@@ -53,6 +55,7 @@ impl Kind {
             Kind::Market => 1,
             Kind::Still => 2,
             Kind::Heart => 3,
+            Kind::Room => 4,
         }
     }
 }
@@ -565,14 +568,41 @@ impl City {
         }
     }
 
-    /// Sources release their waiting cargo onto the Mat while their tile has room, oldest first.
+    /// Where a packet at `at` can go: its own consumer if reachable, else the best reachable one of its kind; a
+    /// stockpile out of reach sends it to the Heart. None when nothing of its kind can be reached.
+    fn reachable_target(&self, at: usize, kind: Kind, key: u32) -> Option<(Kind, u32, usize)> {
+        let own = self.cell_of(kind, key).filter(|&c| self.distance(at, c).is_some());
+        match (kind, own) {
+            (_, Some(c)) => Some((kind, key, c)),
+            (Kind::Heart, None) => None,
+            (Kind::Room, None) => self.heart_cell().filter(|&h| self.distance(at, h).is_some()).map(|h| (Kind::Heart, 0, h)),
+            _ => self.choose(kind, at).map(|(k, c)| (kind, k, c)),
+        }
+    }
+
+    /// Sources release their waiting cargo onto the Mat while their tile has room, oldest first, each only toward
+    /// a consumer it can reach (Full Design v3.12, Cargo). Cargo from the Stash with nothing of its kind in reach
+    /// is the Stash's again at once; cargo for the Stash waits at its source, off the Mat, until the Heart can be
+    /// reached — so an unreachable consumer never fills the tile everything else leaves from.
     fn release(&mut self) {
         if self.outbox.is_empty() {
             return;
         }
         let mut keep = Vec::new();
         for p in std::mem::take(&mut self.outbox) {
-            let cell = self.cell_of(p.kind, p.key).or_else(|| self.choose(p.kind, p.at).map(|c| c.1));
+            let mut p = p;
+            let cell = match self.reachable_target(p.at, p.kind, p.key) {
+                Some((kind, key, cell)) => {
+                    p.kind = kind;
+                    p.key = key;
+                    Some(cell)
+                }
+                None if p.kind != Kind::Heart => {
+                    self.arrivals.push(Arrival { cargo: p.cargo, kind: Kind::Heart, key: 0 });
+                    continue;
+                }
+                None => None,
+            };
             let on_mat = self.mat_mask.get(p.at).copied().unwrap_or(false);
             match cell {
                 Some(cell) if on_mat && self.load[p.at] < CORD_CAPACITY => {
@@ -595,11 +625,23 @@ impl City {
     }
 
     /// One tile a tick toward the consumer; a full tile takes no more, and a full tile cargo is waiting to enter is
-    /// a jam: its packets move at half speed. Returns the jammed tiles.
+    /// a jam: its packets move at half speed. Two packets meeting head-on between full tiles trade places, so a
+    /// cord carrying both ways jams but never locks (Full Design v3.12, Capacity and jams). Returns the jammed tiles.
     fn move_packets(&mut self) -> u32 {
         let w = self.sim.w;
-        let mut keep = Vec::with_capacity(self.pk_pos.len());
-        for k in 0..self.pk_pos.len() {
+        let n = self.pk_pos.len();
+        let mut keep = Vec::with_capacity(n);
+        let mut moved = vec![false; n];
+        // packets by the tile they start the tick on, for the head-on trade
+        let mut by_tile: HashMap<u32, Vec<usize>> = HashMap::new();
+        for (k, &p) in self.pk_pos.iter().enumerate() {
+            by_tile.entry(p).or_default().push(k);
+        }
+        for k in 0..n {
+            if moved[k] {
+                keep.push(k);
+                continue;
+            }
             let p = self.pk_pos[k] as usize;
             // the tile stopped being Mat: step onto Mat beside it, or spill
             if !self.mat_mask[p] {
@@ -636,10 +678,25 @@ impl City {
                 continue;
             }
             if self.load[nxt] >= CORD_CAPACITY {
-                self.jam_now[nxt] = true;
+                // one coming the other way trades tiles with it
+                let other = by_tile.get(&(nxt as u32)).and_then(|v| {
+                    v.iter().copied().find(|&j| {
+                        j != k && !moved[j] && self.pk_pos[j] as usize == nxt && self.fields.get(&(self.pk_cell[j] as usize)).is_some_and(|f| f.dist[nxt] != 0 && f.dist[nxt] != UNREACHED && f.next[nxt] as usize == p)
+                    })
+                });
+                match other {
+                    Some(j) => {
+                        self.pk_pos[k] = nxt as u32;
+                        self.pk_pos[j] = p as u32;
+                        moved[j] = true;
+                        moved[k] = true;
+                    }
+                    None => self.jam_now[nxt] = true,
+                }
                 keep.push(k);
                 continue;
             }
+            moved[k] = true;
             self.load[p] = self.load[p].saturating_sub(1);
             self.load[nxt] = self.load[nxt].saturating_add(1);
             self.pk_pos[k] = nxt as u32;
@@ -674,18 +731,34 @@ impl City {
             let p = self.pk_pos[k] as usize;
             let reach = self.fields.get(&(self.pk_cell[k] as usize)).is_some_and(|f| f.reachable(p));
             let still_there = self.pk_kind[k] == Kind::Heart || self.consumers.iter().any(|c| c.kind == self.pk_kind[k] && c.key == self.pk_key[k] && c.cell == self.pk_cell[k] as usize);
+            if self.pk_kind[k] == Kind::Room && reach {
+                continue;
+            }
             if reach && still_there {
                 continue;
             }
-            if self.pk_kind[k] == Kind::Heart {
+            // cargo for the Stash, or for a stockpile the Mat no longer reaches, goes to the Heart
+            if self.pk_kind[k] == Kind::Heart || self.pk_kind[k] == Kind::Room {
                 if let Some(h) = self.heart_cell() {
+                    self.pk_kind[k] = Kind::Heart;
+                    self.pk_key[k] = 0;
                     self.pk_cell[k] = h as u32;
                 }
                 continue;
             }
-            if let Some((key, cell)) = self.choose(self.pk_kind[k], p) {
-                self.pk_key[k] = key;
-                self.pk_cell[k] = cell as u32;
+            match self.choose(self.pk_kind[k], p) {
+                Some((key, cell)) => {
+                    self.pk_key[k] = key;
+                    self.pk_cell[k] = cell as u32;
+                }
+                // nothing of its kind in reach: it turns back and is the Stash's when it lands at the Heart
+                None => {
+                    if let Some(h) = self.heart_cell() {
+                        self.pk_kind[k] = Kind::Heart;
+                        self.pk_key[k] = 0;
+                        self.pk_cell[k] = h as u32;
+                    }
+                }
             }
         }
     }

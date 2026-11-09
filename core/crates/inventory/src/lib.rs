@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub mod ledger;
+pub mod rooms;
 pub use ledger::{Delivery, Dest, Landing, Ledger, Queued, Quota, Shipment, ShiftReport, Verb, Want};
+pub use rooms::{Room, Shelved, FLOOR, GRID_PRIORITY, SHELF};
 
 pub type Handle = u32;
 
@@ -273,12 +275,24 @@ pub struct Stash {
     pub tier: u8,
     pub grid: Grid,
     pub containers: Vec<Container>,
+    /// the stockpiles: the Stash's other rooms (v10)
+    #[serde(default)]
+    pub rooms: Vec<Room>,
+    #[serde(default)]
+    pub next_shelf: u32,
+    /// the Heart's floor: what the grid has no room for, still the Stash's — the quotas pull it, the verbs work on
+    /// it, a stockpile takes it, and it tries the grid again at every shift end (v3.12)
+    #[serde(default)]
+    pub floor: Vec<Shelved>,
 }
+
+/// Organics spoil this much a shift outside a Cold Store (Full Design v3.12, Condition).
+pub const SPOIL_PER_SHIFT: u8 = 2;
 
 impl Stash {
     pub fn new() -> Self {
         let (w, h) = STASH_DIMS[0];
-        Stash { tier: 1, grid: Grid::new(w, h), containers: Vec::new() }
+        Stash { tier: 1, grid: Grid::new(w, h), containers: Vec::new(), rooms: Vec::new(), next_shelf: 0, floor: Vec::new() }
     }
     pub fn upgrade(&mut self) -> bool {
         if (self.tier as usize) < STASH_DIMS.len() {
@@ -291,7 +305,159 @@ impl Stash {
         }
     }
     pub fn all_items(&self) -> impl Iterator<Item = &ItemInstance> {
-        self.grid.items().chain(self.containers.iter().flat_map(|c| c.grid.items()))
+        self.grid.items().chain(self.containers.iter().flat_map(|c| c.grid.items())).chain(self.rooms.iter().flat_map(|r| r.items.iter().map(|s| &s.item))).chain(self.floor.iter().map(|s| &s.item))
+    }
+
+    /// Grow the Heart's grid to a tier (the city's): it never shrinks.
+    pub fn set_tier(&mut self, tier: u8) {
+        while self.tier < tier.min(STASH_DIMS.len() as u8) {
+            if !self.upgrade() {
+                break;
+            }
+        }
+    }
+
+    /// An item by handle in any room: the Heart's grid below SHELF, a stockpile at or above it.
+    pub fn get_any(&self, h: Handle) -> Option<&ItemInstance> {
+        if (FLOOR..SHELF).contains(&h) {
+            return self.floor.iter().find(|s| FLOOR + s.id == h).map(|s| &s.item);
+        }
+        if h < SHELF {
+            return self.grid.get(h).map(|p| &p.item);
+        }
+        self.rooms.iter().flat_map(|r| r.items.iter()).find(|s| SHELF + s.id == h).map(|s| &s.item)
+    }
+
+    pub fn get_any_mut(&mut self, h: Handle) -> Option<&mut ItemInstance> {
+        if (FLOOR..SHELF).contains(&h) {
+            return self.floor.iter_mut().find(|s| FLOOR + s.id == h).map(|s| &mut s.item);
+        }
+        if h < SHELF {
+            return self.grid.get_mut(h).map(|p| &mut p.item);
+        }
+        self.rooms.iter_mut().flat_map(|r| r.items.iter_mut()).find(|s| SHELF + s.id == h).map(|s| &mut s.item)
+    }
+
+    /// The stockpile zone an item lies in (None: the Heart's grid).
+    pub fn room_of(&self, h: Handle) -> Option<u32> {
+        if h < SHELF {
+            return None;
+        }
+        self.rooms.iter().find(|r| r.items.iter().any(|s| SHELF + s.id == h)).map(|r| r.zone)
+    }
+
+    /// Take an item out of whichever room holds it.
+    pub fn take(&mut self, h: Handle) -> Option<ItemInstance> {
+        if (FLOOR..SHELF).contains(&h) {
+            let k = self.floor.iter().position(|s| FLOOR + s.id == h)?;
+            return Some(self.floor.remove(k).item);
+        }
+        if h < SHELF {
+            return self.grid.remove(h);
+        }
+        for r in self.rooms.iter_mut() {
+            if let Some(k) = r.items.iter().position(|s| SHELF + s.id == h) {
+                return Some(r.items.remove(k).item);
+            }
+        }
+        None
+    }
+
+    /// Every item with its handle, the Heart's grid first, then its floor, then each room in order (the floor is
+    /// the Heart's: no room).
+    pub fn handles(&self) -> Vec<(Handle, Option<u32>, &ItemInstance)> {
+        let mut v: Vec<(Handle, Option<u32>, &ItemInstance)> = self.grid.placed().into_iter().map(|(h, p)| (h, None, &p.item)).collect();
+        v.extend(self.floor.iter().map(|s| (FLOOR + s.id, None, &s.item)));
+        for r in &self.rooms {
+            for s in &r.items {
+                v.push((SHELF + s.id, Some(r.zone), &s.item));
+            }
+        }
+        v
+    }
+
+    /// The grid's overflow onto the Heart's floor.
+    pub fn to_floor(&mut self, item: ItemInstance) -> Handle {
+        let id = self.next_shelf;
+        self.next_shelf += 1;
+        self.floor.push(Shelved { id, item, cell: None });
+        FLOOR + id
+    }
+
+    /// Into the grid if it has room, else onto the Heart's floor. True when the grid took it.
+    pub fn place_or_floor(&mut self, table: &ItemTable, item: ItemInstance) -> bool {
+        match self.grid.auto_place(table.def(item.def), item.clone()) {
+            Ok(_) => true,
+            Err(_) => {
+                self.to_floor(item);
+                false
+            }
+        }
+    }
+
+    /// The floor tries the grid again (shift end), oldest first.
+    pub fn sweep_floor(&mut self, table: &ItemTable) {
+        let mut keep = Vec::new();
+        for s in std::mem::take(&mut self.floor) {
+            if self.grid.auto_place(table.def(s.item.def), s.item.clone()).is_err() {
+                keep.push(s);
+            }
+        }
+        self.floor = keep;
+    }
+
+    /// Put an item into a room as cargo lands there; false when it has no room.
+    pub fn shelve(&mut self, zone: u32, item: ItemInstance) -> Result<Handle, ItemInstance> {
+        let id = self.next_shelf;
+        let Some(r) = self.rooms.iter_mut().find(|r| r.zone == zone) else { return Err(item) };
+        if r.land(id, item.clone()) {
+            self.next_shelf += 1;
+            Ok(SHELF + id)
+        } else {
+            Err(item)
+        }
+    }
+
+    /// Put an item back where it can go: its room if it has one and room is left, else the Heart's grid.
+    pub fn put_back(&mut self, table: &ItemTable, item: ItemInstance, room: Option<u32>) -> Result<Handle, ItemInstance> {
+        let item = match room {
+            Some(z) => match self.shelve(z, item) {
+                Ok(h) => return Ok(h),
+                Err(it) => it,
+            },
+            None => item,
+        };
+        self.grid.auto_place(table.def(item.def), item.clone()).map_err(|_| item)
+    }
+
+    /// The shift's spoiling: Organics lose SPOIL_PER_SHIFT condition wherever they lie but a Cold Store. Returns how
+    /// many items spoiled a step.
+    pub fn spoil(&mut self, table: &ItemTable) -> usize {
+        let organic = |it: &ItemInstance| table.def(it.def).category == items::Category::Organic;
+        let mut n = 0;
+        for h in self.grid.placed().into_iter().map(|(h, _)| h).collect::<Vec<_>>() {
+            if let Some(p) = self.grid.get_mut(h) {
+                if organic(&p.item) && p.item.condition > 0 {
+                    p.item.condition = p.item.condition.saturating_sub(SPOIL_PER_SHIFT);
+                    n += 1;
+                }
+            }
+        }
+        for r in self.rooms.iter_mut().filter(|r| !r.cold) {
+            for s in r.items.iter_mut() {
+                if organic(&s.item) && s.item.condition > 0 {
+                    s.item.condition = s.item.condition.saturating_sub(SPOIL_PER_SHIFT);
+                    n += 1;
+                }
+            }
+        }
+        for s in self.floor.iter_mut() {
+            if organic(&s.item) && s.item.condition > 0 {
+                s.item.condition = s.item.condition.saturating_sub(SPOIL_PER_SHIFT);
+                n += 1;
+            }
+        }
+        n
     }
     /// Blackline and Relic items outside a Vault: what the Attention system counts.
     pub fn exposed_contraband(&self, table: &ItemTable) -> usize {

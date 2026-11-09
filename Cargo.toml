@@ -8,6 +8,7 @@ members = [
   "core/crates/bench",
   "core/crates/people",
   "core/crates/colony",
+  "core/crates/game",
   "core/crates/save",
   "core/crates/render",
   "core/crates/run",
