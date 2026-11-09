@@ -1328,7 +1328,28 @@ impl RoseRun {
         d.set("chunks_seen", o.chunks_seen as i64);
         d.set("blind_value", o.blind_value as i64);
         d.set("route_memory", &PackedByteArray::from(o.route_memory.as_slice()));
+        // the cadence report (Full Design, The cadence budget and its log)
+        let r = &o.report;
+        let mut rep = VarDictionary::new();
+        rep.set("landings", r.landings as i64);
+        rep.set("pulls", r.pulls as i64);
+        rep.set("notables", r.notables as i64);
+        rep.set("losses", r.losses as i64);
+        rep.set("damage", r.damage as i64);
+        rep.set("decisions", r.decisions as i64);
+        rep.set("pull_gap_median", r.pull_gap_median as f64);
+        rep.set("landing_gap_median", r.landing_gap_median as f64);
+        rep.set("loss_gap_max", r.loss_gap_max as f64);
+        rep.set("value_per_min", r.value_per_min as f64);
+        d.set("report", &rep);
         d
+    }
+
+    /// The run's cadence log as text (header, one line per landing / loss / decision, the report), for the
+    /// save folder. Empty before the run ends.
+    #[func]
+    fn cadence_log(&self, header: GString) -> GString {
+        self.sim.as_ref().and_then(|s| s.outcome.as_ref()).map_or_else(GString::new, |o| GString::from(o.log.text(&header.to_string(), &o.report).as_str()))
     }
 
     /// One tick from the input word (see run::sim::RunInput::pack). Returns false when the run is over.

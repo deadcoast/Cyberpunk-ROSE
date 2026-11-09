@@ -73,6 +73,24 @@ enum Cmd {
         #[arg(long, default_value_t = 0)]
         loot: u64,
     },
+    /// Play seeded runs with the cautious bot and check the reward cadence against the design's budget.
+    Cadence {
+        /// runs per stratum
+        #[arg(long, default_value_t = 20)]
+        runs: u64,
+        /// strata to play, e.g. 1,2,3
+        #[arg(long, default_value = "1,2,3")]
+        strata: String,
+        /// first route seed; runs use seed, seed+1, ...
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
+        /// write the aggregate and every run's report here (markdown)
+        #[arg(long, default_value = "docs/telemetry/cadence.md")]
+        report: PathBuf,
+        /// also write each run's full log into this folder
+        #[arg(long)]
+        logs: Option<PathBuf>,
+    },
 }
 
 // ---------------------------------------------------------------- terminal
@@ -429,6 +447,111 @@ fn main() {
         Cmd::Scale { seed, agents, grow, ticks } => cmd_scale(&t, &cli.out, seed, agents, grow, ticks),
         Cmd::Bench { seed, ticks } => cmd_bench(&t, seed, ticks),
         Cmd::Route { seed, stratum, chunks, sweep, loot } => cmd_route(&t, &cli.out, seed, stratum, chunks, sweep, loot),
+        Cmd::Cadence { runs, strata, seed, report, logs } => cmd_cadence(&t, runs, &strata, seed, &report, logs.as_deref()),
     }
     println!();
+}
+
+// ---------------------------------------------------------------- cadence
+fn median(v: &mut [f32]) -> f32 {
+    if v.is_empty() {
+        return 0.0;
+    }
+    v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let n = v.len();
+    if n % 2 == 1 { v[n / 2] } else { (v[n / 2 - 1] + v[n / 2]) / 2.0 }
+}
+
+fn in_band(v: f32, lo: f32, hi: f32) -> &'static str {
+    if v >= lo && v <= hi { "ok" } else if v < lo { "fast" } else { "slow" }
+}
+
+fn cmd_cadence(t: &Term, runs: u64, strata: &str, seed0: u64, report_path: &Path, logs: Option<&Path>) {
+    use run::telemetry::{bot_bands, BOT_FACTOR, DEATH_RATE, LANDING_GAP_S, LOSS_GAP_MAX_S, PULL_GAP_S};
+    let (bp, bl, bq) = bot_bands();
+    let lib = run::ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
+    let table = items::ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
+    let tables = run::LootTables::shipped();
+    let defs = run::CreatureFile::shipped();
+    let strata: Vec<u8> = strata.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+    t.head("cadence", &format!("{runs} bot runs per stratum {strata:?} from seed {seed0}  player budget: pull {}-{} s, landing {}-{} s, loss under {} s, deaths {:.0}-{:.0} %  |  bot bands (/{}): pull {:.0}-{:.0} s, landing {:.0}-{:.0} s, loss under {:.0} s", PULL_GAP_S.0, PULL_GAP_S.1, LANDING_GAP_S.0, LANDING_GAP_S.1, LOSS_GAP_MAX_S, DEATH_RATE.0 * 100.0, DEATH_RATE.1 * 100.0, BOT_FACTOR, bp.0, bp.1, bl.0, bl.1, bq));
+    if let Some(d) = logs {
+        std::fs::create_dir_all(d).expect("logs dir");
+    }
+    let mut md = String::new();
+    md.push_str("# Reward cadence — bot runs against the budget\n\n");
+    md.push_str(&format!("Written by `rose cadence --runs {runs} --strata {} --seed {seed0}` on {}. The bot (`run::bot`) opens what it sees, takes what fits, fights adjacent threats over 40 % HP, digs deposits it stands beside, extracts when the rig is nearly full, the shift is under 90 s or the body is under 30 %; it walks the lit route and never waits or reads. Player budget (Full Design, The cadence budget): pull gap {}–{} s median, landing gap {}–{} s median, longest quiet between losses under {} s, death rate {:.0}–{:.0} %. The bot is taken as {}× faster than a cautious player (an assumption until a recorded human run calibrates it), so its bands are pull {:.0}–{:.0} s, landing {:.0}–{:.0} s, quiet under {:.0} s; the death band is the player's. The run is verdicted on pulls, pressure and deaths; the landing budget is the whole game's (run and colony together) and is judged on the combined log from Phase C, so the landing gap is reported and not verdicted.\n\n",
+        strata.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(","), chrono_free_date(), PULL_GAP_S.0, PULL_GAP_S.1, LANDING_GAP_S.0, LANDING_GAP_S.1, LOSS_GAP_MAX_S, DEATH_RATE.0 * 100.0, DEATH_RATE.1 * 100.0, BOT_FACTOR, bp.0, bp.1, bl.0, bl.1, bq));
+    md.push_str("## Aggregate\n\n| stratum | runs | deaths | run length (median) | pull gap median | landing gap median | pulls / run | notables / run | kills / run | damage / run | longest quiet (median) | blind e / min | verdict |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    let mut per_run_md = String::from("## Every run\n\n| stratum | seed | result | length | pulls | landings | notables | kills | damage | pull gap med | landing gap med | quiet max | blind e |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    t.hrow(&[("S", 2), ("runs", 5), ("deaths", 7), ("length", 7), ("pull gap", 9), ("land gap", 9), ("pulls", 6), ("notab", 6), ("kills", 6), ("dmg", 5), ("quiet", 6), ("e/min", 6), ("verdict", 34)]);
+    for &stratum in &strata {
+        let mut reports = Vec::new();
+        for k in 0..runs {
+            let seed = seed0 + k;
+            let Ok(lay) = run::route(&lib, seed, stratum) else { continue };
+            let m = run::RouteMap::compile(&lib, &lay);
+            let o = run::play(m, table.clone(), tables.clone(), defs.clone(), 7 + k, 1, 1, None);
+            t.bar(&format!("S{stratum}"), k + 1, runs, &format!("seed {seed}  {}  {} pulls", o.report.result, o.report.pulls));
+            if let Some(d) = logs {
+                let header = format!("route seed {seed}  stratum {stratum}  nonce {}  day 1  bot", 7 + k);
+                let _ = std::fs::write(d.join(format!("run_s{stratum}_seed{seed}.log")), o.log.text(&header, &o.report));
+            }
+            let r = &o.report;
+            per_run_md.push_str(&format!("| S{stratum} | {seed} | {} | {} | {} | {} | {} | {} | {} | {:.0} s | {:.0} s | {:.0} s | {} |\n", r.result, run::telemetry::clock(r.ticks), r.pulls, r.landings, r.notables, r.kills, r.damage, r.pull_gap_median, r.landing_gap_median, r.loss_gap_max, r.blind_value));
+            reports.push(o.report);
+        }
+        t.bar_done();
+        if reports.is_empty() {
+            continue;
+        }
+        let n = reports.len() as f32;
+        let deaths = reports.iter().filter(|r| r.result == "died").count();
+        let death_rate = deaths as f32 / n;
+        let mut lens: Vec<f32> = reports.iter().map(|r| r.ticks as f32 / 20.0).collect();
+        let mut pull_gaps: Vec<f32> = reports.iter().filter(|r| r.pulls >= 2).map(|r| r.pull_gap_median).collect();
+        let mut land_gaps: Vec<f32> = reports.iter().filter(|r| r.landings >= 2).map(|r| r.landing_gap_median).collect();
+        let mut quiet: Vec<f32> = reports.iter().map(|r| r.loss_gap_max).collect();
+        let pulls = reports.iter().map(|r| r.pulls).sum::<usize>() as f32 / n;
+        let notables = reports.iter().map(|r| r.notables).sum::<usize>() as f32 / n;
+        let kills = reports.iter().map(|r| r.kills).sum::<usize>() as f32 / n;
+        let damage = reports.iter().map(|r| r.damage).sum::<i32>() as f32 / n;
+        let epm = reports.iter().map(|r| r.value_per_min).sum::<f32>() / n;
+        let (len_m, pull_m, land_m, quiet_m) = (median(&mut lens), median(&mut pull_gaps), median(&mut land_gaps), median(&mut quiet));
+        // the run is judged on pulls, pressure and deaths; the landing budget (10-30 s) is the whole game's and is
+        // judged on the combined run + colony log in Phase C, so landings are reported here and not verdicted
+        let v_pull = in_band(pull_m, bp.0, bp.1);
+        let v_quiet = if quiet_m <= bq { "ok" } else { "lapses" };
+        let v_death = in_band(death_rate, DEATH_RATE.0, DEATH_RATE.1);
+        let v_death = match v_death { "fast" => "corridor", "slow" => "wall", v => v };
+        let verdict = format!("pull {v_pull} · loss {v_quiet} · death {v_death}");
+        let _ = bl;
+        t.row(&[(&format!("{stratum}"), 2), (&format!("{}", reports.len()), 5), (&format!("{deaths} ({:.0}%)", death_rate * 100.0), 7), (&format!("{:.0}:{:02.0}", (len_m / 60.0).floor(), len_m % 60.0), 7), (&format!("{pull_m:.0} s"), 9), (&format!("{land_m:.0} s"), 9), (&format!("{pulls:.1}"), 6), (&format!("{notables:.2}"), 6), (&format!("{kills:.1}"), 6), (&format!("{damage:.0}"), 5), (&format!("{quiet_m:.0} s"), 6), (&format!("{epm:.1}"), 6), (&verdict, 34)]);
+        md.push_str(&format!("| S{stratum} | {} | {} ({:.0} %) | {:.0}:{:02.0} | {:.0} s | {:.0} s | {:.1} | {:.2} | {:.1} | {:.0} | {:.0} s | {:.1} | {} |\n", reports.len(), deaths, death_rate * 100.0, (len_m / 60.0).floor(), len_m % 60.0, pull_m, land_m, pulls, notables, kills, damage, quiet_m, epm, verdict));
+    }
+    md.push('\n');
+    md.push_str(&per_run_md);
+    if let Some(parent) = report_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(report_path, md).expect("report");
+    println!("  {} {}", t.dim("wrote"), report_path.display());
+}
+
+/// Today as YYYY-MM-DD from the system clock, without a date crate.
+fn chrono_free_date() -> String {
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let days = secs / 86_400;
+    // civil-from-days (Howard Hinnant)
+    let z = days as i64 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}")
 }

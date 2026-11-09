@@ -157,6 +157,9 @@ pub struct Outcome {
     pub chunks_seen: u32,
     pub route_memory: Vec<u8>,
     pub blind_value: u32,
+    /// the cadence log of the whole run, with its report
+    pub log: crate::telemetry::CadenceLog,
+    pub report: crate::telemetry::Report,
 }
 
 #[derive(Clone, Debug)]
@@ -172,6 +175,8 @@ pub struct RunSim {
     pub followers: Vec<Follower>,
     pub salt: Vec<bool>,
     pub tick: u64,
+    /// the cadence log: landings, losses, decisions with their ticks
+    pub log: crate::telemetry::CadenceLog,
     /// the shift: ticks the route gives before overtime (ShiftRules)
     pub shift_ticks: u64,
     /// overtime minutes already answered
@@ -254,7 +259,7 @@ impl RunSim {
                     raided = true;
                 }
             }
-            let items: Vec<ItemInstance> = if raided { Vec::new() } else { c.rig.backpack.items().cloned().chain(c.rig.quick.iter().flatten().cloned()).chain([&c.rig.gear.head, &c.rig.gear.body, &c.rig.gear.feet, &c.rig.gear.back].into_iter().flatten().cloned()).chain(c.rig.gear.hands.iter().flatten().cloned()).collect() };
+            let items: Vec<ItemInstance> = if raided { Vec::new() } else { c.rig.backpack.placed().into_iter().map(|(_, p)| p.item.clone()).chain(c.rig.quick.iter().flatten().cloned()).chain([&c.rig.gear.head, &c.rig.gear.body, &c.rig.gear.feet, &c.rig.gear.back].into_iter().flatten().cloned()).chain(c.rig.gear.hands.iter().flatten().cloned()).collect() };
             let chunk = map.chunk_of[c.y as usize * map.w + c.x as usize];
             loot.sources.push(LootSource { x: c.x, y: c.y, kind: SourceKind::OwnCorpse, tier: map.stratum, chunk: if chunk == crate::map::NO_CHUNK { 0 } else { chunk }, locked: false, state: if items.is_empty() { SourceState::Empty } else { SourceState::Closed }, items });
         }
@@ -273,6 +278,7 @@ impl RunSim {
             followers,
             salt: vec![false; n],
             tick: 0,
+            log: crate::telemetry::CadenceLog::new(),
             shift_ticks,
             overtime_minutes: 0,
             next_creature_id,
@@ -395,6 +401,16 @@ impl RunSim {
         self.loot.source_at(t.0 as usize, t.1 as usize)
     }
 
+    /// End the run as a death from outside the simulation (the instrument's cut-off for a stuck bot).
+    pub fn abandon(&mut self) {
+        if self.result.is_some() {
+            return;
+        }
+        self.runner.life = Life::Dead;
+        self.result = Some(RunResult::Died { tick: self.tick });
+        self.finish();
+    }
+
     /// Ticks past the shift (0 while the shift runs).
     pub fn overtime_ticks(&self) -> u64 {
         self.tick.saturating_sub(self.shift_ticks)
@@ -461,6 +477,7 @@ impl RunSim {
         if self.result.is_some() {
             return;
         }
+        let events_before = self.events.len();
         self.tick += 1;
         let rules = self.defs.runner.clone();
         // ---- body upkeep
@@ -528,6 +545,13 @@ impl RunSim {
         }
         if self.runner.is_up() {
             self.open_source = self.source_here().filter(|&i| self.loot.sources[i].state == SourceState::Open);
+        }
+        // ---- the cadence log takes this tick's events
+        if self.events.len() > events_before {
+            let tick = self.tick;
+            let names: Vec<String> = self.loot.sources.iter().map(|s| format!("{} t{}", s.kind.table(), s.tier)).collect();
+            let new_events: Vec<Event> = self.events[events_before..].to_vec();
+            self.log.record(tick, &new_events, |i| names.get(i).cloned().unwrap_or_default());
         }
     }
 
@@ -1120,6 +1144,20 @@ impl RunSim {
             }
         };
         let seen: std::collections::HashSet<u16> = self.senses.fog.state.iter().enumerate().filter(|(_, &st)| st != crate::fog::UNSEEN).map(|(i, _)| self.map.chunk_of[i]).filter(|&c| c != crate::map::NO_CHUNK).collect();
+        // the result's own events (Extracted / Dead) land in the log before the report closes it
+        let tail: Vec<Event> = match result {
+            RunResult::Extracted { .. } => vec![Event::Extracted],
+            RunResult::Died { .. } => vec![Event::Dead],
+        };
+        {
+            let tick = self.tick;
+            let names: Vec<String> = self.loot.sources.iter().map(|s| format!("{} t{}", s.kind.table(), s.tier)).collect();
+            if !self.log.entries.iter().any(|e| e.tick == tick && (e.kind == "extract" || e.kind == "dead")) {
+                self.log.record(tick, &tail, |i| names.get(i).cloned().unwrap_or_default());
+            }
+        }
+        let report = self.log.report(self.tick, blind_value, if matches!(result, RunResult::Extracted { .. }) { "extracted" } else { "died" });
+        let log = self.log.clone();
         self.outcome = Some(Outcome {
             result,
             ticks: self.tick,
@@ -1134,6 +1172,8 @@ impl RunSim {
             chunks_seen: seen.len() as u32,
             route_memory: self.senses.fog.memory_bits(),
             blind_value,
+            log,
+            report,
         });
     }
 
@@ -1333,9 +1373,9 @@ mod tests {
         let x0 = s.runner.x;
         walk(&mut s, 1, 0, 10, false);
         let moved = s.runner.x - x0;
-        // 10 ticks at 4.5 tiles/s walking = 2.25 tiles; crawling the back wall x0.7
+        // 10 ticks at 3.0 tiles/s walking = 1.5 tiles (384 units); crawling the back wall x0.7
         let t = s.runner.tile();
-        let expect = if s.pose_at(t.0, t.1) == Pose::Walk { 576 } else { 403 };
+        let expect = if s.pose_at(t.0, t.1) == Pose::Walk { 384 } else { 269 };
         assert!((moved - expect).abs() <= 24, "moved {moved} units, expected ~{expect} ({:?})", s.pose_at(t.0, t.1));
         assert!(s.senses.noise.since(0).any(|e| e.loudness >= 4), "no footstep");
         // sprint on a floor is faster and louder and costs stamina; put the Runner on the floor first

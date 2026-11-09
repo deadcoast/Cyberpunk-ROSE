@@ -19,6 +19,8 @@ step "sim" "rose scale (headless renders to out/)"
 ./target/release/rose --out out scale --agents 3000 --seed 11 | tail -4
 step "route" "rose route (seeded assembly, 200-seed sweep per stratum)"
 ./target/release/rose --out out route --seed 11 --stratum 1 --sweep 200 --loot 200 | tail -11
+step "cadence" "rose cadence (20 bot runs per stratum against the budget -> docs/telemetry/cadence.md)"
+./target/release/rose --out out cadence --runs 20 --strata 1,2,3 --seed 1 --report docs/telemetry/cadence.md | tail -6
 
 mkdir -p game/bin
 case "$(uname -s)" in

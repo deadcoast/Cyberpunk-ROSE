@@ -205,6 +205,9 @@ impl ItemTable {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ItemId(pub u16);
 
+/// The item table shipped with the game (data/items.toml).
+pub const ITEMS_TOML: &str = include_str!("../../../../data/items.toml");
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Ident {
     Unknown,

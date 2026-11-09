@@ -23,6 +23,8 @@ pub mod noise;
 pub mod runner;
 pub mod senses;
 pub mod sim;
+pub mod telemetry;
+pub mod bot;
 
 pub use assemble::{assemble, route, Layout, Placed, MAX_CHUNKS, MIN_CHUNKS};
 pub use board::{card, RouteCard};
@@ -37,6 +39,8 @@ pub use runner::{Action, Life, Runner, StatusKind};
 pub use follower::{Follower, FollowerLife, Order};
 pub use sim::{Corpse, Event, FollowerSetup, Outcome, RunInput, RunResult, RunSetup, RunSim};
 pub use senses::{notice_range, Lume, Motion, Senses};
+pub use telemetry::{CadenceLog, Class, Report};
+pub use bot::{play, Bot};
 
 /// The authored chunk library shipped with the game (data/chunks.toml). Tools and tests use it; the game may
 /// load a newer file from disk and fall back to this.

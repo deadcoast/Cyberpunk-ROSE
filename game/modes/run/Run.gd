@@ -96,6 +96,7 @@ var summary: Label
 var summary_frame: Panel
 var overtime_flash_t := 0.0
 var kills_seen := 0
+var cadence_path := ""
 # ---- the loot panel
 var loot_panel: Panel
 var loot_title: Label
@@ -553,8 +554,12 @@ func _finish_run() -> void:
 	var fd: PackedInt32Array = o.get("followers_dead", PackedInt32Array())
 	if fe.size() + fs.size() + fd.size() > 0:
 		parts.append("followers: %d out, %d stranded, %d dead" % [fe.size(), fs.size(), fd.size()])
+	var rep: Dictionary = o.get("report", {})
+	if not rep.is_empty() and int(rep.get("pulls", 0)) >= 2:
+		parts.append("a pull every %d s" % int(round(float(rep.pull_gap_median))))
 	summary.text = "   ".join(parts)
 	summary.add_theme_color_override("font_color", UiTheme.OOZE_GLOW if String(o.result) == "extracted" else UiTheme.HOT_PINK)
+	_write_cadence_log(o)
 	summary_frame.size = Vector2(summary.text.length() * 4 + 12, 18)
 	summary_frame.position = Vector2(316 - summary_frame.size.x / 2, 150)
 	summary_frame.visible = true
@@ -673,6 +678,20 @@ func _source(idx: int) -> Dictionary:
 		if int(s.index) == idx:
 			return s
 	return {}
+
+## The cadence log goes to the save folder, where the player can read it (Full Design, The cadence budget and its log).
+func _write_cadence_log(o: Dictionary) -> void:
+	var dir := "user://telemetry"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var header := "route S%d %s  seed %d  day %d  runner %s  %s" % [stratum, route_name, seed_value, Sim.day, runner_name, String(o.get("result", ""))]
+	var text: String = route.cadence_log(header)
+	if text.is_empty():
+		return
+	cadence_path = "%s/run_%03d_S%d_%d.log" % [dir, Sim.day, stratum, seed_value]
+	var f := FileAccess.open(cadence_path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(text)
+		f.close()
 
 ## A follower's chip at the right edge: name, HP bar, order letter; Hot Pink when down.
 func _chip(f: Dictionary) -> void:

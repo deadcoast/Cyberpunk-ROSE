@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase B, the run (PAC-020–027 done).
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase B, the run (PAC-020–028 done).
 
     ./run.sh /path/to/godot4.5
 
@@ -51,3 +51,5 @@ light to `out/`, reports the authored light bands, a lantern-on / dimmed sight a
 step's noise footprint, with `--sweep` chunk, container and spawn averages and the worst connectivity per stratum, and
 with `--loot N` opens every container on N seeds per stratum and reports value per container, tier mix, notable rate and
 the stratum-to-stratum ratio.
+
+`rose cadence --runs 20 --strata 1,2,3` plays seeded runs with the cautious bot (`run::bot`) and writes every run's cadence report and the aggregate against the design's budget to `docs/telemetry/cadence.md` (`--logs DIR` keeps each run's full log). Every run played in the game writes the same log to `user://telemetry/`.

@@ -87,15 +87,15 @@ c = Canvas()
 c.rect(1, 10, 30, 14)                 # the culvert the Mat edge opens into
 c.rect(4, 6, 9, 10)                   # a low alcove above the entry
 c.hline(14, 1, 30, "~")               # standing water on the floor line
-c.put(6, 13, "L"); c.put(8, 13, "D"); c.put(20, 13, "D")
+c.put(6, 13, "L"); c.put(8, 13, "D")
 c.rect(24, 6, 29, 10); c.put(27, 9, "L"); c.put(26, 7, "*")
 c.line_brick(); c.exit_w(entry=True); c.exit_e()
-add("sump_entry", 1, "entry", 0, c, "where the Mat ends; shallow water, two lockers, the first deposits")
+add("sump_entry", 1, "entry", 0, c, "where the Mat ends; shallow water, two lockers, the first deposit")
 
 c = Canvas()
 c.rect(1, 10, 30, 14); c.hline(14, 1, 30, "~")
 c.rect(10, 4, 13, 10); c.rect(19, 4, 22, 10)          # two drops from the ceiling
-c.put(11, 5, "D"); c.put(21, 5, "*"); c.put(15, 13, "D"); c.put(5, 13, "S")
+c.put(11, 5, "D"); c.put(21, 5, "*"); c.put(5, 13, "S")
 c.line_brick(); c.exit_w(); c.exit_e()
 add("sump_culvert", 1, "culvert", 3, c, "a straight culvert with two ceiling drops; a sewerat in the dark end")
 
@@ -145,7 +145,7 @@ c = Canvas()
 c.rect(1, 10, 30, 14); c.rect(14, 1, 17, 22)
 c.rect(4, 4, 11, 8); c.rect(20, 4, 27, 8)
 c.hline(6, 12, 13); c.hline(6, 18, 19)                 # doorways from the shaft
-c.put(15, 11, "O"); c.put(7, 7, "*"); c.put(23, 7, "L"); c.put(5, 13, "D"); c.put(26, 13, "D")
+c.put(15, 11, "O"); c.put(7, 7, "*"); c.put(23, 7, "L"); c.put(5, 13, "D")
 c.line_brick(); c.exit_w(); c.exit_e(); c.exit_n(); c.exit_s()
 add("culvert_junction", 2, "junction", 3, c, "a four-way under a light; a patrol point in the middle of it")
 
@@ -200,7 +200,7 @@ c = Canvas()
 c.rect(1, 10, 30, 14); c.rect(14, 1, 17, 10)
 c.rect(5, 16, 12, 21); c.rect(19, 16, 26, 21)
 c.put(8, 15, "."); c.put(23, 15, ".")                  # drop-ins
-c.put(7, 20, "!"); c.put(10, 20, "D"); c.put(21, 20, "!"); c.put(24, 20, "D"); c.put(15, 3, "*"); c.put(8, 13, "D")
+c.put(7, 20, "!"); c.put(10, 20, "D"); c.put(21, 20, "!"); c.put(24, 20, "D"); c.put(15, 3, "*")
 c.line_brick(); c.exit_w(); c.exit_e(); c.exit_n()
 add("drain_gas", 3, "hazard", 2, c, "gas pockets in two pits below the way, each with a deposit in it")
 

@@ -279,3 +279,33 @@ already slotted; Rust debug text leaked into the "will not craft" line, now "slo
 Known gaps: tiers 2–4 open with Phase E's blueprints (`tier_open` is in the save, ready); the crafter is "the
 Bench" until Phase C names a slimo with Tweak; implants are crafted but installed at the Bench in Phase C; the
 Scrapdex and sets read provenance in Phase E.
+
+## PAC-028 — reward-cadence telemetry (2026-11-09)
+
+Full Design v3.6 first (The cadence budget and its log): three classes — landings (an open is a pull), losses,
+decisions — a report with the median and p90 gap between landings and between pulls, and the budget: a pull every
+60–120 s, a loss at least every two minutes off the Mat, a bot death rate of 10–30 %, a notable per run from S3.
+`run::telemetry` records every tick's events into the log inside `RunSim::step`, so the game and the instrument
+share one log; the Outcome carries it and its report, the Run writes it to `user://telemetry/run_<day>_S<s>_<seed>.log`
+and quotes the pull median in its end summary. `run::bot` is the yardstick: open what it sees, take what fits, fight
+adjacent threats over 40 % HP and back off under it, dig deposits beside it, treat bleeding, extract on a nearly
+full rig, under 90 s of shift or under 30 % HP; it knows only the fog, paths over known tiles and keeps the lantern
+on. `rose cadence` plays twenty seeds per stratum and writes `docs/telemetry/cadence.md` with the aggregate and
+every run; `run.sh` runs it on every build.
+
+What the instrument found, and what changed because of it: at the Phase A speeds the bot cleared a route in
+2:25–3:20 with a pull every 7–8 s — half of them deposits, 16 per S1 route — against a budget of 60–120 s. Three
+things moved: walk 4.5 → 3.0, sneak 2.5 → 1.5, sprint 7.0 → 5.0 (a walk crosses the view in about seven seconds);
+dig 4 → 6 s; deposits thinned to one per chunk (two in collapse and hazard chunks). Measured after: runs of
+3:37–4:58, a pull every 11–12 s, deaths 20–30 %, longest quiet 42–70 s. The bot is taken as 3× faster than a
+cautious player (an assumption printed on every report until a recorded human run calibrates it), so its band is
+pulls every 20–40 s — the routes still pay 2× too often for the bot, and the design now names the lever: source
+density per chunk (~2 pulls per chunk today where the budget wants about one), to close as the chunk library grows.
+The landing budget (10–30 s) is the whole game's and is judged on the combined run-and-colony log from Phase C; the
+report prints it and does not verdict it. The instrument also caught the loot roll walking a `HashMap` in process
+order — two runs of one seed disagreed — fixed by sorting the category table; a seed replays bit-exact again
+(tested). 58 tests in the run crate, 90 in the workspace.
+
+Known gaps: the bot does not sneak or wait, so the player factor is an assumption; the notable budget for S1–S2
+(one per three runs) is missed by the loot rows' own rule and is a loot-pass lever, not a cadence one; the colony's
+cargo and craft landings join the log in Phase C.
