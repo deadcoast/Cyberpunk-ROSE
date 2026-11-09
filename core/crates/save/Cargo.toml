@@ -8,5 +8,6 @@ license.workspace = true
 [dependencies]
 items = { path = "../items" }
 inventory = { path = "../inventory" }
+bench = { path = "../bench" }
 serde.workspace = true
 postcard.workspace = true

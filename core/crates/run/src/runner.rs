@@ -291,10 +291,10 @@ impl Runner {
     pub fn melee(&self, table: &ItemTable) -> (i32, i32, i32) {
         for h in self.rig.gear.hands.iter().flatten() {
             let d = table.def(h.def);
-            if let Some(g) = &d.gear {
+            if let (Some(g), Some(st)) = (&d.gear, h.gear_stats(d)) {
                 if g.kind == "melee" {
                     let reach = if d.id == "ger_sword" || d.id == "ger_monowire" { 2 } else { 1 };
-                    return (g.dmg, g.noise, reach);
+                    return (st.dmg, st.noise, reach);
                 }
             }
         }
@@ -305,9 +305,9 @@ impl Runner {
     pub fn ranged(&self, table: &ItemTable) -> Option<(i32, i32, i32)> {
         for h in self.rig.gear.hands.iter().flatten() {
             let d = table.def(h.def);
-            if let Some(g) = &d.gear {
+            if let (Some(g), Some(st)) = (&d.gear, h.gear_stats(d)) {
                 if g.kind == "ranged" {
-                    return Some((g.dmg, g.noise, g.mag.max(1)));
+                    return Some((st.dmg, st.noise, st.mag.max(1)));
                 }
             }
         }
@@ -319,8 +319,8 @@ impl Runner {
         let mut l = 0;
         let g = &self.rig.gear;
         for it in [&g.head, &g.body, &g.feet, &g.back].into_iter().flatten().chain(g.hands.iter().flatten()) {
-            if let Some(gd) = &table.def(it.def).gear {
-                l += gd.light;
+            if let Some(st) = it.gear_stats(table.def(it.def)) {
+                l += st.light;
             }
         }
         if self.lantern_on && self.rig.quick.iter().flatten().any(|q| table.def(q.def).id == "ger_lantern") {
@@ -342,7 +342,7 @@ impl Runner {
             LEGS => &g.feet,
             _ => &g.body,
         };
-        slot.as_ref().and_then(|it| table.def(it.def).gear.as_ref()).map_or(0, |gd| gd.armour / if section == ARMS { 2 } else { 1 })
+        slot.as_ref().and_then(|it| it.gear_stats(table.def(it.def))).map_or(0, |st| st.armour / if section == ARMS { 2 } else { 1 })
     }
 
     pub fn put_quick(&mut self, slot: usize, item: ItemInstance) {

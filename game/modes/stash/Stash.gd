@@ -207,7 +207,21 @@ func _draw_card() -> void:
 	else:
 		make_label(card, "FEED   the Mat does not eat this", Vector2(6, y + 12), UiTheme.DUST)
 	var tags: PackedStringArray = it.get("tags", PackedStringArray())
-	make_label(card, "CRAFT  " + ("tags: " + ", ".join(tags) if tags.size() > 0 else "no craft tag"), Vector2(6, y + 24), UiTheme.CHALK if tags.size() > 0 else UiTheme.DUST)
+	var best: Dictionary = stash.best_recipe(selected)
+	if best.is_empty():
+		make_label(card, "CRAFT  " + ("no open recipe takes " + ", ".join(tags) if tags.size() > 0 else "no craft tag"), Vector2(6, y + 24), UiTheme.DUST)
+	else:
+		make_label(card, "CRAFT  %s as the %s  (tier %d)" % [String(best.product_name), String(best.slot_tag), int(best.tier)], Vector2(6, y + 24), UiTheme.CHALK)
+	if it.has("crafted_by"):
+		var from: PackedStringArray = it.get("crafted_from", PackedStringArray())
+		make_label(card, ("made by %s from %s" % [String(it.crafted_by), ", ".join(from)]).left(56), Vector2(6, y + 36), UiTheme.OOZE_GLOW)
+	elif it.has("stats"):
+		var st: Dictionary = it.stats
+		var bits := []
+		for key in ["dmg", "armour", "noise", "light", "mag"]:
+			if int(st[key]) != 0:
+				bits.append("%s %d" % [key, int(st[key])])
+		make_label(card, "   ".join(bits), Vector2(6, y + 36), UiTheme.DUST)
 	# the four verbs, in order
 	var hnd := selected
 	var sell_b := make_button(card, "SELL", Vector2(6, 104), func():
@@ -223,7 +237,7 @@ func _draw_card() -> void:
 	var craft_b := make_button(card, "CRAFT", Vector2(110, 104), func():
 		Sim.bench_slot = it.duplicate()
 		Screens.show_screen("bench"))
-	craft_b.disabled = tags.size() == 0
+	craft_b.disabled = best.is_empty()
 	make_button(card, "UNPIN" if bool(it.pinned) else "KEEP", Vector2(168, 104), func():
 		stash.pin(hnd, not bool(it.pinned))
 		_redraw())
@@ -306,7 +320,7 @@ func _draw_queue() -> void:
 		foot = "%d queued: %d e, %.1f n   at shift end" % [q.size(), sell_sum, feed_sum]
 	elif not Sim.shift_report.is_empty():
 		var r: Dictionary = Sim.shift_report
-		foot = "last shift: sold %d for %d e, fed %d" % [int(r.sold), int(r.earned), int(r.fed)]
+		foot = "last shift: sold %d for %d e, fed %d, crafted %d" % [int(r.sold), int(r.earned), int(r.fed), int(r.get("crafted", 0))]
 	else:
 		foot = "nothing queued   shift ends after a run"
 	make_label(queue_panel, foot, Vector2(6, 70), UiTheme.DUST)

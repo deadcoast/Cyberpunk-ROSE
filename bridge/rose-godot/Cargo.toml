@@ -14,6 +14,7 @@ logistics = { path = "../../core/crates/logistics" }
 godot = { version = "0.5", features = ["api-4-5"] }
 items = { path = "../../core/crates/items" }
 inventory = { path = "../../core/crates/inventory" }
+bench = { path = "../../core/crates/bench" }
 save = { path = "../../core/crates/save" }
 run = { path = "../../core/crates/run" }
 postcard.workspace = true

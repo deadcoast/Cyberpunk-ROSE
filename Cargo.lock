@@ -68,6 +68,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bench"
+version = "0.2.0"
+dependencies = [
+ "items",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -483,6 +492,7 @@ dependencies = [
 name = "rose-godot"
 version = "0.2.0"
 dependencies = [
+ "bench",
  "godot",
  "inventory",
  "items",
@@ -527,6 +537,7 @@ dependencies = [
 name = "save"
 version = "0.2.0"
 dependencies = [
+ "bench",
  "inventory",
  "items",
  "postcard",

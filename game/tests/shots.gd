@@ -47,9 +47,25 @@ func _process(_delta: float) -> bool:
 				break
 		scr._select(first_chrome)
 	if frames_on_screen == 6 and screen_i >= 0 and screen_ids[screen_i] == "bench":
-		# the Bench with a Stash item slotted
-		sim.bench_slot = {"id": "chr_street_eye", "name": "Street Eye", "tier": "common", "category": "chrome", "identified": true, "condition": 80, "tags": PackedStringArray(["optic", "conductor"])}
+		# the Bench with a Stash item slotted into the scrap sword and a job on the queue
+		var st: RoseStash = sim.ensure_stash()
+		var blade: int = st.add(RoseItems.new().find("prt_blade_stock"), 90, false)
+		st.add(RoseItems.new().find("prt_wire"), 70, false)
+		var b2: int = st.add(RoseItems.new().find("chr_toe_claws"), 60, false)
+		var housing := -1
+		for h in st.candidates("housing"):
+			housing = int(h)
+			break
+		st.craft("shiv", PackedInt32Array([b2, housing]), "Sable", sim.day)
+		for it in st.items():
+			if int(it.handle) == blade:
+				sim.bench_slot = it
 		screens.show_screen("bench")
+		var scr: Node = screens.current
+		for h in st.candidates("housing"):
+			if not scr.filled.has(int(h)):
+				scr._fill(int(h))
+				break
 	if frames_on_screen == 12 and screen_i >= 0:
 		var id: String = screen_ids[screen_i]
 		if id == "colony":

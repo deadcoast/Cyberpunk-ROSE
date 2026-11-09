@@ -7,6 +7,7 @@ extends SceneTree
 var main: Node
 var frames := 0
 var failures: Array[String] = []
+var sim_sent_handle := -1
 var screen_ids: Array = []
 var screen_i := -1
 var frames_on_screen := 0
@@ -146,9 +147,46 @@ func _verify_current() -> void:
 			_check(st.upgrade() and st.width() == 16, "stash: upgrade failed")
 			# Craft hands the Bench an item
 			sim.bench_slot = scr._item(chrome2)
-			_check(not sim.bench_slot.is_empty(), "stash: craft hand-off empty")
+			sim_sent_handle = chrome2
+			_check(not sim.bench_slot.is_empty() and not st.best_recipe(chrome2).is_empty(), "stash: craft hand-off empty or no recipe takes a lamp core")
 		"bench":
-			_check(not scr.slotted.is_empty() and _count_slots(scr) >= 12, "bench: the crafted item was not slotted (%s)" % str(scr.slotted.keys()))
+			var st: RoseStash = scr.stash
+			_check(scr.recipes.size() == 60 and int(st.tier_open()) == 1, "bench: %d recipes, tier %d open" % [scr.recipes.size(), int(st.tier_open())])
+			_check(scr.chosen != "" and scr.filled.has(int(sim_sent_handle)), "bench: the Stash's item was not pre-slotted (%s %s)" % [scr.chosen, str(scr.filled)])
+			# a shiv: blade + housing, both common on a tier-1 recipe → base numbers; the parts leave the grid
+			var blade: int = st.add(RoseItems.new().find("prt_blade_stock"), 90, false)
+			var housing := -1
+			for h in st.candidates("housing"):
+				housing = int(h)
+				break
+			_check(blade >= 0 and housing >= 0, "bench: no blade or housing to craft with")
+			var pv: Dictionary = st.preview("shiv", PackedInt32Array([blade, housing]), "the Bench", sim.day)
+			_check(bool(pv.get("ok", false)) and String(pv.product_id) == "ger_shiv" and int(pv.stats.dmg) == int(pv.base.dmg), "bench: shiv preview %s" % str(pv))
+			var wrong: Dictionary = st.preview("shiv", PackedInt32Array([housing, blade]), "the Bench", sim.day)
+			_check(not bool(wrong.get("ok", true)), "bench: a housing in the blade slot should refuse")
+			_check(not st.craft("monowire", PackedInt32Array([blade, housing, housing, housing]), "x", 0), "bench: a tier-3 recipe should be closed")
+			var n0: int = st.count()
+			_check(st.craft("shiv", PackedInt32Array([blade, housing]), "the Bench", sim.day) and st.count() == n0 - 2 and st.bench_jobs().size() == 1, "bench: craft did not queue")
+			_check(st.cancel_job(0) and st.count() == n0 and st.bench_jobs().size() == 0, "bench: cancel did not return the parts")
+			var blade2 := -1
+			var housing2 := -1
+			for h in st.candidates("blade"):
+				blade2 = int(h)
+				break
+			for h in st.candidates("housing"):
+				housing2 = int(h)
+				break
+			_check(st.craft("shiv", PackedInt32Array([blade2, housing2]), "Sable", sim.day), "bench: second craft failed")
+			scr._redraw()
+			_check(scr.queue_frame.get_child_count() >= 4, "bench: queue not drawn")
+			sim.end_shift()
+			var made := {}
+			for it in st.items():
+				if it.has("crafted_by") and String(it.id) == "ger_shiv":
+					made = it
+			_check(not made.is_empty() and String(made.crafted_by).begins_with("Sable") and int(made.stats.dmg) == 5, "bench: the shiv did not land in the Stash with its provenance (%s)" % str(made.keys()))
+			_check(int(sim.shift_report.get("crafted", 0)) == 1, "bench: shift report crafted %s" % str(sim.shift_report))
+			_check(st.save_round_trip(), "bench: save round trip with a queue failed")
 		"route":
 			_check(scr.routes.size() == sim.strata_open, "route: %d cards, expected %d" % [scr.routes.size(), sim.strata_open])
 			for rt in scr.routes:

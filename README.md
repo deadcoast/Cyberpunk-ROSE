@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase B, the run (PAC-020–026 done).
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase B, the run (PAC-020–027 done).
 
     ./run.sh /path/to/godot4.5
 
@@ -36,7 +36,9 @@ Controls in the shell
 ESC menu · nav bar on every screen · Colony: LMB apply tool, TAB view (Street / District / Stack), SPACE pause,
 1/2/3 speed, WASD pan, wheel zoom · Stash: filter buttons select the view, SORT re-packs the grid; click an item for
 its card and the four verbs (Sell to a grate market, Feed to a Pit, Craft to the Bench, Keep pins); SELL ALL / FEED
-ALL act on the unpinned view; BACK pulls a queued item out; queues resolve when the shift ends after a run · Route
+ALL act on the unpinned view; BACK pulls a queued item out; queues resolve when the shift ends after a run · Bench:
+pick a recipe, click a slot then a Stash item that carries its tag, CRAFT queues (parts leave the Stash), CANCEL
+returns them; jobs finish at shift end · Route
 Board: click a card or 1–3 to pick a route, toggle followers, click Stash items into the hand, quick slots and pack,
 DEPART or ENTER · Run: WASD move, SHIFT sprint, CTRL sneak, Q (hold) dim veins, SPACE dodge, J swing, K shoot, F + direction dig,
 E open a source (pry bar when carried) or hold E on the Mat or under a grate to extract, R take all, V drop the last

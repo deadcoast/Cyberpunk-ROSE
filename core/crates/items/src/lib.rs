@@ -196,6 +196,9 @@ impl ItemTable {
     pub fn by_category(&self, c: Category) -> impl Iterator<Item = &ItemDef> {
         self.defs.iter().filter(move |d| d.category == c)
     }
+    pub fn defs(&self) -> impl Iterator<Item = &ItemDef> {
+        self.defs.iter()
+    }
 }
 
 /// Index into the table; stable for a given data file.
@@ -216,6 +219,36 @@ pub struct Provenance {
     pub day: u32,
 }
 
+/// Where a crafted item came from: who made it, when, and every part by name and tier (Full Design, Bench).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Crafted {
+    pub by: String,
+    pub day: u32,
+    pub recipe: String,
+    /// "Mono-Edge Blade (rare)", in slot order
+    pub parts: Vec<String>,
+}
+
+/// Per-instance deltas over the def's gear numbers; a crafted sword keeps its own damage. Zero means "as the def".
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GearMods {
+    pub dmg: i32,
+    pub armour: i32,
+    pub noise: i32,
+    pub light: i32,
+    pub mag: i32,
+}
+
+/// The gear numbers of one instance: the def's, moved by the instance's mods.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GearStats {
+    pub dmg: i32,
+    pub armour: i32,
+    pub noise: i32,
+    pub light: i32,
+    pub mag: i32,
+}
+
 /// One physical item.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ItemInstance {
@@ -227,14 +260,30 @@ pub struct ItemInstance {
     pub pinned: bool,
     /// Bench-crafted insurance: regrows at the Heart on the Runner's death, once (Full Design, Death and recovery)
     pub spored: bool,
+    /// set when the Bench made it
+    pub crafted: Option<Crafted>,
+    /// the Bench's changes to the def's gear numbers
+    pub mods: GearMods,
 }
 
 impl ItemInstance {
     pub fn new(def: ItemId) -> Self {
-        ItemInstance { def, condition: 100, ident: Ident::Full, found_in_run: false, provenance: None, pinned: false, spored: false }
+        ItemInstance { def, condition: 100, ident: Ident::Full, found_in_run: false, provenance: None, pinned: false, spored: false, crafted: None, mods: GearMods::default() }
     }
     pub fn found(def: ItemId, condition: u8, prov: Provenance) -> Self {
-        ItemInstance { def, condition, ident: Ident::Unknown, found_in_run: true, provenance: Some(prov), pinned: false, spored: false }
+        ItemInstance { def, condition, ident: Ident::Unknown, found_in_run: true, provenance: Some(prov), pinned: false, spored: false, crafted: None, mods: GearMods::default() }
+    }
+
+    /// The gear numbers of this instance (None for an item that is not gear).
+    pub fn gear_stats(&self, def: &ItemDef) -> Option<GearStats> {
+        let g = def.gear.as_ref()?;
+        Some(GearStats {
+            dmg: (g.dmg + self.mods.dmg).max(0),
+            armour: (g.armour + self.mods.armour).max(0),
+            noise: (g.noise + self.mods.noise).max(0),
+            light: g.light + self.mods.light,
+            mag: (g.mag + self.mods.mag).max(0),
+        })
     }
 }
 

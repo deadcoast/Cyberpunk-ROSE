@@ -365,6 +365,8 @@ pub struct RoseStash {
     table: Option<ItemTable>,
     stash: Option<Stash>,
     ledger: inventory::Ledger,
+    recipes: Option<bench::RecipeFile>,
+    bench: bench::BenchQueue,
 }
 
 #[godot_api]
@@ -376,6 +378,247 @@ impl RoseStash {
         if self.stash.is_none() {
             self.stash = Some(Stash::new());
         }
+        if self.recipes.is_none() {
+            self.recipes = Some(bench::RecipeFile::from_toml(&data_text("recipes.toml", bench::RECIPES_TOML)).unwrap_or_else(|_| bench::RecipeFile::shipped()));
+        }
+        if self.bench.tier_open == 0 {
+            self.bench = bench::BenchQueue::new();
+        }
+    }
+
+    // ------------------------------------------------------------ the Bench
+
+    /// Every recipe: [{id, name, tier, product, product_name, count, shifts, open, slots: [{tag, drives}]}].
+    #[func]
+    fn recipes(&mut self) -> VarArray {
+        self.ensure();
+        let t = self.table.as_ref().unwrap();
+        let f = self.recipes.as_ref().unwrap();
+        let mut out = VarArray::new();
+        for r in &f.recipe {
+            let mut d = VarDictionary::new();
+            d.set("id", r.id.as_str());
+            d.set("name", r.name.as_str());
+            d.set("tier", r.tier as i64);
+            d.set("product", r.product.as_str());
+            let pname = if let Some(job) = r.product.strip_prefix('@') {
+                match job {
+                    "repair" => "the gear, +40 condition".to_string(),
+                    "identify" => "the item, identified".to_string(),
+                    _ => "the gear, Spored".to_string(),
+                }
+            } else {
+                t.get(&r.product).map(|d| d.name.clone()).unwrap_or_default()
+            };
+            d.set("product_name", pname.as_str());
+            d.set("count", r.count as i64);
+            d.set("shifts", f.shifts(r) as i64);
+            d.set("open", self.bench.is_open(r));
+            let mut slots = VarArray::new();
+            for sl in &r.slots {
+                let mut e = VarDictionary::new();
+                e.set("tag", sl.tag.as_str());
+                e.set("drives", sl.drives.clone().unwrap_or_default().as_str());
+                slots.push(&e.to_variant());
+            }
+            d.set("slots", &slots);
+            out.push(&d.to_variant());
+        }
+        out
+    }
+
+    /// Grid handles that fill a slot with this tag, best tier first.
+    #[func]
+    fn candidates(&mut self, tag: GString) -> PackedInt32Array {
+        self.ensure();
+        let t = self.table.as_ref().unwrap();
+        let slot = bench::Slot { tag: tag.to_string(), drives: None };
+        let mut v: Vec<(i32, u32)> = self
+            .stash
+            .as_ref()
+            .unwrap()
+            .grid
+            .placed()
+            .into_iter()
+            .filter(|(_, p)| bench::accepts(&slot, t.def(p.item.def), &p.item))
+            .map(|(h, p)| (h as i32, t.def(p.item.def).tier as u32))
+            .collect();
+        v.sort_by_key(|(h, tier)| (std::cmp::Reverse(*tier), *h));
+        PackedInt32Array::from(v.iter().map(|(h, _)| *h).collect::<Vec<i32>>().as_slice())
+    }
+
+    fn parts_for(&self, handles: &PackedInt32Array) -> Option<Vec<ItemInstance>> {
+        let stash = self.stash.as_ref()?;
+        let mut parts = Vec::new();
+        for h in handles.as_slice() {
+            parts.push(stash.grid.get(*h as u32)?.item.clone());
+        }
+        Some(parts)
+    }
+
+    fn outcome_dict(&self, o: &bench::Outcome) -> VarDictionary {
+        let t = self.table.as_ref().unwrap();
+        let d = t.def(o.product.def);
+        let mut out = VarDictionary::new();
+        out.set("ok", true);
+        out.set("product_id", d.id.as_str());
+        out.set("product_name", d.name.as_str());
+        out.set("tier", format!("{:?}", d.tier).to_lowercase().as_str());
+        out.set("condition", o.product.condition as i64);
+        out.set("count", o.count as i64);
+        out.set("shifts", o.shifts as i64);
+        out.set("spored", o.product.spored);
+        out.set("identified", o.product.ident == items::Ident::Full);
+        let stat_dict = |g: &items::GearStats| {
+            let mut sd = VarDictionary::new();
+            sd.set("dmg", g.dmg as i64);
+            sd.set("armour", g.armour as i64);
+            sd.set("noise", g.noise as i64);
+            sd.set("light", g.light as i64);
+            sd.set("mag", g.mag as i64);
+            sd
+        };
+        if let Some(b) = &o.base {
+            out.set("base", &stat_dict(b));
+        }
+        if let Some(st) = &o.stats {
+            out.set("stats", &stat_dict(st));
+        }
+        if let Some(c) = &o.product.crafted {
+            out.set("by", c.by.as_str());
+            out.set("parts", &PackedStringArray::from(c.parts.iter().map(|p| GString::from(p.as_str())).collect::<Vec<_>>().as_slice()));
+        }
+        out
+    }
+
+    /// The outcome of a recipe on these grid handles (one per slot), without crafting: {ok, error?, product_id,
+    /// product_name, tier, condition, count, shifts, base {dmg, armour, noise, light, mag}, stats {...}, by, parts}.
+    #[func]
+    fn preview(&mut self, recipe: GString, handles: PackedInt32Array, by: GString, day: i64) -> VarDictionary {
+        self.ensure();
+        let mut err = VarDictionary::new();
+        err.set("ok", false);
+        let Some(r) = self.recipes.as_ref().unwrap().get(&recipe.to_string()).cloned() else {
+            err.set("error", "no such recipe");
+            return err;
+        };
+        let Some(parts) = self.parts_for(&handles) else {
+            err.set("error", "a part is missing from the Stash");
+            return err;
+        };
+        let t = self.table.as_ref().unwrap();
+        match bench::outcome(t, self.recipes.as_ref().unwrap(), &r, &parts, &by.to_string(), day.max(0) as u32) {
+            Ok(o) => self.outcome_dict(&o),
+            Err(e) => {
+                let msg = match e {
+                    bench::CraftError::WrongPartCount { want, got } => format!("{want} slots, {got} parts"),
+                    bench::CraftError::SlotRefuses { slot, tag, item } => format!("slot {} ({}) refuses {}", slot + 1, tag, t.get(&item).map(|d| d.name.as_str()).unwrap_or(&item)),
+                    bench::CraftError::UnknownProduct(p) => format!("no such product {p}"),
+                    bench::CraftError::IdentifyNeedsUnidentified => "that item is already identified".to_string(),
+                };
+                err.set("error", msg.as_str());
+                err
+            }
+        }
+    }
+
+    /// Queue the craft: the parts leave the grid. False when the recipe is closed or the slotting is wrong.
+    #[func]
+    fn craft(&mut self, recipe: GString, handles: PackedInt32Array, by: GString, day: i64) -> bool {
+        self.ensure();
+        let Some(r) = self.recipes.as_ref().unwrap().get(&recipe.to_string()).cloned() else { return false };
+        if !self.bench.is_open(&r) {
+            return false;
+        }
+        let Some(parts) = self.parts_for(&handles) else { return false };
+        let t = self.table.as_ref().unwrap().clone();
+        if bench::outcome(&t, self.recipes.as_ref().unwrap(), &r, &parts, &by.to_string(), day.max(0) as u32).is_err() {
+            return false;
+        }
+        let stash = self.stash.as_mut().unwrap();
+        for h in handles.as_slice() {
+            stash.grid.remove(*h as u32);
+        }
+        let f = self.recipes.as_ref().unwrap();
+        self.bench.queue(f, &r, parts, &by.to_string(), day.max(0) as u32);
+        true
+    }
+
+    /// The Bench queue: [{index, recipe, name, shifts_left, parts: [names]}], then whatever waits for Stash room.
+    #[func]
+    fn bench_jobs(&mut self) -> VarArray {
+        self.ensure();
+        let t = self.table.as_ref().unwrap();
+        let f = self.recipes.as_ref().unwrap();
+        let mut out = VarArray::new();
+        for (i, j) in self.bench.jobs.iter().enumerate() {
+            let mut d = VarDictionary::new();
+            d.set("index", i as i64);
+            d.set("recipe", j.recipe.as_str());
+            d.set("name", f.get(&j.recipe).map(|r| r.name.as_str()).unwrap_or("?"));
+            d.set("shifts_left", j.shifts_left as i64);
+            d.set("parts", &PackedStringArray::from(j.parts.iter().map(|p| GString::from(t.def(p.def).name.as_str())).collect::<Vec<_>>().as_slice()));
+            out.push(&d.to_variant());
+        }
+        out
+    }
+
+    /// The best open recipe this grid item can go into (highest product value), for the Stash card's third number:
+    /// {id, name, tier, product_name, slot_tag} or empty.
+    #[func]
+    fn best_recipe(&mut self, handle: i64) -> VarDictionary {
+        self.ensure();
+        let mut out = VarDictionary::new();
+        let t = self.table.as_ref().unwrap();
+        let Some(p) = self.stash.as_ref().unwrap().grid.get(handle as u32) else { return out };
+        let d = t.def(p.item.def);
+        let mut best: Option<(&bench::Recipe, &bench::Slot, u32)> = None;
+        for r in &self.recipes.as_ref().unwrap().recipe {
+            if !self.bench.is_open(r) {
+                continue;
+            }
+            let Some(slot) = r.slots.iter().find(|s| bench::accepts(s, d, &p.item)) else { continue };
+            let value = t.get(&r.product).map(|pd| pd.value).unwrap_or(d.value);
+            if best.is_none_or(|(_, _, v)| value > v) {
+                best = Some((r, slot, value));
+            }
+        }
+        if let Some((r, slot, _)) = best {
+            out.set("id", r.id.as_str());
+            out.set("name", r.name.as_str());
+            out.set("tier", r.tier as i64);
+            out.set("product_name", t.get(&r.product).map(|pd| pd.name.as_str()).unwrap_or(r.name.as_str()));
+            out.set("slot_tag", slot.tag.as_str());
+        }
+        out
+    }
+
+    #[func]
+    fn bench_waiting(&self) -> i64 {
+        self.bench.waiting.len() as i64
+    }
+
+    #[func]
+    fn tier_open(&self) -> i64 {
+        self.bench.tier_open.max(1) as i64
+    }
+
+    /// Cancel a job: its parts come back to the grid (those that fit; the rest wait at the Bench).
+    #[func]
+    fn cancel_job(&mut self, index: i64) -> bool {
+        self.ensure();
+        let parts = self.bench.cancel(index.max(0) as usize);
+        if parts.is_empty() {
+            return false;
+        }
+        let t = self.table.as_ref().unwrap().clone();
+        let stash = self.stash.as_mut().unwrap();
+        for p in parts {
+            if stash.grid.auto_place(t.def(p.def), p.clone()).is_err() {
+                self.bench.waiting.push(p);
+            }
+        }
+        true
     }
 
     // ------------------------------------------------------------ the four verbs and the ledger
@@ -509,10 +752,28 @@ impl RoseStash {
         self.ensure();
         let t = self.table.as_ref().unwrap().clone();
         let r = self.ledger.resolve(&t);
+        // the Bench: finished products into the grid, the rest wait for room
+        let products = self.bench.end_shift(&t, self.recipes.as_ref().unwrap());
+        let mut crafted = 0i64;
+        let mut crafted_names = Vec::new();
+        {
+            let stash = self.stash.as_mut().unwrap();
+            for p in products {
+                crafted_names.push(GString::from(t.def(p.def).name.as_str()));
+                if stash.grid.auto_place(t.def(p.def), p.clone()).is_err() {
+                    self.bench.waiting.push(p);
+                } else {
+                    crafted += 1;
+                }
+            }
+        }
         let mut d = VarDictionary::new();
         d.set("sold", r.sold as i64);
         d.set("earned", r.earned as i64);
         d.set("fed", r.fed as i64);
+        d.set("crafted", crafted);
+        d.set("crafted_names", &PackedStringArray::from(crafted_names.as_slice()));
+        d.set("waiting", self.bench.waiting.len() as i64);
         d.set("eddies", self.ledger.eddies as i64);
         let mut dl = VarArray::new();
         for de in &r.deliveries {
@@ -613,6 +874,20 @@ impl RoseStash {
             e.set("category", format!("{:?}", d.category).to_lowercase().as_str());
             e.set("weight", d.weight as f64);
             e.set("found", p.item.found_in_run);
+            e.set("spored", p.item.spored);
+            if let Some(c) = &p.item.crafted {
+                e.set("crafted_by", format!("{} on day {}", c.by, c.day).as_str());
+                e.set("crafted_from", &PackedStringArray::from(c.parts.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
+            }
+            if let Some(st) = p.item.gear_stats(d) {
+                let mut sd = VarDictionary::new();
+                sd.set("dmg", st.dmg as i64);
+                sd.set("armour", st.armour as i64);
+                sd.set("noise", st.noise as i64);
+                sd.set("light", st.light as i64);
+                sd.set("mag", st.mag as i64);
+                e.set("stats", &sd);
+            }
             e.set("tags", &PackedStringArray::from(d.tags.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
             out.push(&e.to_variant());
         }
@@ -726,9 +1001,10 @@ impl RoseStash {
         let mut file = save::SaveFile::new(1, 1);
         file.stash = self.stash.as_ref().unwrap().clone();
         file.ledger = self.ledger.clone();
+        file.bench = self.bench.clone();
         let bytes = file.encode();
         match save::SaveFile::decode(&bytes) {
-            Ok(back) => back.stash == file.stash && back.ledger == file.ledger,
+            Ok(back) => back.stash == file.stash && back.ledger == file.ledger && back.bench == file.bench,
             Err(_) => false,
         }
     }

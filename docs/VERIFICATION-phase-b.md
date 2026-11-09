@@ -252,3 +252,30 @@ a selected card, so it lives in the ledger panel.
 Known gaps: Craft slots the item but the recipe table is PAC-027; haulers carrying feeds to the Pit are Phase C's
 job system (feeds arrive at shift end until then); market demand stays 1.0 until Phase D's factions; containers
 as Stash tabs and drag/split are Phase F polish.
+
+## PAC-027 — Bench tier 1 recipes by craft tag (2026-11-09)
+
+Full Design v3.5 first (Bench: recipes, stats from parts, provenance, products, queue); research 13 is two sources
+and five decisions. `data/recipes.toml` holds the sixty recipes (15 / 17 / 16 / 12 by tier); each slot names a tag
+and the stat it drives, and the `bench` crate validates every product id and tag against the item table, so a typo
+in the data fails a test instead of a craft. `bench::outcome` computes the product without consuming anything —
+the preview and the queue call the same function — moving each driven stat ±15 % per part tier against the recipe
+tier (0.7–1.6 ×), noise −1 per tier above, condition the mean with housing twice; the instance keeps its numbers
+in `ItemInstance.mods` and its story in `ItemInstance.crafted`, and the run's melee, ranged, armour and gear-light
+readers now go through `gear_stats`, so the design's 13 → 15 sword hits for 15 in the sewer (tested). Jobs:
+@repair +40, @identify, @spored. The queue takes a recipe's tier in shifts and finishes into the Stash at shift end
+through the same `resolve_shift` as the ledger; cancel returns the parts; no room leaves products waiting at the
+Bench. Save v5 carries the queue and the instance fields. The Bench screen is the designed one: recipe list by tier
+(1 open, 2–4 with their blueprint lines), slots with the stat each drives, a picker of the Stash items that fit the
+chosen slot, the outcome with every number against the base and the provenance, the queue with CANCEL; Craft on a
+Stash card arrives pre-slotted, and the Stash card's third number names the best open recipe for the item. 88
+Rust tests; smoke previews, refuses a wrong slotting, refuses a closed tier, crafts, cancels, crafts again, ends
+the shift and finds the shiv in the Stash made by Sable at its base damage.
+
+Reviewed and fixed from the frames: the `->` arrow and `>` glyph read as `-0` in the 3 × 5 font, so stat lines say
+"13 to 15" and slot labels name the stat; the picker said "nothing carries this tag" when the one candidate was
+already slotted; Rust debug text leaked into the "will not craft" line, now "slot 2 (housing) refuses Wire".
+
+Known gaps: tiers 2–4 open with Phase E's blueprints (`tier_open` is in the save, ready); the crafter is "the
+Bench" until Phase C names a slimo with Tweak; implants are crafted but installed at the Bench in Phase C; the
+Scrapdex and sets read provenance in Phase E.

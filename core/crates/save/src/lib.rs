@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 4;
+pub const SAVE_VERSION: u16 = 5;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -87,6 +87,8 @@ pub struct SaveFile {
     pub corpses: Vec<CorpseRecord>,
     /// the Stash's queues, eddies and glut (v4)
     pub ledger: inventory::Ledger,
+    /// the Bench queue and the tier open (v5)
+    pub bench: bench::BenchQueue,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -132,6 +134,7 @@ impl SaveFile {
             route_memory: Vec::new(),
             corpses: Vec::new(),
             ledger: inventory::Ledger::new(),
+            bench: bench::BenchQueue::new(),
         }
     }
 
