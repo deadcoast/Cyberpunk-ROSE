@@ -1,0 +1,35 @@
+; Engine configuration file.
+; Cyberpunk: ROSE — Phase A shell. Sewer Noir 32: 640x360 base, integer scaling, nearest filtering.
+
+config_version=5
+
+[application]
+
+config/name="Cyberpunk: ROSE"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.5", "GL Compatibility")
+
+[autoload]
+
+Assets="*res://autoload/Assets.gd"
+Screens="*res://autoload/Screens.gd"
+Sim="*res://autoload/Sim.gd"
+
+[display]
+
+window/size/viewport_width=640
+window/size/viewport_height=360
+window/size/window_width_override=1920
+window/size/window_height_override=1080
+window/stretch/mode="viewport"
+window/stretch/aspect="keep"
+window/stretch/scale_mode="integer"
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0
+2d/snap/snap_2d_transforms_to_pixel=true
+2d/snap/snap_2d_vertices_to_pixel=true
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.0549, 0.0627, 0.0941, 1)

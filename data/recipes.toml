@@ -1,0 +1,439 @@
+# Bench recipes by craft tag (Full Design v3.5, Bench). A slot names a tag and the stat it drives; any item
+# carrying the tag fills it. Special tags: "gear" (a piece of gear already in the Stash), "unidentified" (any
+# unidentified item), "spore" (Spore Tissue or a Spore Cap). Products starting with @ are jobs on the gear slot:
+# @repair (+40 condition), @identify (one shift), @spored. Tier 1 is open at launch; 2-4 open with blueprints.
+# Shifts per tier: 1, 1, 2, 3. Stats from parts: +-15 % per part tier above/below the recipe tier (0.7-1.6x) for
+# dmg/armour/light/mag; noise -1 per tier above, +1 below; condition = mean of parts, housing counted twice.
+
+[rules]
+tier_shifts = [1, 1, 2, 3]
+step = 0.15
+min_mult = 0.7
+max_mult = 1.6
+repair_gain = 40
+
+[[recipe]]
+id = "pipe_club"
+name = "Pipe Club"
+tier = 1
+product = "ger_pipe"
+slots = [{ tag = "housing", drives = "dmg" }, { tag = "housing", drives = "condition" }]
+
+[[recipe]]
+id = "shiv"
+name = "Shiv"
+tier = 1
+product = "ger_shiv"
+slots = [{ tag = "blade", drives = "dmg" }, { tag = "housing", drives = "condition" }]
+
+[[recipe]]
+id = "zip_gun"
+name = "Zip Gun"
+tier = 1
+product = "ger_zip"
+slots = [{ tag = "housing", drives = "condition" }, { tag = "conductor", drives = "noise" }, { tag = "cell", drives = "dmg" }]
+
+[[recipe]]
+id = "tarp_coat"
+name = "Tarp Coat"
+tier = 1
+product = "ger_tarp_coat"
+slots = [{ tag = "weave", drives = "armour" }, { tag = "weave", drives = "condition" }]
+
+[[recipe]]
+id = "waders"
+name = "Waders"
+tier = 1
+product = "ger_waders"
+slots = [{ tag = "weave", drives = "armour" }, { tag = "pump", drives = "noise" }]
+
+[[recipe]]
+id = "lantern"
+name = "Lantern"
+tier = 1
+product = "ger_lantern"
+slots = [{ tag = "cell", drives = "light" }, { tag = "optic", drives = "light" }, { tag = "housing", drives = "condition" }]
+
+[[recipe]]
+id = "pry_bar"
+name = "Pry Bar"
+tier = 1
+product = "ger_pry_bar"
+slots = [{ tag = "housing", drives = "condition" }, { tag = "blade", drives = "noise" }]
+
+[[recipe]]
+id = "salt_bags"
+name = "Salt Bags"
+tier = 1
+product = "prt_salt"
+count = 3
+slots = [{ tag = "enzyme" }, { tag = "filter" }]
+
+[[recipe]]
+id = "antiseptic"
+name = "Antiseptic"
+tier = 1
+product = "org_antiseptic"
+slots = [{ tag = "enzyme" }, { tag = "enzyme" }]
+
+[[recipe]]
+id = "splint"
+name = "Splint"
+tier = 1
+product = "org_splint"
+slots = [{ tag = "housing" }, { tag = "weave" }]
+
+[[recipe]]
+id = "repair"
+name = "Repair"
+tier = 1
+product = "@repair"
+slots = [{ tag = "gear" }, { tag = "housing" }]
+
+[[recipe]]
+id = "identify"
+name = "Identify"
+tier = 1
+product = "@identify"
+slots = [{ tag = "unidentified" }, { tag = "optic" }]
+
+[[recipe]]
+id = "corpse_tags"
+name = "Corpse Tags"
+tier = 1
+product = "org_corpse_tag"
+count = 3
+slots = [{ tag = "board" }, { tag = "weave" }]
+
+[[recipe]]
+id = "cell_charge"
+name = "Cell Charge"
+tier = 1
+product = "prt_cell"
+slots = [{ tag = "cell" }, { tag = "conductor" }]
+
+[[recipe]]
+id = "board_salvage"
+name = "Board Salvage"
+tier = 1
+product = "prt_board"
+slots = [{ tag = "board" }, { tag = "conductor" }]
+
+[[recipe]]
+id = "scrap_sword"
+name = "Scrap Sword"
+tier = 2
+product = "ger_sword"
+slots = [{ tag = "blade", drives = "dmg" }, { tag = "housing", drives = "condition" }, { tag = "conductor", drives = "noise" }]
+
+[[recipe]]
+id = "chrome_fist"
+name = "Chrome Fist"
+tier = 2
+product = "ger_fist"
+slots = [{ tag = "servo", drives = "dmg" }, { tag = "housing", drives = "condition" }, { tag = "conductor", drives = "noise" }]
+
+[[recipe]]
+id = "scrap_pistol"
+name = "Scrap Pistol"
+tier = 2
+product = "ger_scrap_pistol"
+slots = [{ tag = "housing", drives = "condition" }, { tag = "conductor", drives = "noise" }, { tag = "servo", drives = "dmg" }, { tag = "cell", drives = "mag" }]
+
+[[recipe]]
+id = "nail_rifle"
+name = "Nail Rifle"
+tier = 2
+product = "ger_nail_rifle"
+slots = [{ tag = "housing", drives = "condition" }, { tag = "servo", drives = "dmg" }, { tag = "cell", drives = "mag" }, { tag = "blade", drives = "dmg" }]
+
+[[recipe]]
+id = "plate_vest"
+name = "Plate Vest"
+tier = 2
+product = "ger_plate_vest"
+slots = [{ tag = "housing", drives = "armour" }, { tag = "weave", drives = "condition" }, { tag = "weave", drives = "noise" }]
+
+[[recipe]]
+id = "helm"
+name = "Helm"
+tier = 2
+product = "ger_helm"
+slots = [{ tag = "housing", drives = "armour" }, { tag = "optic", drives = "light" }]
+
+[[recipe]]
+id = "dig_claw"
+name = "Dig Claw"
+tier = 2
+product = "ger_dig_claw"
+slots = [{ tag = "servo", drives = "noise" }, { tag = "blade" }, { tag = "housing", drives = "condition" }]
+
+[[recipe]]
+id = "lure"
+name = "Lure"
+tier = 2
+product = "ger_lure"
+slots = [{ tag = "cell" }, { tag = "board" }, { tag = "enzyme" }]
+
+[[recipe]]
+id = "repair_kit"
+name = "Repair Kit"
+tier = 2
+product = "ger_repair_kit"
+slots = [{ tag = "housing" }, { tag = "conductor" }, { tag = "filter" }]
+
+[[recipe]]
+id = "backpack"
+name = "Backpack"
+tier = 2
+product = "ger_backpack_2"
+slots = [{ tag = "weave", drives = "condition" }, { tag = "weave" }, { tag = "housing" }]
+
+[[recipe]]
+id = "stim"
+name = "Stim"
+tier = 2
+product = "org_stim"
+slots = [{ tag = "enzyme" }, { tag = "cell" }]
+
+[[recipe]]
+id = "fever_tonic"
+name = "Fever Tonic"
+tier = 2
+product = "org_fever_tonic"
+slots = [{ tag = "enzyme" }, { tag = "filter" }]
+
+[[recipe]]
+id = "filtered_water"
+name = "Filtered Water"
+tier = 2
+product = "con_filtered_water"
+count = 2
+slots = [{ tag = "filter" }, { tag = "pump" }]
+
+[[recipe]]
+id = "cold_light"
+name = "Cold Light"
+tier = 2
+product = "con_cold_light"
+count = 2
+slots = [{ tag = "cell" }, { tag = "enzyme" }]
+
+[[recipe]]
+id = "comms"
+name = "Comms"
+tier = 2
+product = "tec_comms"
+slots = [{ tag = "board" }, { tag = "conductor" }, { tag = "board" }]
+
+[[recipe]]
+id = "spored"
+name = "Spored"
+tier = 2
+product = "@spored"
+slots = [{ tag = "gear" }, { tag = "spore" }]
+
+[[recipe]]
+id = "lume_jelly"
+name = "Lume Jelly"
+tier = 2
+product = "org_lume_jelly"
+count = 2
+slots = [{ tag = "enzyme" }, { tag = "cell" }]
+
+[[recipe]]
+id = "monowire"
+name = "Monowire"
+tier = 3
+product = "ger_monowire"
+slots = [{ tag = "blade", drives = "dmg" }, { tag = "conductor", drives = "noise" }, { tag = "servo", drives = "dmg" }, { tag = "board", drives = "condition" }]
+
+[[recipe]]
+id = "flechette"
+name = "Flechette"
+tier = 3
+product = "ger_flechette"
+slots = [{ tag = "housing", drives = "condition" }, { tag = "servo", drives = "dmg" }, { tag = "cell", drives = "mag" }, { tag = "blade", drives = "dmg" }]
+
+[[recipe]]
+id = "shock_lance"
+name = "Shock Lance"
+tier = 3
+product = "ger_shock_lance"
+slots = [{ tag = "conductor", drives = "dmg" }, { tag = "cell", drives = "mag" }, { tag = "housing", drives = "condition" }, { tag = "board", drives = "noise" }]
+
+[[recipe]]
+id = "dermis_wrap"
+name = "Dermis Wrap"
+tier = 3
+product = "ger_dermis_wrap"
+slots = [{ tag = "weave", drives = "armour" }, { tag = "enzyme", drives = "condition" }, { tag = "enzyme", drives = "noise" }]
+
+[[recipe]]
+id = "downer"
+name = "Downer"
+tier = 3
+product = "org_downer"
+slots = [{ tag = "enzyme" }, { tag = "enzyme" }, { tag = "filter" }]
+
+[[recipe]]
+id = "night_eye"
+name = "Night Eye"
+tier = 3
+product = "imp_night_eye"
+slots = [{ tag = "optic" }, { tag = "optic" }, { tag = "board" }, { tag = "conductor" }]
+
+[[recipe]]
+id = "tendon_set"
+name = "Tendon Set"
+tier = 3
+product = "imp_tendon_set"
+slots = [{ tag = "servo" }, { tag = "weave" }, { tag = "enzyme" }]
+
+[[recipe]]
+id = "loader_arm"
+name = "Loader Arm"
+tier = 3
+product = "imp_loader_arm"
+slots = [{ tag = "servo" }, { tag = "servo" }, { tag = "housing" }, { tag = "board" }]
+
+[[recipe]]
+id = "appraiser"
+name = "Appraiser"
+tier = 3
+product = "imp_appraiser"
+slots = [{ tag = "optic" }, { tag = "board" }, { tag = "conductor" }]
+
+[[recipe]]
+id = "mat_ear"
+name = "Mat Ear"
+tier = 3
+product = "imp_mat_ear"
+slots = [{ tag = "enzyme" }, { tag = "board" }, { tag = "conductor" }]
+
+[[recipe]]
+id = "enzyme_vial"
+name = "Enzyme Vial"
+tier = 3
+product = "con_enzyme_vial"
+slots = [{ tag = "enzyme" }, { tag = "enzyme" }, { tag = "cell" }]
+
+[[recipe]]
+id = "comms_rig"
+name = "Comms Rig"
+tier = 3
+product = "con_comms_rig"
+slots = [{ tag = "board" }, { tag = "conductor" }, { tag = "housing" }]
+
+[[recipe]]
+id = "optic_array"
+name = "Optic Array"
+tier = 3
+product = "prt_optic_array"
+slots = [{ tag = "optic" }, { tag = "optic" }, { tag = "board" }]
+
+[[recipe]]
+id = "gold_trace"
+name = "Gold Trace"
+tier = 3
+product = "prt_gold_trace"
+slots = [{ tag = "conductor" }, { tag = "conductor" }, { tag = "cell" }]
+
+[[recipe]]
+id = "mil_servo"
+name = "Mil Servo"
+tier = 3
+product = "prt_mil_servo"
+slots = [{ tag = "servo" }, { tag = "servo" }, { tag = "board" }]
+
+[[recipe]]
+id = "reactor_cell"
+name = "Reactor Cell"
+tier = 3
+product = "prt_reactor_cell"
+slots = [{ tag = "cell" }, { tag = "cell" }, { tag = "conductor" }]
+
+[[recipe]]
+id = "lamp_pole"
+name = "Lamp Pole"
+tier = 4
+product = "ger_lamp_pole"
+slots = [{ tag = "housing", drives = "condition" }, { tag = "cell", drives = "light" }, { tag = "optic", drives = "light" }, { tag = "conductor", drives = "dmg" }]
+
+[[recipe]]
+id = "sanitation_rifle"
+name = "Sanitation Rifle"
+tier = 4
+product = "ger_sanitation_rifle"
+slots = [{ tag = "housing", drives = "condition" }, { tag = "servo", drives = "dmg" }, { tag = "cell", drives = "mag" }, { tag = "board", drives = "noise" }]
+
+[[recipe]]
+id = "bleach_sprayer"
+name = "Bleach Sprayer"
+tier = 4
+product = "ger_bleach_sprayer"
+slots = [{ tag = "pump", drives = "dmg" }, { tag = "pump", drives = "mag" }, { tag = "housing", drives = "condition" }, { tag = "enzyme" }]
+
+[[recipe]]
+id = "vestment"
+name = "Vestment"
+tier = 4
+product = "ger_vestment"
+slots = [{ tag = "weave", drives = "armour" }, { tag = "weave", drives = "condition" }, { tag = "enzyme", drives = "noise" }]
+
+[[recipe]]
+id = "lamp_core"
+name = "Lamp Core"
+tier = 4
+product = "imp_lamp_core"
+slots = [{ tag = "cell" }, { tag = "optic" }, { tag = "board" }, { tag = "conductor" }]
+
+[[recipe]]
+id = "relic_shard"
+name = "Relic Shard"
+tier = 4
+product = "prt_relic_shard"
+slots = [{ tag = "conductor" }, { tag = "enzyme" }, { tag = "cell" }, { tag = "board" }]
+
+[[recipe]]
+id = "oath_shard"
+name = "Oath Shard"
+tier = 4
+product = "tec_shard_oath"
+slots = [{ tag = "board" }, { tag = "board" }, { tag = "conductor" }]
+
+[[recipe]]
+id = "recorder"
+name = "Recorder"
+tier = 4
+product = "tec_recorder"
+slots = [{ tag = "board" }, { tag = "board" }, { tag = "cell" }, { tag = "optic" }]
+
+[[recipe]]
+id = "vestment_cloth"
+name = "Vestment Cloth"
+tier = 4
+product = "con_vestment_cloth"
+slots = [{ tag = "weave" }, { tag = "weave" }, { tag = "enzyme" }, { tag = "salt" }]
+
+[[recipe]]
+id = "downer_crate"
+name = "Downer Crate"
+tier = 4
+product = "con_downer_crate"
+slots = [{ tag = "enzyme" }, { tag = "enzyme" }, { tag = "enzyme" }, { tag = "housing" }]
+
+[[recipe]]
+id = "spore_culture"
+name = "Spore Culture"
+tier = 4
+product = "org_spore_cap"
+count = 2
+slots = [{ tag = "enzyme" }, { tag = "enzyme" }, { tag = "weave" }]
+
+[[recipe]]
+id = "blueprint_copy"
+name = "Blueprint Copy"
+tier = 4
+product = "tec_blueprint_chrome1"
+slots = [{ tag = "board" }, { tag = "board" }, { tag = "optic" }]

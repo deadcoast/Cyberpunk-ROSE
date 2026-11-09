@@ -1,0 +1,1979 @@
+# Cyberpunk: ROSE — item table. Source of truth for the `items` crate. Authored, not generated at runtime.
+# Fields: id name category tier size(w,h) weight(kg) value(eddies) feed(nutrient) bias{gene=weight} tags set gear codex
+# 164 items.
+
+[[item]]
+id = "chr_optic_slag"
+name = "Optic Slag"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { lume = 0.3 }
+tags = ["optic"]
+codex = "a fused cheap eye; the lens survived, the brain did not"
+
+[[item]]
+id = "chr_jaw_plate"
+name = "Jaw Plate"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { thrift = 0.2 }
+tags = ["housing"]
+codex = "street dental chrome, molars still in it"
+
+[[item]]
+id = "chr_finger_servos"
+name = "Finger Servos"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { branching = 0.3 }
+tags = ["servo"]
+codex = "five of them, one still twitching"
+
+[[item]]
+id = "chr_neural_tap"
+name = "Dead Neural Tap"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { conductance = 0.2 }
+tags = ["conductor"]
+codex = "the port that took the vaccine first"
+
+[[item]]
+id = "chr_spine_bolt"
+name = "Spine Bolt"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { thrift = 0.3 }
+tags = ["housing"]
+codex = "a single vertebral anchor, re-organified around the thread"
+
+[[item]]
+id = "chr_subdermal_mesh"
+name = "Subdermal Mesh"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { chrome = 0.2 }
+tags = ["weave"]
+codex = "a hand's worth of armour weave gone soft"
+
+[[item]]
+id = "chr_vox_box"
+name = "Vox Box"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { lume = 0.2 }
+tags = ["conductor"]
+codex = "a voice modulator stuck on one tone"
+
+[[item]]
+id = "chr_knee_actuator"
+name = "Knee Actuator"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { vigor = 0.3 }
+tags = ["servo"]
+codex = "runner's chrome; the gel inside has gone purple"
+
+[[item]]
+id = "chr_ear_coil"
+name = "Ear Coil"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { branching = 0.2 }
+tags = ["conductor"]
+codex = "audio implant, cheap, still warm"
+
+[[item]]
+id = "chr_hand_shunt"
+name = "Hand Shunt"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { conductance = 0.3 }
+tags = ["conductor"]
+codex = "a power pass-through for cheap arm mods"
+
+[[item]]
+id = "chr_skin_wire"
+name = "Skin Wire"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { conductance = 0.2 }
+tags = ["conductor"]
+codex = "a metre of under-skin cable"
+
+[[item]]
+id = "chr_pain_editor"
+name = "Burnt Pain Editor"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { appetite = 0.3 }
+tags = ["board"]
+codex = "the chip that let a chromehead keep going"
+
+[[item]]
+id = "chr_liver_sieve"
+name = "Liver Sieve"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { thrift = 0.4 }
+tags = ["filter"]
+codex = "a filter organ with a corporate logo on it"
+
+[[item]]
+id = "chr_toe_claws"
+name = "Toe Claws"
+category = "chrome"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 4
+feed = 0.18
+bias = { vigor = 0.2 }
+tags = ["blade"]
+codex = "climbing chrome, blunted"
+
+[[item]]
+id = "chr_street_eye"
+name = "Street Eye"
+category = "chrome"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { lume = 0.5 }
+tags = ["optic"]
+codex = "working low-light optic, scratched"
+
+[[item]]
+id = "chr_arm_frame"
+name = "Arm Frame"
+category = "chrome"
+tier = "uncommon"
+size = [1, 2]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { vigor = 0.4, chrome = 0.2 }
+tags = ["housing", "servo"]
+codex = "a forearm chassis, intact"
+
+[[item]]
+id = "chr_reflex_chip"
+name = "Reflex Chip"
+category = "chrome"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { vigor = 0.5 }
+tags = ["board"]
+codex = "clocked for bar fights"
+
+[[item]]
+id = "chr_gill_plate"
+name = "Gill Plate"
+category = "chrome"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { thrift = 0.5 }
+tags = ["filter"]
+codex = "a sewer-diver's lung mod"
+
+[[item]]
+id = "chr_sync_jack"
+name = "Sync Jack"
+category = "chrome"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { conductance = 0.5 }
+tags = ["conductor", "board"]
+codex = "a clean interface port"
+
+[[item]]
+id = "chr_heat_sink"
+name = "Heat Sink Rib"
+category = "chrome"
+tier = "uncommon"
+size = [1, 2]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { thrift = 0.3, chrome = 0.3 }
+tags = ["housing"]
+codex = "a rib replaced with a radiator"
+
+[[item]]
+id = "chr_pulse_cell"
+name = "Pulse Cell"
+category = "chrome"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { lume = 0.4, conductance = 0.2 }
+tags = ["cell"]
+codex = "an implant battery, half charge"
+
+[[item]]
+id = "chr_lamp_eye"
+name = "Lamp Eye"
+category = "chrome"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { lume = 0.6 }
+tags = ["optic", "cell"]
+codex = "an optic that throws light"
+
+[[item]]
+id = "chr_grip_palm"
+name = "Grip Palm"
+category = "chrome"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { chrome = 0.4 }
+tags = ["servo"]
+codex = "a loader's hand, magnetic"
+
+[[item]]
+id = "chr_balance_gyro"
+name = "Balance Gyro"
+category = "chrome"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { branching = 0.5 }
+tags = ["servo", "board"]
+codex = "inner-ear chrome, still spinning"
+
+[[item]]
+id = "chr_vein_pump"
+name = "Vein Pump"
+category = "chrome"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { appetite = 0.5 }
+tags = ["pump"]
+codex = "a secondary heart for stims"
+
+[[item]]
+id = "chr_shock_cuff"
+name = "Shock Cuff"
+category = "chrome"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.2
+value = 15
+feed = 0.3
+bias = { toxicity = 0.4 }
+tags = ["conductor", "cell"]
+codex = "a defensive wrist discharge"
+
+[[item]]
+id = "chr_corpo_eye"
+name = "Corpo Eye"
+category = "chrome"
+tier = "rare"
+size = [1, 2]
+weight = 2.4
+value = 60
+feed = 0.45
+bias = { lume = 0.5, conductance = 0.4 }
+tags = ["optic", "board"]
+codex = "Arasaka-grade optic with the serial filed"
+
+[[item]]
+id = "chr_lattice_spine"
+name = "Lattice Spine"
+category = "chrome"
+tier = "rare"
+size = [2, 2]
+weight = 2.4
+value = 60
+feed = 0.45
+bias = { chrome = 0.6, conductance = 0.3 }
+tags = ["housing", "conductor"]
+codex = "full spinal replacement, titanium lattice"
+
+[[item]]
+id = "chr_cortex_shunt"
+name = "Cortex Shunt"
+category = "chrome"
+tier = "rare"
+size = [1, 2]
+weight = 2.4
+value = 60
+feed = 0.45
+bias = { conductance = 0.7 }
+tags = ["board", "conductor"]
+codex = "the thing that made an executive fast"
+
+[[item]]
+id = "chr_black_lung"
+name = "Black Lung"
+category = "chrome"
+tier = "rare"
+size = [1, 2]
+weight = 2.4
+value = 60
+feed = 0.45
+bias = { thrift = 0.6, toxicity = 0.3 }
+tags = ["filter", "pump"]
+codex = "a filter organ built for toxic floors"
+
+[[item]]
+id = "chr_mono_tendons"
+name = "Mono Tendons"
+category = "chrome"
+tier = "rare"
+size = [1, 2]
+weight = 2.4
+value = 60
+feed = 0.45
+bias = { vigor = 0.7 }
+tags = ["servo", "blade"]
+codex = "monowire tendon set, a full leg"
+
+[[item]]
+id = "chr_armour_dermis"
+name = "Armour Dermis"
+category = "chrome"
+tier = "rare"
+size = [2, 2]
+weight = 2.4
+value = 60
+feed = 0.45
+bias = { chrome = 0.7 }
+tags = ["weave", "housing"]
+codex = "a torso of woven plate under skin"
+
+[[item]]
+id = "chr_vault_jack"
+name = "Vault Jack"
+category = "chrome"
+tier = "rare"
+size = [1, 2]
+weight = 2.4
+value = 60
+feed = 0.45
+bias = { conductance = 0.4, plasticity = 0.3 }
+tags = ["board"]
+codex = "an access implant keyed to a dead building"
+
+[[item]]
+id = "chr_lamp_core"
+name = "Lamp Core"
+category = "chrome"
+tier = "blackline"
+size = [2, 2]
+weight = 3.0
+value = 220
+feed = 0.6
+bias = { toxicity = 0.5, lume = 0.4 }
+tags = ["cell", "optic"]
+codex = "the white-light emitter from a carrier's pole"
+
+[[item]]
+id = "chr_sanitation_glove"
+name = "Sanitation Glove"
+category = "chrome"
+tier = "blackline"
+size = [2, 2]
+weight = 3.0
+value = 220
+feed = 0.6
+bias = { appetite = 0.6, chrome = 0.3 }
+tags = ["servo", "housing"]
+codex = "a flamer's trigger hand, mil-tech servos"
+
+[[item]]
+id = "chr_moon_board"
+name = "Moon Board"
+category = "chrome"
+tier = "blackline"
+size = [2, 2]
+weight = 3.0
+value = 220
+feed = 0.6
+bias = { conductance = 0.6, feral = 0.3 }
+tags = ["board", "conductor"]
+codex = "lunar-fab control board; the traces are gold"
+
+[[item]]
+id = "chr_bleach_pump"
+name = "Bleach Pump"
+category = "chrome"
+tier = "blackline"
+size = [2, 2]
+weight = 3.0
+value = 220
+feed = 0.6
+bias = { toxicity = 0.7 }
+tags = ["pump"]
+codex = "the sprayer's heart"
+
+[[item]]
+id = "chr_vestment_weave"
+name = "Vestment Weave"
+category = "chrome"
+tier = "blackline"
+size = [2, 2]
+weight = 3.0
+value = 220
+feed = 0.6
+bias = { feral = 0.5, chrome = 0.4 }
+tags = ["weave"]
+codex = "ballistic cloth with a prayer printed in the fibre"
+
+[[item]]
+id = "prt_pipe"
+name = "Pipe Length"
+category = "part"
+tier = "common"
+size = [1, 3]
+weight = 2.0
+value = 2
+feed = 0.0
+tags = ["housing"]
+codex = "half a metre of galvanised nothing"
+
+[[item]]
+id = "prt_wire"
+name = "Wire Spool"
+category = "part"
+tier = "common"
+size = [1, 1]
+weight = 0.5
+value = 2
+feed = 0.0
+tags = ["conductor"]
+codex = "copper, mostly"
+
+[[item]]
+id = "prt_lens"
+name = "Cracked Lens"
+category = "part"
+tier = "common"
+size = [1, 1]
+weight = 0.2
+value = 3
+feed = 0.0
+tags = ["optic"]
+codex = "fogged but it bends light"
+
+[[item]]
+id = "prt_bearing"
+name = "Bearing Set"
+category = "part"
+tier = "common"
+size = [1, 1]
+weight = 0.4
+value = 3
+feed = 0.0
+tags = ["servo"]
+codex = "six balls, one race"
+
+[[item]]
+id = "prt_cloth"
+name = "Filter Cloth"
+category = "part"
+tier = "common"
+size = [1, 1]
+weight = 0.2
+value = 2
+feed = 0.0
+tags = ["filter"]
+codex = "sewer-grade"
+
+[[item]]
+id = "prt_cell_dead"
+name = "Dead Cell"
+category = "part"
+tier = "common"
+size = [1, 1]
+weight = 0.6
+value = 2
+feed = 0.0
+tags = ["cell"]
+codex = "takes a charge, leaks it by morning"
+
+[[item]]
+id = "prt_board_fried"
+name = "Fried Board"
+category = "part"
+tier = "common"
+size = [1, 1]
+weight = 0.2
+value = 3
+feed = 0.0
+tags = ["board"]
+codex = "three traces still live"
+
+[[item]]
+id = "prt_blade_stock"
+name = "Blade Stock"
+category = "part"
+tier = "common"
+size = [1, 2]
+weight = 0.8
+value = 3
+feed = 0.0
+tags = ["blade"]
+codex = "a strip of spring steel"
+
+[[item]]
+id = "prt_tarp"
+name = "Tarp"
+category = "part"
+tier = "common"
+size = [2, 2]
+weight = 1.0
+value = 2
+feed = 0.0
+tags = ["weave"]
+codex = "keeps the drip off"
+
+[[item]]
+id = "prt_valve"
+name = "Valve"
+category = "part"
+tier = "common"
+size = [1, 1]
+weight = 0.7
+value = 3
+feed = 0.0
+tags = ["pump"]
+codex = "it turns"
+
+[[item]]
+id = "prt_servo"
+name = "Servo Motor"
+category = "part"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.6
+value = 8
+feed = 0.0
+tags = ["servo"]
+codex = "stepper, torque intact"
+
+[[item]]
+id = "prt_lens_good"
+name = "Clear Lens"
+category = "part"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.2
+value = 9
+feed = 0.0
+tags = ["optic"]
+codex = "from a dead camera"
+
+[[item]]
+id = "prt_cell"
+name = "Live Cell"
+category = "part"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.6
+value = 10
+feed = 0.0
+tags = ["cell"]
+codex = "holds a charge for a shift"
+
+[[item]]
+id = "prt_board"
+name = "Logic Board"
+category = "part"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.2
+value = 12
+feed = 0.0
+tags = ["board"]
+codex = "boots"
+
+[[item]]
+id = "prt_pump"
+name = "Pump Head"
+category = "part"
+tier = "uncommon"
+size = [2, 1]
+weight = 1.4
+value = 10
+feed = 0.0
+tags = ["pump"]
+codex = "moves brine"
+
+[[item]]
+id = "prt_plate"
+name = "Welded Plate"
+category = "part"
+tier = "uncommon"
+size = [2, 2]
+weight = 3.0
+value = 9
+feed = 0.0
+tags = ["housing", "weave"]
+codex = "someone's door"
+
+[[item]]
+id = "prt_enzyme_jar"
+name = "Enzyme Jar"
+category = "part"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.5
+value = 11
+feed = 0.0
+tags = ["enzyme"]
+codex = "Mat spit, sealed"
+
+[[item]]
+id = "prt_salt"
+name = "Salt Bag"
+category = "part"
+tier = "uncommon"
+size = [1, 2]
+weight = 2.5
+value = 6
+feed = 0.0
+tags = ["salt"]
+codex = "road salt; eight tiles of no"
+
+[[item]]
+id = "prt_gold_trace"
+name = "Gold Trace"
+category = "part"
+tier = "rare"
+size = [1, 1]
+weight = 0.1
+value = 40
+feed = 0.0
+tags = ["conductor"]
+codex = "Moon-grade conductor"
+
+[[item]]
+id = "prt_mil_servo"
+name = "Mil Servo"
+category = "part"
+tier = "rare"
+size = [1, 1]
+weight = 0.8
+value = 45
+feed = 0.0
+tags = ["servo"]
+codex = "quiet and strong"
+
+[[item]]
+id = "prt_optic_array"
+name = "Optic Array"
+category = "part"
+tier = "rare"
+size = [2, 1]
+weight = 0.5
+value = 50
+feed = 0.0
+tags = ["optic", "board"]
+codex = "sees in the dark"
+
+[[item]]
+id = "prt_reactor_cell"
+name = "Reactor Cell"
+category = "part"
+tier = "rare"
+size = [1, 2]
+weight = 1.5
+value = 55
+feed = 0.0
+tags = ["cell"]
+codex = "warm to the touch, always"
+
+[[item]]
+id = "prt_spore_tissue"
+name = "Spore Tissue"
+category = "part"
+tier = "rare"
+size = [1, 1]
+weight = 0.3
+value = 30
+feed = 0.0
+tags = ["enzyme", "weave"]
+codex = "cut from a Sac; it remembers shapes"
+
+[[item]]
+id = "prt_relic_shard"
+name = "Relic Shard"
+category = "part"
+tier = "blackline"
+size = [1, 1]
+weight = 0.4
+value = 0
+feed = 0.0
+tags = ["conductor", "enzyme"]
+codex = "a splinter of lunar stone; the Mat wants it"
+
+[[item]]
+id = "org_paste"
+name = "Food Paste"
+category = "organic"
+tier = "common"
+size = [1, 1]
+weight = 0.4
+value = 2
+feed = 0.0
+codex = "a shift of not drawing on the Mat"
+
+[[item]]
+id = "org_jerky"
+name = "Rat Jerky"
+category = "organic"
+tier = "common"
+size = [1, 1]
+weight = 0.2
+value = 2
+feed = 0.0
+codex = "sewerat, cured"
+
+[[item]]
+id = "org_water"
+name = "Clean Water"
+category = "organic"
+tier = "common"
+size = [1, 1]
+weight = 1.0
+value = 2
+feed = 0.0
+codex = "a Lung's day of work"
+
+[[item]]
+id = "org_mould"
+name = "Mould Culture"
+category = "organic"
+tier = "common"
+size = [1, 1]
+weight = 0.1
+value = 1
+feed = 0.0
+tags = ["enzyme"]
+codex = "grows on anything"
+
+[[item]]
+id = "org_antiseptic"
+name = "Antiseptic"
+category = "organic"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.2
+value = 8
+feed = 0.0
+codex = "stops a bleed"
+
+[[item]]
+id = "org_splint"
+name = "Splint Kit"
+category = "organic"
+tier = "uncommon"
+size = [1, 2]
+weight = 0.5
+value = 7
+feed = 0.0
+codex = "sets a fracture"
+
+[[item]]
+id = "org_stim"
+name = "Stim"
+category = "organic"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.1
+value = 14
+feed = 0.0
+codex = "one shift of stamina, one shift of debt"
+
+[[item]]
+id = "org_downer"
+name = "Downer Dose"
+category = "organic"
+tier = "rare"
+size = [1, 1]
+weight = 0.1
+value = 45
+feed = 0.0
+codex = "the cure that works; the Oathkeepers' does not"
+
+[[item]]
+id = "org_brine"
+name = "Lung Brine"
+category = "organic"
+tier = "common"
+size = [1, 2]
+weight = 1.2
+value = 3
+feed = 0.0
+tags = ["enzyme"]
+codex = "what a Lung sweats"
+
+[[item]]
+id = "org_fever_tonic"
+name = "Fever Tonic"
+category = "organic"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.2
+value = 12
+feed = 0.0
+codex = "clears Fungal Fever"
+
+[[item]]
+id = "org_ooze_sample"
+name = "Ooze Sample"
+category = "organic"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.3
+value = 9
+feed = 0.0
+tags = ["enzyme"]
+codex = "your own strain in a jar"
+
+[[item]]
+id = "org_lume_jelly"
+name = "Lume Jelly"
+category = "organic"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.2
+value = 10
+feed = 0.0
+tags = ["cell"]
+codex = "glows for a day"
+
+[[item]]
+id = "org_corpse_tag"
+name = "Corpse Tag"
+category = "organic"
+tier = "common"
+size = [1, 1]
+weight = 0.0
+value = 0
+feed = 0.0
+codex = "a name and a shift"
+
+[[item]]
+id = "org_spore_cap"
+name = "Spore Cap"
+category = "organic"
+tier = "rare"
+size = [1, 1]
+weight = 0.2
+value = 25
+feed = 0.0
+tags = ["enzyme"]
+codex = "tames a sewerat if it eats it"
+
+[[item]]
+id = "tec_shard_street"
+name = "Street Shard"
+category = "tech"
+tier = "common"
+size = [1, 1]
+weight = 0.1
+value = 6
+feed = 0.0
+tags = ["board"]
+codex = "gang gossip and a map of two blocks"
+
+[[item]]
+id = "tec_shard_corpo"
+name = "Corpo Shard"
+category = "tech"
+tier = "rare"
+size = [1, 1]
+weight = 0.1
+value = 70
+feed = 0.0
+tags = ["board"]
+codex = "payroll, a floor plan, a password"
+
+[[item]]
+id = "tec_shard_oath"
+name = "Oathkeeper Shard"
+category = "tech"
+tier = "blackline"
+size = [1, 1]
+weight = 0.1
+value = 200
+feed = 0.0
+tags = ["board"]
+codex = "patrol schedules in a dead language"
+
+[[item]]
+id = "tec_blueprint_chrome1"
+name = "Blueprint: Chrome I"
+category = "tech"
+tier = "uncommon"
+size = [2, 1]
+weight = 0.2
+value = 30
+feed = 0.0
+codex = "scrap forge tolerances"
+
+[[item]]
+id = "tec_blueprint_chrome2"
+name = "Blueprint: Chrome II"
+category = "tech"
+tier = "rare"
+size = [2, 1]
+weight = 0.2
+value = 90
+feed = 0.0
+codex = "vault doors and gate housings"
+
+[[item]]
+id = "tec_blueprint_chrome3"
+name = "Blueprint: Chrome III"
+category = "tech"
+tier = "blackline"
+size = [2, 1]
+weight = 0.2
+value = 260
+feed = 0.0
+codex = "lamp capture"
+
+[[item]]
+id = "tec_blueprint_flesh1"
+name = "Blueprint: Flesh I"
+category = "tech"
+tier = "uncommon"
+size = [2, 1]
+weight = 0.2
+value = 30
+feed = 0.0
+codex = "pod ventilation"
+
+[[item]]
+id = "tec_blueprint_flesh2"
+name = "Blueprint: Flesh II"
+category = "tech"
+tier = "rare"
+size = [2, 1]
+weight = 0.2
+value = 90
+feed = 0.0
+codex = "the Still"
+
+[[item]]
+id = "tec_blueprint_flesh3"
+name = "Blueprint: Flesh III"
+category = "tech"
+tier = "blackline"
+size = [2, 1]
+weight = 0.2
+value = 260
+feed = 0.0
+codex = "shepherd training"
+
+[[item]]
+id = "tec_blueprint_myc1"
+name = "Blueprint: Mycelium I"
+category = "tech"
+tier = "uncommon"
+size = [2, 1]
+weight = 0.2
+value = 30
+feed = 0.0
+codex = "pits and bait"
+
+[[item]]
+id = "tec_blueprint_myc2"
+name = "Blueprint: Mycelium II"
+category = "tech"
+tier = "rare"
+size = [2, 1]
+weight = 0.2
+value = 90
+feed = 0.0
+codex = "quotas and housings"
+
+[[item]]
+id = "tec_blueprint_myc3"
+name = "Blueprint: Mycelium III"
+category = "tech"
+tier = "blackline"
+size = [2, 1]
+weight = 0.2
+value = 260
+feed = 0.0
+codex = "nerve logic"
+
+[[item]]
+id = "tec_map_s2"
+name = "Culvert Survey"
+category = "tech"
+tier = "uncommon"
+size = [2, 1]
+weight = 0.1
+value = 20
+feed = 0.0
+codex = "reveals a Culvert route"
+
+[[item]]
+id = "tec_map_s4"
+name = "Service Schematic"
+category = "tech"
+tier = "rare"
+size = [2, 1]
+weight = 0.1
+value = 60
+feed = 0.0
+codex = "reveals a Service Tunnel route"
+
+[[item]]
+id = "tec_comms"
+name = "Night City Comms"
+category = "tech"
+tier = "rare"
+size = [1, 2]
+weight = 0.8
+value = 80
+feed = 0.0
+tags = ["board"]
+codex = "hears the street; Badges pay for it"
+
+[[item]]
+id = "tec_recorder"
+name = "Chaplain's Recorder"
+category = "tech"
+tier = "blackline"
+size = [1, 1]
+weight = 0.3
+value = 150
+feed = 0.0
+tags = ["board"]
+codex = "sermons, and the frequency of the lamps"
+
+[[item]]
+id = "ger_pipe"
+name = "Lead Pipe"
+category = "gear"
+tier = "common"
+size = [1, 3]
+weight = 2.5
+value = 6
+feed = 0.0
+gear = { slot = "hand", kind = "melee", dmg = 8, noise = 3 }
+codex = "swings slow, lands heavy"
+
+[[item]]
+id = "ger_shiv"
+name = "Chrome Shiv"
+category = "gear"
+tier = "common"
+size = [1, 1]
+weight = 0.3
+value = 5
+feed = 0.0
+gear = { slot = "hand", kind = "melee", dmg = 5, noise = 1 }
+codex = "quiet"
+
+[[item]]
+id = "ger_fist"
+name = "Chrome Fist"
+category = "gear"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.5
+value = 22
+feed = 0.0
+gear = { slot = "hand", kind = "melee", dmg = 10, noise = 2 }
+codex = "a loader's hand on a strap"
+
+[[item]]
+id = "ger_sword"
+name = "Scrap Sword"
+category = "gear"
+tier = "uncommon"
+size = [1, 3]
+weight = 1.8
+value = 28
+feed = 0.0
+gear = { slot = "hand", kind = "melee", dmg = 13, noise = 2 }
+codex = "blade stock, housing, a conductor for the hum"
+
+[[item]]
+id = "ger_monowire"
+name = "Monowire"
+category = "gear"
+tier = "rare"
+size = [1, 1]
+weight = 0.2
+value = 110
+feed = 0.0
+gear = { slot = "hand", kind = "melee", dmg = 18, noise = 1 }
+codex = "do not touch the line"
+
+[[item]]
+id = "ger_lamp_pole"
+name = "Captured Lamp Pole"
+category = "gear"
+tier = "blackline"
+size = [1, 4]
+weight = 4.0
+value = 0
+feed = 0.0
+gear = { slot = "hand", kind = "melee", dmg = 9, noise = 2, light = 8 }
+codex = "white light on a stick; ferals hate it, so does the Mat"
+
+[[item]]
+id = "ger_zip"
+name = "Zip Gun"
+category = "gear"
+tier = "common"
+size = [1, 2]
+weight = 1.0
+value = 10
+feed = 0.0
+gear = { slot = "hand", kind = "ranged", dmg = 12, noise = 6, mag = 1 }
+codex = "one shot, then a prayer"
+
+[[item]]
+id = "ger_scrap_pistol"
+name = "Scrap Pistol"
+category = "gear"
+tier = "uncommon"
+size = [1, 2]
+weight = 1.2
+value = 35
+feed = 0.0
+gear = { slot = "hand", kind = "ranged", dmg = 11, noise = 5, mag = 6 }
+codex = "jams below condition 20"
+
+[[item]]
+id = "ger_nail_rifle"
+name = "Nail Rifle"
+category = "gear"
+tier = "uncommon"
+size = [1, 4]
+weight = 3.5
+value = 48
+feed = 0.0
+gear = { slot = "hand", kind = "ranged", dmg = 16, noise = 4, mag = 8 }
+codex = "built from a framing gun"
+
+[[item]]
+id = "ger_flechette"
+name = "Flechette Pipe"
+category = "gear"
+tier = "rare"
+size = [1, 3]
+weight = 3.0
+value = 95
+feed = 0.0
+gear = { slot = "hand", kind = "ranged", dmg = 22, noise = 6, mag = 2 }
+codex = "spreads; shreds Bursters"
+
+[[item]]
+id = "ger_shock_lance"
+name = "Shock Lance"
+category = "gear"
+tier = "rare"
+size = [1, 4]
+weight = 3.2
+value = 120
+feed = 0.0
+gear = { slot = "hand", kind = "ranged", dmg = 14, noise = 3, mag = 4 }
+codex = "stuns a lamp carrier"
+
+[[item]]
+id = "ger_sanitation_rifle"
+name = "Sanitation Rifle"
+category = "gear"
+tier = "blackline"
+size = [2, 4]
+weight = 4.5
+value = 380
+feed = 0.0
+gear = { slot = "hand", kind = "ranged", dmg = 28, noise = 5, mag = 12 }
+codex = "theirs; it still burns cords"
+
+[[item]]
+id = "ger_bleach_sprayer"
+name = "Bleach Sprayer"
+category = "gear"
+tier = "blackline"
+size = [2, 3]
+weight = 5.0
+value = 300
+feed = 0.0
+gear = { slot = "hand", kind = "ranged", dmg = 6, noise = 2, mag = 20 }
+codex = "kills a Bloom; kills your own Mat too"
+
+[[item]]
+id = "ger_tarp_coat"
+name = "Tarp Coat"
+category = "gear"
+tier = "common"
+size = [2, 2]
+weight = 1.5
+value = 8
+feed = 0.0
+gear = { slot = "body", kind = "armour", armour = 2, noise = 0 }
+codex = "dry, at least"
+
+[[item]]
+id = "ger_plate_vest"
+name = "Plate Vest"
+category = "gear"
+tier = "uncommon"
+size = [2, 2]
+weight = 6.0
+value = 40
+feed = 0.0
+gear = { slot = "body", kind = "armour", armour = 6, noise = 1 }
+codex = "a door, worn"
+
+[[item]]
+id = "ger_dermis_wrap"
+name = "Dermis Wrap"
+category = "gear"
+tier = "rare"
+size = [2, 2]
+weight = 2.0
+value = 130
+feed = 0.0
+gear = { slot = "body", kind = "armour", armour = 8, noise = 0 }
+codex = "armour dermis sewn into a jacket"
+
+[[item]]
+id = "ger_vestment"
+name = "Stolen Vestment"
+category = "gear"
+tier = "blackline"
+size = [2, 2]
+weight = 1.8
+value = 0
+feed = 0.0
+gear = { slot = "body", kind = "armour", armour = 7, noise = 0 }
+codex = "scouts hesitate for one second"
+
+[[item]]
+id = "ger_helm"
+name = "Welding Helm"
+category = "gear"
+tier = "uncommon"
+size = [1, 1]
+weight = 1.2
+value = 18
+feed = 0.0
+gear = { slot = "head", kind = "armour", armour = 3, light = -1 }
+codex = "shields the eyes from white light"
+
+[[item]]
+id = "ger_waders"
+name = "Waders"
+category = "gear"
+tier = "common"
+size = [1, 2]
+weight = 1.5
+value = 9
+feed = 0.0
+gear = { slot = "feet", kind = "armour", armour = 1, noise = -1 }
+codex = "water tiles do not soak you"
+
+[[item]]
+id = "ger_lantern"
+name = "Lantern"
+category = "gear"
+tier = "common"
+size = [1, 1]
+weight = 0.8
+value = 7
+feed = 0.0
+gear = { slot = "rig", kind = "tool", light = 6, noise = 0 }
+codex = "see six tiles, be seen from nine"
+
+[[item]]
+id = "ger_dig_claw"
+name = "Dig Claw"
+category = "gear"
+tier = "uncommon"
+size = [1, 2]
+weight = 1.5
+value = 24
+feed = 0.0
+gear = { slot = "hand", kind = "tool", noise = 4 }
+codex = "deposits in half the time"
+
+[[item]]
+id = "ger_pry_bar"
+name = "Pry Bar"
+category = "gear"
+tier = "common"
+size = [1, 3]
+weight = 2.0
+value = 6
+feed = 0.0
+gear = { slot = "hand", kind = "tool", noise = 3 }
+codex = "lockers open; so do skulls, slowly"
+
+[[item]]
+id = "ger_lure"
+name = "Rat Lure"
+category = "gear"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.3
+value = 15
+feed = 0.0
+gear = { slot = "rig", kind = "tool", noise = 5 }
+codex = "throws noise elsewhere"
+
+[[item]]
+id = "ger_repair_kit"
+name = "Repair Kit"
+category = "gear"
+tier = "uncommon"
+size = [2, 1]
+weight = 1.0
+value = 20
+feed = 0.0
+gear = { slot = "rig", kind = "tool" }
+codex = "+30 condition, once"
+
+[[item]]
+id = "ger_backpack_2"
+name = "Tweaker's Pack"
+category = "gear"
+tier = "uncommon"
+size = [2, 2]
+weight = 1.0
+value = 35
+feed = 0.0
+gear = { slot = "back", kind = "pack", grid = "8x5" }
+codex = "two more rows"
+
+[[item]]
+id = "imp_night_eye"
+name = "Night Eye"
+category = "gear"
+tier = "rare"
+size = [1, 1]
+weight = 0.1
+value = 140
+feed = 0.0
+gear = { slot = "implant", kind = "implant", stat = "eye", bonus = 2, weakness = "white light blinds for 3 s" }
+codex = "fog radius +2"
+
+[[item]]
+id = "imp_tendon_set"
+name = "Tendon Set"
+category = "gear"
+tier = "rare"
+size = [1, 1]
+weight = 0.3
+value = 150
+feed = 0.0
+gear = { slot = "implant", kind = "implant", stat = "nerve", bonus = 2, weakness = "fractures take twice as long" }
+codex = "sprint longer"
+
+[[item]]
+id = "imp_loader_arm"
+name = "Loader Arm"
+category = "gear"
+tier = "rare"
+size = [1, 2]
+weight = 2.0
+value = 160
+feed = 0.0
+gear = { slot = "implant", kind = "implant", stat = "body", bonus = 2, weakness = "noise +1" }
+codex = "carry 8 kg more"
+
+[[item]]
+id = "imp_appraiser"
+name = "Appraiser's Lens"
+category = "gear"
+tier = "rare"
+size = [1, 1]
+weight = 0.1
+value = 170
+feed = 0.0
+gear = { slot = "implant", kind = "implant", stat = "eye", bonus = 1, weakness = "Lit need rises faster" }
+codex = "identifies Uncommon on sight"
+
+[[item]]
+id = "imp_mat_ear"
+name = "Mat Ear"
+category = "gear"
+tier = "rare"
+size = [1, 1]
+weight = 0.1
+value = 130
+feed = 0.0
+gear = { slot = "implant", kind = "implant", stat = "matsense", bonus = 2, weakness = "Mood falls off the Mat" }
+codex = "hear the signal"
+
+[[item]]
+id = "imp_lamp_core"
+name = "Lamp-Core Socket"
+category = "gear"
+tier = "blackline"
+size = [1, 1]
+weight = 0.4
+value = 0
+feed = 0.0
+gear = { slot = "implant", kind = "implant", stat = "eye", bonus = 3, weakness = "the Mat will not carry you; Toxicity hurts you" }
+codex = "white light in your own head"
+
+[[item]]
+id = "con_downer_crate"
+name = "Downer Crate"
+category = "contraband"
+tier = "rare"
+size = [2, 2]
+weight = 4.0
+value = 400
+feed = 0.0
+tags = ["enzyme"]
+codex = "twelve doses; every faction wants it; the Moon knows"
+
+[[item]]
+id = "con_cold_light"
+name = "Cold Light Cell"
+category = "contraband"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.3
+value = 18
+feed = 0.0
+tags = ["cell"]
+codex = "a Bulb's week in a jar; sells topside as decor"
+
+[[item]]
+id = "con_filtered_water"
+name = "Filtered Water Drum"
+category = "contraband"
+tier = "uncommon"
+size = [2, 2]
+weight = 10.0
+value = 30
+feed = 0.0
+codex = "Nomads carry it up the drains"
+
+[[item]]
+id = "con_enzyme_vial"
+name = "Ooze Enzyme Vial"
+category = "contraband"
+tier = "rare"
+size = [1, 1]
+weight = 0.2
+value = 60
+feed = 0.0
+tags = ["enzyme"]
+codex = "the Still's input; Corpo chemists bid"
+
+[[item]]
+id = "con_vestment_cloth"
+name = "Vestment Cloth"
+category = "contraband"
+tier = "blackline"
+size = [2, 1]
+weight = 0.5
+value = 180
+feed = 0.0
+tags = ["weave"]
+codex = "gangs wear it as a joke; the joke raises Attention"
+
+[[item]]
+id = "con_comms_rig"
+name = "Night City Comms Rig"
+category = "contraband"
+tier = "rare"
+size = [2, 2]
+weight = 3.0
+value = 140
+feed = 0.0
+tags = ["board", "conductor"]
+codex = "hears the whole street"
+
+[[item]]
+id = "key_grate_sump"
+name = "Sump Grate Key"
+category = "key"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.2
+value = 0
+feed = 0.0
+codex = "opens the two Sump grates"
+
+[[item]]
+id = "key_grate_culvert"
+name = "Culvert Grate Key"
+category = "key"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.2
+value = 0
+feed = 0.0
+codex = "opens the Culvert grates"
+
+[[item]]
+id = "key_grate_drain"
+name = "Drain Grate Key"
+category = "key"
+tier = "rare"
+size = [1, 1]
+weight = 0.2
+value = 0
+feed = 0.0
+codex = "opens the Storm Drain grates"
+
+[[item]]
+id = "key_grate_service"
+name = "Service Grate Key"
+category = "key"
+tier = "rare"
+size = [1, 1]
+weight = 0.2
+value = 0
+feed = 0.0
+codex = "opens the Service Tunnel grates"
+
+[[item]]
+id = "key_vault_card"
+name = "Vault Card"
+category = "key"
+tier = "rare"
+size = [1, 1]
+weight = 0.0
+value = 0
+feed = 0.0
+codex = "one Vault door, once"
+
+[[item]]
+id = "key_vault_master"
+name = "Vault Master Card"
+category = "key"
+tier = "blackline"
+size = [1, 1]
+weight = 0.0
+value = 0
+feed = 0.0
+codex = "every Vault door, until a Corpo contact notices"
+
+[[item]]
+id = "key_lamp_badge"
+name = "Lamp-Carrier Badge"
+category = "key"
+tier = "blackline"
+size = [1, 1]
+weight = 0.1
+value = 0
+feed = 0.0
+codex = "one Runner passes one Patrol, once"
+
+[[item]]
+id = "key_undercroft"
+name = "Undercroft Pass"
+category = "key"
+tier = "blackline"
+size = [1, 1]
+weight = 0.1
+value = 0
+feed = 0.0
+codex = "the metro gate under Night City"
+
+[[item]]
+id = "cur_street_sign"
+name = "Pre-Vaccine Street Sign"
+category = "curio"
+tier = "uncommon"
+size = [3, 1]
+weight = 2.0
+value = 12
+feed = 0.0
+set = "street"
+codex = "a block that no longer exists"
+
+[[item]]
+id = "cur_ooze_toy"
+name = "Child's Ooze Toy"
+category = "curio"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.2
+value = 15
+feed = 0.0
+set = "street"
+codex = "a jar of purple; it was a toy once"
+
+[[item]]
+id = "cur_arcade_token"
+name = "Arcade Token"
+category = "curio"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.0
+value = 8
+feed = 0.0
+set = "street"
+codex = "a game nobody can play"
+
+[[item]]
+id = "cur_nameplate"
+name = "Corpo Nameplate"
+category = "curio"
+tier = "rare"
+size = [2, 1]
+weight = 0.5
+value = 40
+feed = 0.0
+set = "arasaka"
+codex = "a desk, a floor, a tower, all gone"
+
+[[item]]
+id = "cur_lanyard"
+name = "Executive Lanyard"
+category = "curio"
+tier = "rare"
+size = [1, 1]
+weight = 0.1
+value = 35
+feed = 0.0
+set = "arasaka"
+codex = "the photo has been scraped off"
+
+[[item]]
+id = "cur_tower_model"
+name = "Tower Desk Model"
+category = "curio"
+tier = "rare"
+size = [2, 2]
+weight = 1.0
+value = 70
+feed = 0.0
+set = "arasaka"
+codex = "the building, at 1:2000, before the head came off"
+
+[[item]]
+id = "cur_rosary"
+name = "Lunar Stone Rosary"
+category = "curio"
+tier = "blackline"
+size = [1, 1]
+weight = 0.2
+value = 120
+feed = 0.0
+set = "reliquary"
+codex = "fifty-nine beads of holy rock"
+
+[[item]]
+id = "cur_hymnal"
+name = "Oathkeeper Hymnal"
+category = "curio"
+tier = "blackline"
+size = [1, 2]
+weight = 0.6
+value = 90
+feed = 0.0
+set = "reliquary"
+codex = "the words are kind; the margins are not"
+
+[[item]]
+id = "cur_vial_moon"
+name = "Vial of Moon Dust"
+category = "curio"
+tier = "blackline"
+size = [1, 1]
+weight = 0.1
+value = 150
+feed = 0.0
+set = "reliquary"
+codex = "regolith from the holy rock"
+
+[[item]]
+id = "cur_rat_skull"
+name = "Sewerat Skull"
+category = "curio"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.3
+value = 10
+feed = 0.0
+set = "feral"
+codex = "the teeth kept growing"
+
+[[item]]
+id = "cur_burster_husk"
+name = "Burster Husk"
+category = "curio"
+tier = "uncommon"
+size = [2, 1]
+weight = 0.4
+value = 12
+feed = 0.0
+set = "feral"
+codex = "dry, and still faintly purple"
+
+[[item]]
+id = "cur_maw_tooth"
+name = "Maw Tooth"
+category = "curio"
+tier = "rare"
+size = [1, 2]
+weight = 0.8
+value = 45
+feed = 0.0
+set = "feral"
+codex = "the Maw that held a corridor for a week"
+
+[[item]]
+id = "cur_nomad_patch"
+name = "Nomad Patch"
+category = "curio"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.0
+value = 9
+feed = 0.0
+set = "road"
+codex = "a clan that moves goods down drains"
+
+[[item]]
+id = "cur_badge"
+name = "Retired Badge"
+category = "curio"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.1
+value = 14
+feed = 0.0
+set = "road"
+codex = "NCPD; the officer is a slimo now"
+
+[[item]]
+id = "cur_gang_colours"
+name = "Gang Colours"
+category = "curio"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.1
+value = 9
+feed = 0.0
+set = "road"
+codex = "a jacket back; the crew is mostly dead"
+
+[[item]]
+id = "cur_first_cord"
+name = "First Cord"
+category = "curio"
+tier = "rare"
+size = [1, 1]
+weight = 0.1
+value = 0
+feed = 0.0
+set = "heart"
+codex = "a dried length of your own first strand"
+
+[[item]]
+id = "cur_heart_shard"
+name = "Heart Shard"
+category = "curio"
+tier = "rare"
+size = [1, 1]
+weight = 0.2
+value = 0
+feed = 0.0
+set = "heart"
+codex = "a bulb that calcified when the Heart was cut"
+
+[[item]]
+id = "cur_ivan_fragment"
+name = "Ivan's Fragment"
+category = "curio"
+tier = "rare"
+size = [1, 1]
+weight = 0.1
+value = 0
+feed = 0.0
+set = "heart"
+codex = "a chrome flake from the narrator's shoulder"
+
+[[item]]
+id = "cur_neon_tube"
+name = "Night City Neon Tube"
+category = "curio"
+tier = "rare"
+size = [3, 1]
+weight = 1.0
+value = 55
+feed = 0.0
+set = "leak"
+codex = "still lights pink when it gets signal"
+
+[[item]]
+id = "cur_billboard"
+name = "Billboard Fragment"
+category = "curio"
+tier = "rare"
+size = [2, 2]
+weight = 2.0
+value = 40
+feed = 0.0
+set = "leak"
+codex = "half a face selling something"
+
+[[item]]
+id = "cur_metro_ticket"
+name = "Metro Ticket"
+category = "curio"
+tier = "uncommon"
+size = [1, 1]
+weight = 0.0
+value = 6
+feed = 0.0
+set = "leak"
+codex = "one trip, Undercroft to anywhere"
+
+[[item]]
+id = "cur_vaccine_vial"
+name = "MAP-SSRI-II Vial"
+category = "curio"
+tier = "rare"
+size = [1, 1]
+weight = 0.1
+value = 30
+feed = 0.0
+codex = "empty; the label promises safety"
+
+[[item]]
+id = "rel_reactor_fragment"
+name = "Reliquary Reactor Fragment"
+category = "relic"
+tier = "relic"
+size = [2, 2]
+weight = 3.0
+value = 0
+feed = 1.0
+bias = { plasticity = 1.0, conductance = 0.6 }
+codex = "helium-3 vessel wall; the Mat trembles near it"
+
+[[item]]
+id = "rel_holy_rock"
+name = "Holy Rock Chip"
+category = "relic"
+tier = "relic"
+size = [2, 2]
+weight = 3.0
+value = 0
+feed = 1.0
+bias = { plasticity = 1.0, chrome = 0.6 }
+codex = "lunar stone from under the basilica"
+
+[[item]]
+id = "rel_saint_implant"
+name = "Saint's Implant"
+category = "relic"
+tier = "relic"
+size = [2, 2]
+weight = 3.0
+value = 0
+feed = 1.0
+bias = { plasticity = 1.0, lume = 0.7 }
+codex = "a chaplain's chrome that never went soft"
+
+[[item]]
+id = "rel_first_vaccine"
+name = "First-Batch Vaccine"
+category = "relic"
+tier = "relic"
+size = [2, 2]
+weight = 3.0
+value = 0
+feed = 1.0
+bias = { plasticity = 1.0, feral = 0.7 }
+codex = "the ampoule that started Slimecity"
+
+[[item]]
+id = "rel_hive_seed"
+name = "Hive Seed"
+category = "relic"
+tier = "relic"
+size = [2, 2]
+weight = 3.0
+value = 0
+feed = 1.0
+bias = { plasticity = 1.0, chrome = 1.0, conductance = 0.8 }
+codex = "a Relic that grows chrome; the Hive ending's key"

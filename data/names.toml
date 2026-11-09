@@ -1,0 +1,5 @@
+# Names for new slimos (Full Design v3.7, Creation): a first name, and one time in four an epithet.
+
+first = ["Sable", "Pell", "Rook", "Mara", "Dez", "Kett", "Ivo", "Nia", "Tamsin", "Oro", "Hal", "Vesper", "Juno", "Cass", "Fenn", "Lior", "Marlo", "Sol", "Tove", "Wren", "Ash", "Bix", "Corin", "Dael", "Eske", "Fiora", "Gath", "Hesper", "Iko", "Jory", "Kai", "Lune", "Mott", "Nell", "Oska", "Pim", "Quill", "Rane", "Sorrel", "Tam", "Ulla", "Vane", "Wick", "Xan", "Yara", "Zev", "Arlo", "Brix", "Cully", "Dove", "Ember", "Fitch", "Gale", "Hollis", "Indra", "Jace", "Kerr", "Lark", "Moss", "Nico"]
+
+epithet = ["Tin Hands", "Two Lamps", "the Quiet", "Halfpipe", "Saltline", "Grate-born", "Sump", "Dimmer", "Rebar", "Flicker", "Crawlspace", "the Wick", "Deep Six", "Bleach", "Cordwalker", "Sprocket", "Night Soil", "the Patient", "Rattle", "Gristle", "Lantern", "Culvert", "Brine", "Ninefingers", "Soft Step", "the Fence", "Oathless", "Drainpipe", "Mossback", "Shiv"]

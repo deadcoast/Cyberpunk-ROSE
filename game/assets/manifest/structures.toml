@@ -1,0 +1,113 @@
+# Structures: three visual tiers each (t1 scrap and tarp, t2 welded plate and ooze housing, t3 chrome-plated with lume trim). Phase A ships eight; the rest arrive with Phase C.
+
+[[slot]]
+id = "struct.heart"
+kind = "sprite"
+size = [96, 96]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "HRT"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; the Heart: the first ooze node grown into a chamber; t1 a bulb in a culvert, t2 a bulb with scrap walls, t3 ooze arches with hung lamps"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.pit"
+kind = "sprite"
+size = [64, 32]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "PIT"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Feeding Pit: a scrap-lined trough on a cord with chrome scrap in it"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.pod"
+kind = "sprite"
+size = [64, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "POD"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Hab-Pod: a sleeping capsule of plate and tarp with a round hatch"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.bench"
+kind = "sprite"
+size = [64, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "BNC"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Tweaker Bench: a workbench of pipe and plate with hanging tools and a lamp"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.market"
+kind = "sprite"
+size = [96, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "MKT"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Seep Market: a stall under a grate with a canopy, crates, a counter"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.gate"
+kind = "sprite"
+size = [32, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "GAT"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Sphincter Gate housing: a steel frame around an ooze ring in a narrow tunnel"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.still"
+kind = "sprite"
+size = [96, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "STL"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Downer Still: copper coils, glass, a dripping spout, purple fluid"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.relay"
+kind = "sprite"
+size = [32, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "RLY"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Relay Shrine: a pole of chrome with an ooze bulb at the top, a built nerve"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"

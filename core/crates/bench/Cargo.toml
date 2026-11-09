@@ -1,0 +1,11 @@
+[package]
+name = "bench"
+description = "Cyberpunk: ROSE - the Tweaker Bench: recipes by craft tag, outcomes from parts, the queue"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+items = { path = "../items" }
+serde.workspace = true
+toml.workspace = true

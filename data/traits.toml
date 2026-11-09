@@ -1,0 +1,308 @@
+# The forty traits (Full Design v3.7, Runners and slimos: Traits). Two per slimo at creation, no excluded pair.
+# stats: leans on body/nerve/hands/eye/matsense/voice. need_rate: multipliers on Fed/Lit/Dry/Signal/Rest decay (Rest on
+# its regen). mood: a lean on the Mood target. loves/hates: a job (working it moves the target +10/-15). skill_xp:
+# multipliers. rig_rows: backpack rows. flags: what the run and colony check. carry: kg. Levels: skills at creation.
+
+[[trait]]
+id = "hoarder"
+name = "Hoarder"
+text = "Two more rows in the rig and a nerve that frays holding them."
+stats = { nerve = -1 }
+loves = "scav"
+rig_rows = 2
+
+[[trait]]
+id = "night_eyes"
+name = "Night Eyes"
+text = "Sees a tile farther into the dark; the dark is not a need."
+need_rate = { lit = 0.5 }
+flags = ["see_plus_1"]
+
+[[trait]]
+id = "loud"
+name = "Loud"
+text = "Every sound they make carries one louder; so does their voice."
+stats = { voice = 1 }
+flags = ["noise_plus_1"]
+excludes = ["soft_voice"]
+
+[[trait]]
+id = "steady_hands"
+name = "Steady Hands"
+text = "Quiet with a blade, quick at the Bench."
+stats = { hands = 1 }
+skill_xp = { tweak = 1.5 }
+flags = ["melee_noise_minus_1"]
+
+[[trait]]
+id = "claustrophobic"
+name = "Claustrophobic"
+text = "Mood falls in one-wide tunnels; hates the scavenging that lives in them."
+hates = "scav"
+flags = ["narrow_mood_minus_10"]
+
+[[trait]]
+id = "devout"
+name = "Devout"
+text = "Mood rises near white light, and the white light finds that useful."
+flags = ["white_light_mood_plus_10"]
+defect_line = 25
+
+[[trait]]
+id = "chromehead"
+name = "Chromehead"
+text = "Eats chrome meant for the Mat; grows on it; is not happy."
+mood = -5
+loves = "haul"
+flags = ["feeds_chrome_self"]
+
+[[trait]]
+id = "teacher"
+name = "Teacher"
+text = "Everyone in the district learns faster around them."
+loves = "tweak"
+flags = ["district_xp_x1_25"]
+
+[[trait]]
+id = "glutton"
+name = "Glutton"
+text = "Hungry half again as fast, and glad when full."
+need_rate = { fed = 1.5 }
+flags = ["fed_80_mood_plus_5"]
+excludes = ["iron_gut"]
+
+[[trait]]
+id = "cold_blood"
+name = "Cold Blood"
+text = "White light does not panic them."
+stats = { nerve = 1 }
+flags = ["no_white_light_panic"]
+
+[[trait]]
+id = "pack_rat"
+name = "Pack Rat"
+text = "Notices the curios others walk past."
+loves = "scav"
+flags = ["curio_x1_5"]
+
+[[trait]]
+id = "iron_gut"
+name = "Iron Gut"
+text = "Eats less; eats anything."
+need_rate = { fed = 0.7 }
+excludes = ["glutton"]
+
+[[trait]]
+id = "light_sleeper"
+name = "Light Sleeper"
+text = "Rests poorly; watches well."
+need_rate = { rest = 0.7 }
+loves = "guard"
+excludes = ["heavy_sleeper"]
+
+[[trait]]
+id = "heavy_sleeper"
+name = "Heavy Sleeper"
+text = "Sleeps like the dead; hates the watch."
+need_rate = { rest = 1.4 }
+hates = "guard"
+excludes = ["light_sleeper"]
+
+[[trait]]
+id = "brawler"
+name = "Brawler"
+text = "Learns fighting fast and hits a little harder; no patience for tending."
+hates = "tend"
+skill_xp = { fight = 1.5 }
+flags = ["melee_plus_1"]
+
+[[trait]]
+id = "dead_shot"
+name = "Dead Shot"
+text = "Two more damage down a barrel."
+stats = { eye = 1 }
+flags = ["ranged_plus_2"]
+
+[[trait]]
+id = "quick"
+name = "Quick"
+text = "Half a tile a second faster at a sprint, and the wind comes back sooner."
+flags = ["sprint_plus_0_5", "stamina_regen_x1_2"]
+excludes = ["lumbering"]
+
+[[trait]]
+id = "lumbering"
+name = "Lumbering"
+text = "Slow on the walk, strong on the back."
+stats = { body = 1 }
+flags = ["walk_minus_0_3"]
+carry = 4
+excludes = ["quick"]
+
+[[trait]]
+id = "mule"
+name = "Mule"
+text = "Carries six kilos more; will not sit at a Bench to think."
+hates = "research"
+carry = 6
+
+[[trait]]
+id = "frail"
+name = "Frail"
+text = "Little body, little appetite, a good eye for value."
+stats = { body = -2 }
+need_rate = { fed = 0.8 }
+skill_xp = { appraise = 1.3 }
+
+[[trait]]
+id = "webbed"
+name = "Webbed"
+text = "Wades and swims at a walk; water is not a worry."
+need_rate = { dry = 0.5 }
+flags = ["water_at_walk"]
+
+[[trait]]
+id = "dry_skin"
+name = "Dry Skin"
+text = "Water wears them out; hates tending the wet Mat."
+need_rate = { dry = 1.5 }
+hates = "tend"
+
+[[trait]]
+id = "mat_born"
+name = "Mat-born"
+text = "The signal holds them longer; they love the tissue."
+stats = { matsense = 1 }
+need_rate = { signal = 0.5 }
+loves = "tend"
+excludes = ["topsider"]
+
+[[trait]]
+id = "topsider"
+name = "Topsider"
+text = "Loses the signal fast; trades like they were born to it."
+need_rate = { signal = 1.5 }
+loves = "appraise"
+skill_xp = { trade = 1.5 }
+excludes = ["mat_born"]
+
+[[trait]]
+id = "gloomy"
+name = "Gloomy"
+text = "Eight points under everyone else, always."
+mood = -8
+excludes = ["sunny"]
+
+[[trait]]
+id = "sunny"
+name = "Sunny"
+text = "Eight points over; people listen."
+stats = { voice = 1 }
+mood = 8
+excludes = ["gloomy"]
+
+[[trait]]
+id = "fence"
+name = "Fence"
+text = "Sells at a tenth over; happiest moving goods."
+loves = "haul"
+flags = ["sell_x1_1"]
+
+[[trait]]
+id = "tinkerer"
+name = "Tinkerer"
+text = "Learns the Bench fast and loves it."
+loves = "tweak"
+skill_xp = { tweak = 1.5 }
+
+[[trait]]
+id = "healers_hands"
+name = "Healer's Hands"
+text = "Treats twice as fast and learns medicine faster."
+skill_xp = { medic = 1.5 }
+flags = ["treat_x2"]
+
+[[trait]]
+id = "coward"
+name = "Coward"
+text = "Backs off a fight under sixty percent; sleeps well after."
+stats = { nerve = -1 }
+need_rate = { rest = 1.2 }
+flags = ["flee_at_60"]
+excludes = ["fearless"]
+
+[[trait]]
+id = "fearless"
+name = "Fearless"
+text = "Never backs off."
+stats = { nerve = 1 }
+flags = ["never_flee"]
+excludes = ["coward"]
+
+[[trait]]
+id = "scrounger"
+name = "Scrounger"
+text = "Finds one more thing in every deposit; clumsy hands."
+stats = { hands = -1 }
+loves = "scav"
+flags = ["deposit_plus_1"]
+
+[[trait]]
+id = "sharp_nose"
+name = "Sharp Nose"
+text = "Notices creatures a tile farther; sees better in the dark."
+flags = ["notice_plus_1", "eye_plus_1_dark"]
+
+[[trait]]
+id = "strong_back"
+name = "Strong Back"
+text = "Eight kilos more on the back; coarse hands."
+stats = { body = 1, hands = -1 }
+carry = 8
+
+[[trait]]
+id = "soft_voice"
+name = "Soft Voice"
+text = "Hard to hear, easy to overlook, good at looking."
+stats = { voice = -2 }
+appraise_level = 1
+excludes = ["loud"]
+
+[[trait]]
+id = "orator"
+name = "Orator"
+text = "Twice the weight in an election; will not stoop to scavenging."
+stats = { voice = 2 }
+hates = "scav"
+flags = ["election_x2"]
+
+[[trait]]
+id = "hermit"
+name = "Hermit"
+text = "Ten better alone in a Pod, ten worse in a Bunkhouse; hates the watch."
+hates = "guard"
+flags = ["pod_alone_plus_10", "bunkhouse_minus_10"]
+excludes = ["pack_animal"]
+
+[[trait]]
+id = "pack_animal"
+name = "Pack Animal"
+text = "Ten better in a Bunkhouse; bonds in two runs."
+flags = ["bunkhouse_plus_10"]
+bond_runs = 2
+excludes = ["hermit"]
+
+[[trait]]
+id = "old_chrome"
+name = "Old Chrome"
+text = "A worn body with one more socket and a feel for the Bench."
+stats = { body = -1 }
+flags = ["implant_socket_plus_1"]
+tweak_level = 1
+
+[[trait]]
+id = "sewer_lungs"
+name = "Sewer Lungs"
+text = "Fungal Fever cannot take; water wears a little more."
+need_rate = { dry = 1.2 }
+flags = ["fever_immune"]

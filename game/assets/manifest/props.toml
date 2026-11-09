@@ -1,0 +1,112 @@
+# Run props: what the route map's overlays draw. 32x32, sitting on a floor tile; states are the thing's condition.
+[[slot]]
+id = "prop.locker"
+kind = "prop"
+size = [32, 32]
+frames = 1
+states = ["closed", "open", "empty"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "LKR"
+anchor = "anchor.item"
+prompt = "a dented steel utility locker against a sewer wall, side view, one door, rust streaks, 1 px Void selective outline; closed / door ajar with a purple glint inside / door open and empty"
+negative = "gradient, text, clean paint"
+status = "placeholder"
+
+[[slot]]
+id = "prop.crate"
+kind = "prop"
+size = [32, 32]
+frames = 1
+states = ["closed", "open", "empty"]
+ramp = "mud"
+silhouette = "rect"
+tag = "CRT"
+anchor = "anchor.item"
+prompt = "a corporate shipping crate dumped in a sewer, side view, stencilled corner marks, pink-cyan reflective tape strip, 1 px Void selective outline; sealed / lid pried / emptied"
+negative = "gradient, readable text, wood"
+status = "placeholder"
+
+[[slot]]
+id = "prop.corpse"
+kind = "prop"
+size = [32, 32]
+frames = 1
+states = ["fresh", "picked"]
+ramp = "flesh"
+silhouette = "strip"
+tag = "BDY"
+anchor = "anchor.slimo"
+prompt = "a body lying face down on a sewer floor, side view, dark coat, one hand in the water, a faint purple vein glow on the skin; fresh / picked over with the coat open"
+negative = "gore, blood pool, outline on every edge"
+status = "placeholder"
+
+[[slot]]
+id = "prop.lamp"
+kind = "prop"
+size = [32, 32]
+frames = 2
+states = ["lit", "dark"]
+ramp = "neon"
+silhouette = "disc"
+tag = "LMP"
+anchor = "anchor.tile"
+prompt = "a broken caged work light hanging from a sewer ceiling, side view, acid-yellow emitter pixel and a short cone, 2-frame flicker; lit / dark and swinging"
+negative = "soft glow gradient, lens flare, white light"
+status = "placeholder"
+
+[[slot]]
+id = "prop.gas"
+kind = "prop"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "bile"
+silhouette = "hatch"
+tag = "GAS"
+anchor = "anchor.tile"
+prompt = "a drifting pocket of sewer gas, side view, sickly yellow-green haze in 2-tone dither, 4-frame slow drift, transparent background"
+negative = "solid fill, smoke plume, outline"
+status = "placeholder"
+
+[[slot]]
+id = "prop.burrow"
+kind = "prop"
+size = [32, 32]
+frames = 1
+states = ["quiet", "stirring"]
+ramp = "mud"
+silhouette = "disc"
+tag = "BRW"
+anchor = "anchor.tile"
+prompt = "a sewerat burrow: a ragged hole chewed through sewer brick, side view, dark inside with two flesh-pink eye pixels; quiet / stirring with claws at the lip"
+negative = "cartoon mouse hole, outline, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "prop.patrol_mark"
+kind = "prop"
+size = [32, 32]
+frames = 1
+states = [""]
+ramp = "white"
+silhouette = "disc"
+tag = "PTL"
+anchor = "anchor.tile"
+prompt = "an Oathkeeper waymark chalked on a sewer wall: a small white circle with a bar through it, vestment-white chalk on dark brick, worn"
+negative = "cross, religious symbol, outline, glow"
+status = "placeholder"
+
+[[slot]]
+id = "prop.pile"
+kind = "prop"
+size = [32, 32]
+frames = 1
+states = ["full", "picked"]
+ramp = "industrial"
+silhouette = "pile"
+tag = "PIL"
+anchor = "anchor.item"
+prompt = "a dug-out pile of scrap on a sewer floor, side view, chrome shards and cable in grey muck with a purple fleck, 1 px Void selective outline; full / picked over and flattened"
+negative = "outline on every edge, gradient, clean metal"
+status = "placeholder"

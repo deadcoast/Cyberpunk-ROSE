@@ -1,0 +1,11 @@
+[package]
+name = "people"
+description = "Cyberpunk: ROSE - slimo records: creation, stats, skills and XP, traits, needs and Mood, job utility, bonds, the roster"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mat = { path = "../mat" }
+serde.workspace = true
+toml.workspace = true

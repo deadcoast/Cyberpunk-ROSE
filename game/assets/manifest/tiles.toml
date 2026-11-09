@@ -1,0 +1,168 @@
+# World tiles, 32 px. frames = variants of the base tile; 47-tile autotile sets are cut from 64 px panels in Phase F.
+[[slot]]
+id = "tile.concrete"
+kind = "tile"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "noir"
+silhouette = "hatch"
+tag = "CON"
+anchor = "anchor.tile"
+prompt = "wet concrete sewer wall tile, cracked, one dim purple light from the left, hard shadow, 2-tone dither, no outline"
+negative = "gradient, outline, green, text"
+status = "placeholder"
+
+[[slot]]
+id = "tile.brick"
+kind = "tile"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "mud"
+silhouette = "hatch"
+tag = "BRK"
+anchor = "anchor.tile"
+prompt = "old sewer brick arch tile, mortar dark, bricks rust brown with one-pixel wet highlights, seamless"
+negative = "gradient, outline, text"
+status = "placeholder"
+
+[[slot]]
+id = "tile.pipe"
+kind = "tile"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "industrial"
+silhouette = "strip"
+tag = "PIP"
+anchor = "anchor.tile"
+prompt = "horizontal rusted steel pipe run tile with a flange, grey steel with rust, one specular pixel line on top, seamless left to right"
+negative = "gradient, outline, text"
+status = "placeholder"
+
+[[slot]]
+id = "tile.water"
+kind = "tile"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "drain"
+silhouette = "strip"
+tag = "WTR"
+anchor = "anchor.tile"
+prompt = "dark sewer water tile, deep blue with one line of flood-light highlight, 4-frame slow ripple, seamless"
+negative = "white foam, bright blue, outline"
+status = "placeholder"
+
+[[slot]]
+id = "tile.grate"
+kind = "tile"
+size = [32, 32]
+frames = 2
+states = [""]
+ramp = "industrial"
+silhouette = "frame"
+tag = "GRT"
+anchor = "anchor.tile"
+prompt = "street grate seen from below, steel bars with a thin pink-and-cyan neon leak between them, frame 2 brighter"
+negative = "full daylight, white light, outline on bars"
+status = "placeholder"
+
+[[slot]]
+id = "tile.collapse"
+kind = "tile"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "mud"
+silhouette = "pile"
+tag = "CLP"
+anchor = "anchor.tile"
+prompt = "collapsed rubble and rebar tile blocking a tunnel, brown rock, grey rebar ends, dust"
+negative = "outline, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "tile.deposit"
+kind = "tile"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "industrial"
+silhouette = "pile"
+tag = "DEP"
+anchor = "anchor.tile"
+prompt = "a pile of scrap chrome and cables half buried in sewer muck, grey metal with a few purple flecks, diggable"
+negative = "outline, gradient, clean metal"
+status = "placeholder"
+
+[[slot]]
+id = "tile.salt"
+kind = "tile"
+size = [32, 32]
+frames = 2
+states = [""]
+ramp = "white"
+silhouette = "strip"
+tag = "SLT"
+anchor = "anchor.tile"
+prompt = "a thin line of coarse road salt poured across a sewer floor tile, chalk white grains on dark ground"
+negative = "snow, glow, outline"
+status = "placeholder"
+
+[[slot]]
+id = "tile.bg.wall"
+kind = "tile"
+size = [64, 64]
+frames = 2
+states = [""]
+ramp = "noir"
+silhouette = "hatch"
+tag = "BGW"
+anchor = "anchor.tile"
+prompt = "distant cavern wall for a parallax background, very dark concrete and rock, almost black, faint purple ambient from below"
+negative = "detail, outline, bright"
+status = "placeholder"
+
+[[slot]]
+id = "tile.bg.tunnel"
+kind = "tile"
+size = [64, 64]
+frames = 2
+states = [""]
+ramp = "noir"
+silhouette = "frame"
+tag = "BGT"
+anchor = "anchor.tile"
+prompt = "a distant tunnel mouth for a parallax background, black opening in dark concrete, one faint pink neon point far inside"
+negative = "detail, outline, bright"
+status = "placeholder"
+
+[[slot]]
+id = "tile.fg.pipes"
+kind = "tile"
+size = [64, 32]
+frames = 2
+states = [""]
+ramp = "industrial"
+silhouette = "strip"
+tag = "FGP"
+anchor = "anchor.tile"
+prompt = "foreground pipe run silhouette for parallax, nearly black steel with one specular line, drips"
+negative = "detail, bright, outline"
+status = "placeholder"
+
+[[slot]]
+id = "tile.fg.cables"
+kind = "tile"
+size = [64, 32]
+frames = 2
+states = [""]
+ramp = "noir"
+silhouette = "strip"
+tag = "FGC"
+anchor = "anchor.tile"
+prompt = "foreground hanging cable bundle silhouette for parallax, black with one cyan pixel at a cut end"
+negative = "detail, bright, outline"
+status = "placeholder"

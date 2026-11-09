@@ -1,0 +1,323 @@
+# Slimos by Mod-Depth, Ivan, Oathkeepers, sewerats. 32x48 people, 48x64 for Ivan and lamp carriers, 32x32 sewerats.
+
+[[slot]]
+id = "slimo.d1.idle"
+kind = "sprite"
+size = [32, 48]
+frames = 4
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "D1I"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; skin-deep: looks human, faint purple veins at the temples, a coat; idle breathing, 4 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d1.walk"
+kind = "sprite"
+size = [32, 48]
+frames = 8
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "D1W"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; skin-deep: looks human, faint purple veins at the temples, a coat; walk cycle, 8 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d2.idle"
+kind = "sprite"
+size = [32, 48]
+frames = 4
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "D2I"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; limbed: chrome arms re-organified into grey muscle with metal flecks, a scavenger's harness; idle breathing, 4 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d2.walk"
+kind = "sprite"
+size = [32, 48]
+frames = 8
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "D2W"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; limbed: chrome arms re-organified into grey muscle with metal flecks, a scavenger's harness; walk cycle, 8 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d3.idle"
+kind = "sprite"
+size = [32, 48]
+frames = 4
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "D3I"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; core-modded: torso half translucent violet ooze with chrome ribs showing, tool belt; idle breathing, 4 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d3.walk"
+kind = "sprite"
+size = [32, 48]
+frames = 8
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "D3W"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; core-modded: torso half translucent violet ooze with chrome ribs showing, tool belt; walk cycle, 8 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d4.idle"
+kind = "sprite"
+size = [32, 48]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "capsule"
+tag = "D4I"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; deep: a translucent purple ooze body with chrome inclusions drifting inside, no clothes, barely a face; idle breathing, 4 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d4.walk"
+kind = "sprite"
+size = [32, 48]
+frames = 8
+states = [""]
+ramp = "ooze"
+silhouette = "capsule"
+tag = "D4W"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; deep: a translucent purple ooze body with chrome inclusions drifting inside, no clothes, barely a face; walk cycle, 8 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d5.pile"
+kind = "sprite"
+size = [32, 32]
+frames = 2
+states = [""]
+ramp = "flesh"
+silhouette = "pile"
+tag = "D5P"
+anchor = "anchor.slimo"
+prompt = "a dissolved slimo: a pile of pink-grey flesh with purple veins and a few chrome pieces, breathing slightly, 2 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.carry"
+kind = "sprite"
+size = [32, 48]
+frames = 6
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "CRY"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; a D2 carrying a wrapped body over the shoulder, slow walk, 6 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "ivan.idle"
+kind = "sprite"
+size = [48, 64]
+frames = 4
+states = ["a1", "a2", "a3", "a4"]
+ramp = "ooze"
+silhouette = "capsule"
+tag = "IVI"
+anchor = "anchor.slimo"
+prompt = "Ivan Ooze: a tall D4 slimo of saturated purple ooze with chrome fragments at the shoulders, hot pink rim light, bald ridged head, theatrical stance; four Authority states from plain ooze to robed and chrome-shouldered; idle 4 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "ivan.walk"
+kind = "sprite"
+size = [48, 64]
+frames = 8
+states = ["a1", "a2", "a3", "a4"]
+ramp = "ooze"
+silhouette = "capsule"
+tag = "IVW"
+anchor = "anchor.slimo"
+prompt = "Ivan Ooze walking along an ooze cord, 8 frames, purple ooze body, pink rim light"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "ivan.portrait"
+kind = "panel"
+size = [64, 64]
+frames = 1
+states = ["a1", "a2", "a3", "a4"]
+ramp = "ooze"
+silhouette = "disc"
+tag = "IVP"
+anchor = "anchor.slimo"
+prompt = "portrait of Ivan Ooze for the bark box: purple ooze face, chrome flecks, a grin, hot pink highlights, black background"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "oath.scout"
+kind = "sprite"
+size = [48, 64]
+frames = 6
+states = [""]
+ramp = "white"
+silhouette = "capsule"
+tag = "OSC"
+anchor = "anchor.slimo"
+prompt = "Oathkeeper in vestment-white ballistic robes with reliquary-gold trim and bulky Y2K military hardware, 1 px black selective outline, the only pure white in the game; a scout with a handheld white lamp, walk 6 frames"
+negative = "purple, pink, grey robes, outline on light"
+status = "placeholder"
+
+[[slot]]
+id = "oath.lamp"
+kind = "sprite"
+size = [48, 64]
+frames = 6
+states = [""]
+ramp = "white"
+silhouette = "capsule"
+tag = "OLP"
+anchor = "anchor.slimo"
+prompt = "Oathkeeper in vestment-white ballistic robes with reliquary-gold trim and bulky Y2K military hardware, 1 px black selective outline, the only pure white in the game; a lamp carrier with a tall pole lamp emitting hard white light, walk 6 frames"
+negative = "purple, pink, grey robes"
+status = "placeholder"
+
+[[slot]]
+id = "oath.flamer"
+kind = "sprite"
+size = [48, 64]
+frames = 6
+states = [""]
+ramp = "white"
+silhouette = "capsule"
+tag = "OFL"
+anchor = "anchor.slimo"
+prompt = "Oathkeeper in vestment-white ballistic robes with reliquary-gold trim and bulky Y2K military hardware, 1 px black selective outline, the only pure white in the game; a sanitation trooper with a flamer and bleach tank, walk 6 frames"
+negative = "purple, pink, grey robes"
+status = "placeholder"
+
+[[slot]]
+id = "rat.crawler"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "pile"
+tag = "RCR"
+anchor = "anchor.slimo"
+prompt = "a feral sewerat: a lost symbiote collapsed into a purple-grey ooze animal with chrome teeth, 1 px black selective outline; low crawler, four stubby limbs, crawl 4 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "rat.burster"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "disc"
+tag = "RBU"
+anchor = "anchor.slimo"
+prompt = "a feral sewerat: a lost symbiote collapsed into a purple-grey ooze animal with chrome teeth, 1 px black selective outline; a bloated burster, swollen violet sac, waddle 4 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "rat.maw"
+kind = "sprite"
+size = [64, 48]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "pile"
+tag = "RMW"
+anchor = "anchor.slimo"
+prompt = "a feral sewerat: a lost symbiote collapsed into a purple-grey ooze animal with chrome teeth, 1 px black selective outline; a Maw that fills a corridor, a wide ooze mouth with rows of chrome teeth, breathing 4 frames"
+negative = "green glow, smooth shading, outline on every edge, anime proportions"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d1.crawl"
+kind = "sprite"
+size = [48, 32]
+frames = 8
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "D1C"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle"
+negative = "upright pose, green glow, outline on every edge"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d2.crawl"
+kind = "sprite"
+size = [48, 32]
+frames = 8
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "D2C"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle"
+negative = "upright pose, green glow, outline on every edge"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d3.crawl"
+kind = "sprite"
+size = [48, 32]
+frames = 8
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "D3C"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle"
+negative = "upright pose, green glow, outline on every edge"
+status = "placeholder"
+
+[[slot]]
+id = "slimo.d4.crawl"
+kind = "sprite"
+size = [48, 32]
+frames = 8
+states = [""]
+ramp = "flesh"
+silhouette = "capsule"
+tag = "D4C"
+anchor = "anchor.slimo"
+prompt = "side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle"
+negative = "upright pose, green glow, outline on every edge"
+status = "placeholder"

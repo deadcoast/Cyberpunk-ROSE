@@ -1,0 +1,22 @@
+[package]
+name = "rose-godot"
+description = "GDExtension exposing the ROSE core to Godot 4"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+mat = { path = "../../core/crates/mat" }
+logistics = { path = "../../core/crates/logistics" }
+godot = { version = "0.5", features = ["api-4-5"] }
+items = { path = "../../core/crates/items" }
+inventory = { path = "../../core/crates/inventory" }
+bench = { path = "../../core/crates/bench" }
+save = { path = "../../core/crates/save" }
+run = { path = "../../core/crates/run" }
+people = { path = "../../core/crates/people" }
+toml.workspace = true
+postcard.workspace = true
