@@ -286,17 +286,18 @@ impl LootState {
     }
 
     /// A dug deposit becomes a pile on its tile, already open with its contents.
-    pub fn add_pile(&mut self, tables: &LootTables, table: &ItemTable, x: usize, y: usize, chunk: u16) -> usize {
-        self.add_open_source(tables, table, SourceKind::Pile, x, y, chunk)
+    /// A dug deposit's pile; `extra` items on top of the roll (Scrounger +1).
+    pub fn add_pile(&mut self, tables: &LootTables, table: &ItemTable, x: usize, y: usize, chunk: u16, extra: u8) -> usize {
+        self.add_open_source(tables, table, SourceKind::Pile, x, y, chunk, extra)
     }
 
     /// A source that appears during the run, already open: a dug pile, a dead scout, a dead sewerat.
-    pub fn add_open_source(&mut self, tables: &LootTables, table: &ItemTable, kind: SourceKind, x: usize, y: usize, chunk: u16) -> usize {
+    pub fn add_open_source(&mut self, tables: &LootTables, table: &ItemTable, kind: SourceKind, x: usize, y: usize, chunk: u16, extra: u8) -> usize {
         let idx = self.sources.len();
         let mut src = LootSource { x: x as u16, y: y as u16, kind, tier: self.stratum, chunk, locked: false, state: SourceState::Open, items: Vec::new() };
         let mut rng = Pcg32::new(mix(self.seed, self.run_nonce, idx as u64 + 10_000, 0x917E));
         let generous = kind == SourceKind::Pile && self.generous();
-        let (items, _) = self.roll(tables, table, kind.table(), self.stratum, generous, 0, &mut rng, chunk);
+        let (items, _) = self.roll(tables, table, kind.table(), self.stratum, generous, extra, &mut rng, chunk);
         src.items = items;
         if src.items.is_empty() {
             src.state = SourceState::Empty;
@@ -704,7 +705,7 @@ mod tests {
     fn piles_corpses_and_oathkeeper_drops_roll_their_tables() {
         let (m, t, table) = setup(2, 1);
         let mut st = LootState::new(&m, &t, 1, 1, 1);
-        let pile = st.add_pile(&t, &table, 5, 12, 0);
+        let pile = st.add_pile(&t, &table, 5, 12, 0, 0);
         assert!(st.sources[pile].kind == SourceKind::Pile);
         assert!(st.sources[pile].items.len() <= 2);
         for it in &st.sources[pile].items {

@@ -7,10 +7,14 @@ const CARD_W := 206
 const CARD_H := 96
 const SLOT := 36
 const DANGER_COLOR := {"low": UiTheme.DUST, "medium": UiTheme.ACID, "high": UiTheme.HOT_PINK}
-const CARRY := 18.0
-
 var items: RoseItems
 var stash: RoseStash
+var people: RosePeople
+var eligible: Array[int] = []       # roster ids who may run, Runners first
+var runner_id := -1
+var follower_ids: Array[int] = []    # up to two
+var crew_frame: Panel
+var carry := 18.0
 var routes: Array = []            # [{stratum, seed, name, run: RoseRun, card: Dictionary, memory}]
 var selected := 0
 var card_frames: Array[Panel] = []
@@ -18,14 +22,13 @@ var strip_frame: Panel
 var strip_tex: TextureRect
 var strip_label: Label
 var strip_note: Label
-var follower_on := {101: true, 102: true}
-var follower_buttons := {}
 var rig_frame: Panel
 var rig_row: Control
 var hand_handle := -1
 var quick_handles: Array[int] = [-1, -1, -1, -1]
 var pack_handles: Array[int] = []
 var weight_label: Label
+var rig_title: Label
 var depart_note: Label
 var depart_button: Button
 var hand_label: Label
@@ -37,6 +40,19 @@ func _ready() -> void:
 func _build_content(c: Control) -> void:
 	items = RoseItems.new()
 	stash = Sim.ensure_stash()
+	people = Sim.ensure_people()
+	for id in people.eligible():
+		eligible.append(int(id))
+	if not eligible.is_empty():
+		runner_id = eligible[0]
+		# SEND ON A RUN from the Slimo card names the Runner
+		var sent := int(Sim.launch.get("runner_id", -1))
+		if eligible.has(sent):
+			runner_id = sent
+		for id in eligible:
+			if id != runner_id and follower_ids.size() < 2:
+				follower_ids.append(id)
+	Sim.launch = {}
 	_assemble_routes()
 	# ---- the cards
 	for i in routes.size():
@@ -53,28 +69,12 @@ func _build_content(c: Control) -> void:
 	strip_frame.add_child(strip_tex)
 	strip_label = make_label(strip_frame, "", Vector2(462, 4), UiTheme.CYAN)
 	strip_note = make_label(strip_frame, "the route as remembered", Vector2(462, 16), UiTheme.DUST)
-	# ---- the crew
-	var crew := make_frame(c, Vector2(0, CARD_H + 44), Vector2(300, 166))
-	make_label(crew, "CREW", Vector2(6, 4), UiTheme.CYAN)
-	var y := 18
-	for who in Sim.CREW:
-		make_slot(crew, String(who.sprite), Vector2(6, y), 32, 48, 4.0)
-		var total := int((20 + 50 + 30 + 30) * (0.8 + 0.04 * int(who.body)))
-		if String(who.role) == "runner":
-			make_label(crew, "%s   RUNNER" % String(who.name), Vector2(44, y + 4), UiTheme.CYAN)
-			make_label(crew, "Body %d   HP %d   Nerve 5" % [int(who.body), total], Vector2(44, y + 16), UiTheme.CHALK)
-			hand_label = make_label(crew, "", Vector2(44, y + 28), UiTheme.DUST)
-		else:
-			make_label(crew, "%s   follower" % String(who.name), Vector2(44, y + 4), UiTheme.CHALK)
-			make_label(crew, "Body %d   HP %d   fists %d" % [int(who.body), int(total * 0.6), int(who.damage)], Vector2(44, y + 16), UiTheme.DUST)
-			var id := int(who.id)
-			var b := make_button(crew, "", Vector2(220, y + 8), func(): _toggle_follower(id))
-			follower_buttons[id] = b
-			_paint_follower_button(id)
-		y += 50
+	# ---- the crew: the roster's eligible slimos (D1-D3, up, not out); the Runner and up to two followers
+	crew_frame = make_frame(c, Vector2(0, CARD_H + 44), Vector2(300, 166))
+	_draw_crew()
 	# ---- the rig
 	rig_frame = make_frame(c, Vector2(306, CARD_H + 44), Vector2(326, 166))
-	make_label(rig_frame, "RIG   8x5 backpack   4 quick", Vector2(6, 4), UiTheme.CYAN)
+	rig_title = make_label(rig_frame, "RIG", Vector2(6, 4), UiTheme.CYAN)
 	weight_label = make_label(rig_frame, "", Vector2(226, 4), UiTheme.CYAN)
 	rig_row = Control.new()
 	rig_frame.add_child(rig_row)
@@ -140,10 +140,72 @@ func _fill_card(f: Panel, r: Dictionary, i: int) -> void:
 	f.add_child(pick)
 
 func _crew_name(id: int) -> String:
-	for who in Sim.CREW:
-		if int(who.id) == id:
-			return String(who.name)
-	return "#%d" % id
+	return Sim.slimo_name(id)
+
+## The crew panel: every eligible slimo on a row with its run numbers; click a row to make it the Runner, click
+## COMES ALONG / STAYS HOME to take or leave a follower (two at most).
+func _draw_crew() -> void:
+	for ch in crew_frame.get_children():
+		ch.queue_free()
+	make_label(crew_frame, "CREW   %d can run" % eligible.size(), Vector2(6, 4), UiTheme.CYAN)
+	if eligible.is_empty():
+		make_label(crew_frame, "nobody can run: everyone is out, down or deep", Vector2(6, 20), UiTheme.HOT_PINK)
+		return
+	var y := 16
+	var shown := 0
+	for id in eligible:
+		if shown >= 4:
+			make_label(crew_frame, "+%d more on the Slimo card" % (eligible.size() - 4), Vector2(6, y), UiTheme.DUST)
+			break
+		var rec: Dictionary = people.record(id)
+		if rec.is_empty():
+			continue
+		var is_runner := id == runner_id
+		var along := follower_ids.has(id)
+		var row := Control.new()
+		row.position = Vector2(0, y)
+		crew_frame.add_child(row)
+		make_slot(row, "slimo.%s.idle" % String(rec.depth).to_lower(), Vector2(6, 0), 20, 30, 3.0)
+		var st: Dictionary = rec.stats
+		var total := int((20 + 50 + 30 + 30) * (0.8 + 0.04 * int(st.body)))
+		var name_col: Color = UiTheme.CYAN if is_runner else (UiTheme.CHALK if along else UiTheme.DUST)
+		make_label(row, "%s   %s %s" % [String(rec.full_name).to_upper(), String(rec.depth), String(rec.past)], Vector2(36, 1), name_col)
+		var line2 := "Body %d  Nerve %d  Hands %d  Eye %d   HP %d" % [int(st.body), int(st.nerve), int(st.hands), int(st.eye), total if is_runner else int(total * 0.6)]
+		make_label(row, line2, Vector2(36, 11), UiTheme.CHALK if is_runner or along else UiTheme.DUST)
+		var skills: Array = rec.skills
+		var sk := "Scav %d  Fight %d" % [int(skills[0].level), int(skills[1].level)]
+		var traits: Array = rec.traits
+		if traits.size() == 2:
+			sk += "   %s, %s" % [String(traits[0].name), String(traits[1].name)]
+		make_label(row, sk, Vector2(36, 21), UiTheme.DUST)
+		if is_runner:
+			make_label(row, "RUNNER", Vector2(232, 1), UiTheme.CYAN)
+			hand_label = make_label(row, "", Vector2(232, 11), UiTheme.DUST)
+		else:
+			var pick := Button.new()
+			pick.flat = true
+			pick.focus_mode = Control.FOCUS_NONE
+			pick.size = Vector2(220, 30)
+			var pid := id
+			pick.pressed.connect(func(): _make_runner(pid))
+			row.add_child(pick)
+			var fid := id
+			var b := make_button(row, "COMES ALONG" if along else "STAYS HOME", Vector2(216, 7), func(): _toggle_follower(fid))
+			b.modulate = Color.WHITE if along else Color(0.6, 0.6, 0.65)
+		y += 32
+		shown += 1
+	make_label(crew_frame, "click a name to make them the Runner", Vector2(6, 155), UiTheme.DUST)
+	make_button(crew_frame, "CARDS", Vector2(246, 148), func(): Screens.show_screen("slimo"))
+
+func _make_runner(id: int) -> void:
+	if id == runner_id:
+		return
+	follower_ids.erase(id)
+	if runner_id >= 0 and follower_ids.size() < 2:
+		follower_ids.append(runner_id)
+	runner_id = id
+	_draw_crew()
+	_redraw_rig()
 
 func _select(i: int) -> void:
 	if routes.is_empty():
@@ -199,14 +261,11 @@ func _draw_strip() -> void:
 	strip_note.text = "the route as remembered" if known > 0 else "never run: only the Mat edge is known"
 
 func _toggle_follower(id: int) -> void:
-	follower_on[id] = not bool(follower_on.get(id, true))
-	_paint_follower_button(id)
-
-func _paint_follower_button(id: int) -> void:
-	var b: Button = follower_buttons[id]
-	var on := bool(follower_on.get(id, true))
-	b.text = "COMES ALONG" if on else "STAYS HOME"
-	b.modulate = Color.WHITE if on else Color(0.6, 0.6, 0.65)
+	if follower_ids.has(id):
+		follower_ids.erase(id)
+	elif follower_ids.size() < 2:
+		follower_ids.append(id)
+	_draw_crew()
 
 # ---------------------------------------------------------------- the rig, packed from the Stash
 func _stash_item(handle: int) -> Dictionary:
@@ -279,9 +338,15 @@ func _slot_frame(parent: Control, pos: Vector2, handle: int, key: String, on_cli
 	b.pressed.connect(on_click)
 	f.add_child(b)
 
+func _runner_setup() -> Dictionary:
+	return people.runner_setup(runner_id) if runner_id >= 0 else RosePeople.plain_runner(5)
+
 func _redraw_rig() -> void:
 	for ch in rig_row.get_children():
 		ch.queue_free()
+	var rs := _runner_setup()
+	carry = float(rs.get("carry_kg", 18.0))
+	rig_title.text = "RIG   8x%d backpack   4 quick" % int(rs.get("rig_rows", 5))
 	# the hand, the quick slots, the pack
 	make_label(rig_row, "HAND", Vector2(6, 16), UiTheme.DUST)
 	var hh := hand_handle
@@ -297,7 +362,7 @@ func _redraw_rig() -> void:
 	if pack_handles.size() > 2:
 		make_label(rig_row, "+%d" % (pack_handles.size() - 2), Vector2(296, 36), UiTheme.CHALK)
 	# the Stash: what can still be packed
-	make_label(rig_row, "FROM THE STASH   click to pack", Vector2(6, 66), UiTheme.DUST)
+	make_label(rig_row, "FROM THE STASH   click to pack", Vector2(6, 62), UiTheme.DUST)
 	var packed := _packed()
 	var k := 0
 	var more := 0
@@ -308,21 +373,23 @@ func _redraw_rig() -> void:
 		if k >= 14:
 			more += 1
 			continue
-		_slot_frame(rig_row, Vector2(6 + (k % 7) * 40, 76 + (k / 7) * 40), h, "", func(): _pack(h))
+		_slot_frame(rig_row, Vector2(6 + (k % 7) * 40, 71 + (k / 7) * 38), h, "", func(): _pack(h))
 		k += 1
 	if more > 0:
-		make_label(rig_row, "+%d more in the Stash" % more, Vector2(6, 156), UiTheme.DUST)
+		make_label(rig_row, "+%d more in the Stash" % more, Vector2(300, 108), UiTheme.DUST)
 	var w := _weight()
 	if hand_label != null:
 		var hit := _stash_item(hand_handle) if hand_handle >= 0 else {}
 		hand_label.text = "in hand: " + (String(hit.name) if not hit.is_empty() else "fists")
-	weight_label.text = "%.1f / %.0f kg" % [w, CARRY]
-	weight_label.add_theme_color_override("font_color", UiTheme.HOT_PINK if w > CARRY else UiTheme.CYAN)
+	weight_label.text = "%.1f / %.0f kg" % [w, carry]
+	weight_label.add_theme_color_override("font_color", UiTheme.HOT_PINK if w > carry else UiTheme.CYAN)
 	var r: Dictionary = routes[selected] if not routes.is_empty() else {}
 	var note := ""
-	if hand_handle < 0:
+	if runner_id < 0:
+		note = "nobody can run"
+	elif hand_handle < 0:
 		note = "no weapon in hand: fists"
-	elif w > CARRY:
+	elif w > carry:
 		note = "overweight: half sprint, double noise"
 	elif not r.is_empty():
 		note = "%s  S%d  %s danger     1-3 pick  ENTER go" % [String(r.name), int(r.stratum), String(r.card.danger_band)]
@@ -330,16 +397,19 @@ func _redraw_rig() -> void:
 
 ## Pack the rig out of the Stash, hand the Run its route, crew and rig, go.
 func _depart() -> void:
-	if routes.is_empty():
+	if routes.is_empty() or runner_id < 0:
 		return
 	var r: Dictionary = routes[selected]
-	var rig: PackedByteArray = stash.pack_rig(hand_handle, PackedInt32Array(quick_handles), PackedInt32Array(pack_handles))
+	var rs := _runner_setup()
+	var rig: PackedByteArray = stash.pack_rig(hand_handle, PackedInt32Array(quick_handles), PackedInt32Array(pack_handles), int(rs.rig_rows), float(rs.carry_kg))
 	var followers := []
-	for who in Sim.CREW:
-		if String(who.role) == "follower" and bool(follower_on.get(int(who.id), true)):
-			followers.append({"id": int(who.id), "name": String(who.name), "body": int(who.body), "damage": int(who.damage)})
-	var runner: Dictionary = Sim.CREW[0]
-	Sim.launch = {"stratum": int(r.stratum), "seed": int(r.seed), "name": String(r.name), "rig": rig, "followers": followers, "body": int(runner.body), "runner": String(runner.name)}
+	for id in follower_ids:
+		followers.append(people.follower_setup(id, runner_id))
+	var fids := PackedInt32Array()
+	for id in follower_ids:
+		fids.append(id)
+	people.depart(runner_id, fids)
+	Sim.launch = {"stratum": int(r.stratum), "seed": int(r.seed), "name": String(r.name), "rig": rig, "followers": followers, "runner": rs, "runner_id": runner_id, "runner_name": String(rs.name)}
 	Screens.show_screen("run")
 
 func _unhandled_input(event: InputEvent) -> void:

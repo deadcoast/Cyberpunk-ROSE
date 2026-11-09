@@ -10,7 +10,7 @@ var content: Control
 var title_label: Label
 var nav: HBoxContainer
 
-const NAV := ["colony", "route", "stash", "bench", "market", "strain", "charter", "codex", "settings"]
+const NAV := ["colony", "route", "slimo", "stash", "bench", "market", "strain", "charter", "codex", "settings"]
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)

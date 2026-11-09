@@ -9,5 +9,6 @@ license.workspace = true
 items = { path = "../items" }
 inventory = { path = "../inventory" }
 bench = { path = "../bench" }
+people = { path = "../people" }
 serde.workspace = true
 postcard.workspace = true

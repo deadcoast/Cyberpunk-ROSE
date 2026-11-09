@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 5;
+pub const SAVE_VERSION: u16 = 6;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -89,6 +89,8 @@ pub struct SaveFile {
     pub ledger: inventory::Ledger,
     /// the Bench queue and the tier open (v5)
     pub bench: bench::BenchQueue,
+    /// the slimos: records, the memorial (v6)
+    pub roster: people::Roster,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -135,6 +137,7 @@ impl SaveFile {
             corpses: Vec::new(),
             ledger: inventory::Ledger::new(),
             bench: bench::BenchQueue::new(),
+            roster: people::Roster::new(),
         }
     }
 
@@ -288,7 +291,11 @@ mod tests {
         save.remember_route(12, 2, 192, 48, vec![1; 192 * 48 / 8]);
         assert_eq!(save.route_memory.len(), 2);
         save.corpses.push(CorpseRecord { seed: 11, stratum: 1, x: 40, y: 13, chunk: "sump_culvert".into(), day: 3, runner: "Pell".into(), rig: vec![1, 2, 3], raided: false });
+        // the roster rides along (v6): six founders with their records
+        save.roster.found(&people::TraitFile::shipped(), &people::NameFile::shipped(), 7, 1);
         let back = SaveFile::decode(&save.encode()).unwrap();
+        assert_eq!(back.roster, save.roster);
+        assert_eq!(back.roster.records.len(), 6);
         assert_eq!(back.route_memory(11, 1).unwrap().bits[0], 0x0F);
         assert!(back.route_memory(99, 1).is_none());
         assert_eq!(back.corpses_on(11, 1).len(), 1);

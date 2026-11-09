@@ -8,6 +8,8 @@ use mat::sim::{hy, sub};
 use logistics::City;
 use mat::MatSim;
 
+mod people;
+
 struct RoseExtension;
 
 #[gdextension]
@@ -950,11 +952,11 @@ impl RoseStash {
     /// number of backpack items by handle. Packed items leave the Stash; a handle that is missing or does not fit is
     /// skipped. Returns the rig serialised (postcard) for `RoseRun.begin_run_rig`, or empty when nothing packed.
     #[func]
-    fn pack_rig(&mut self, hand: i64, quick: PackedInt32Array, pack: PackedInt32Array) -> PackedByteArray {
+    fn pack_rig(&mut self, hand: i64, quick: PackedInt32Array, pack: PackedInt32Array, rows: i64, carry_kg: f64) -> PackedByteArray {
         self.ensure();
         let t = self.table.as_ref().unwrap().clone();
         let stash = self.stash.as_mut().unwrap();
-        let mut rig = inventory::Rig::new(8, 5, 4, 18.0);
+        let mut rig = inventory::Rig::new(8, rows.clamp(3, 8) as u8, 4, carry_kg.max(1.0) as f32);
         let mut any = false;
         if hand >= 0 {
             if let Some(it) = stash.grid.remove(hand as u32) {
@@ -1127,10 +1129,11 @@ impl RoseRun {
     /// `followers`: [{id, name, body, damage}] up to two. `corpses`: [{x, y, chunk, day, rig: PackedByteArray,
     /// raided}] of our dead on this route (from the save); the raider roll runs here.
     #[func]
-    fn begin_run(&mut self, nonce: i64, route_runs: i64, day: i64, kit: PackedStringArray, weapon: GString, body: i64, followers: VarArray, corpses: VarArray) {
+    fn begin_run(&mut self, nonce: i64, route_runs: i64, day: i64, kit: PackedStringArray, weapon: GString, runner: VarDictionary, followers: VarArray, corpses: VarArray) {
         let Some(m) = self.map.clone() else { return };
         let table = table();
-        let mut rig = inventory::Rig::new(8, 5, 4, 18.0);
+        let setup = Self::runner_from(&runner);
+        let mut rig = inventory::Rig::new(8, setup.rig_rows, 4, setup.carry_kg());
         for (i, id) in kit.as_slice().iter().take(4).enumerate() {
             if let Some((_, inst)) = inventory::instance(&table, &id.to_string()) {
                 rig.quick[i] = Some(inst);
@@ -1141,18 +1144,39 @@ impl RoseRun {
         }
         let fs = Self::followers_from(&followers);
         let cs = Self::corpses_from(&corpses);
-        self.start(m, table, nonce, route_runs, day, rig, body, fs, cs);
+        self.start(m, table, nonce, route_runs, day, rig, setup, fs, cs);
     }
 
     /// Start the run with a rig packed on the Route Board (`RoseStash.pack_rig` bytes); otherwise as `begin_run`.
+    /// `runner` is `RosePeople.runner_setup(id)` (or `plain_runner`): {id, name, body, nerve, hands, eye, veins,
+    /// rig_rows, carry_kg, flags}.
     #[func]
-    fn begin_run_rig(&mut self, nonce: i64, route_runs: i64, day: i64, rig: PackedByteArray, body: i64, followers: VarArray, corpses: VarArray) {
+    fn begin_run_rig(&mut self, nonce: i64, route_runs: i64, day: i64, rig: PackedByteArray, runner: VarDictionary, followers: VarArray, corpses: VarArray) {
         let Some(m) = self.map.clone() else { return };
         let table = table();
-        let rig = postcard::from_bytes::<inventory::Rig>(rig.to_vec().as_slice()).unwrap_or_else(|_| inventory::Rig::new(8, 5, 4, 18.0));
+        let setup = Self::runner_from(&runner);
+        let rig = postcard::from_bytes::<inventory::Rig>(rig.to_vec().as_slice()).unwrap_or_else(|_| inventory::Rig::new(8, setup.rig_rows, 4, setup.carry_kg()));
         let fs = Self::followers_from(&followers);
         let cs = Self::corpses_from(&corpses);
-        self.start(m, table, nonce, route_runs, day, rig, body, fs, cs);
+        self.start(m, table, nonce, route_runs, day, rig, setup, fs, cs);
+    }
+
+    fn runner_from(d: &VarDictionary) -> crate::people::RunnerSetup {
+        let geti = |k: &str, def: i64| d.get(k).and_then(|v| v.try_to::<i64>().ok()).unwrap_or(def);
+        let plain = crate::people::RunnerSetup::plain(geti("body", 5).clamp(1, 10) as u8);
+        crate::people::RunnerSetup {
+            id: geti("id", 0) as u32,
+            name: d.get("name").map(|v| v.to_string()).unwrap_or(plain.name),
+            body: plain.body,
+            nerve: geti("nerve", plain.nerve as i64).clamp(1, 10) as u8,
+            hands: geti("hands", plain.hands as i64).clamp(1, 10) as u8,
+            eye: geti("eye", plain.eye as i64).clamp(1, 10) as u8,
+            veins: geti("veins", plain.veins as i64).clamp(1, 5) as u8,
+            rig_rows: geti("rig_rows", plain.rig_rows as i64).clamp(3, 8) as u8,
+            // carry_kg is 18 + (body - 5) + the traits'; the dict carries the total
+            carry_bonus_kg: d.get("carry_kg").and_then(|v| v.try_to::<f64>().ok()).map(|c| c as f32 - 18.0 - (plain.body as f32 - 5.0)).unwrap_or(0.0),
+            flags: d.get("flags").and_then(|v| v.try_to::<PackedStringArray>().ok()).map(|a| a.as_slice().iter().map(|s| s.to_string()).collect()).unwrap_or_default(),
+        }
     }
 
     fn followers_from(followers: &VarArray) -> Vec<run::FollowerSetup> {
@@ -1164,6 +1188,8 @@ impl RoseRun {
                 name: d.get("name").map(|v| v.to_string()).unwrap_or_default(),
                 body: d.get("body").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(5) as u8,
                 damage: d.get("damage").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(4) as i32,
+                back_off_pct: d.get("back_off_pct").and_then(|v| v.try_to::<i64>().ok()).unwrap_or(30).clamp(0, 100) as u8,
+                bonded: d.get("bonded").and_then(|v| v.try_to::<bool>().ok()).unwrap_or(false),
             });
         }
         fs
@@ -1188,7 +1214,7 @@ impl RoseRun {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn start(&mut self, m: run::RouteMap, table: ItemTable, nonce: i64, route_runs: i64, day: i64, rig: inventory::Rig, body: i64, fs: Vec<run::FollowerSetup>, cs: Vec<run::Corpse>) {
+    fn start(&mut self, m: run::RouteMap, table: ItemTable, nonce: i64, route_runs: i64, day: i64, rig: inventory::Rig, runner: crate::people::RunnerSetup, fs: Vec<run::FollowerSetup>, cs: Vec<run::Corpse>) {
         let setup = run::RunSetup {
             mat_lume_gene: self.mat_lume_gene,
             memory: self.memory.as_deref(),
@@ -1196,7 +1222,7 @@ impl RoseRun {
             route_runs: route_runs.clamp(0, u16::MAX as i64) as u16,
             day: day.max(0) as u32,
             rig,
-            body: body.clamp(1, 10) as u8,
+            runner,
             followers: fs,
             corpses: cs,
         };
@@ -1328,6 +1354,12 @@ impl RoseRun {
         d.set("chunks_seen", o.chunks_seen as i64);
         d.set("blind_value", o.blind_value as i64);
         d.set("route_memory", &PackedByteArray::from(o.route_memory.as_slice()));
+        // what the roster reads (RosePeople.apply_run)
+        d.set("items_taken", o.items_taken as i64);
+        d.set("hits_survived", o.hits_survived as i64);
+        d.set("follower_strikes", o.follower_strikes as i64);
+        d.set("injuries", &PackedStringArray::from(o.injuries.iter().map(|s| GString::from(*s)).collect::<Vec<_>>().as_slice()));
+        d.set("pulls", o.report.pulls as i64);
         // the cadence report (Full Design, The cadence budget and its log)
         let r = &o.report;
         let mut rep = VarDictionary::new();

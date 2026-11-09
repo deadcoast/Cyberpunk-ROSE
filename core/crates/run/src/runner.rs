@@ -101,6 +101,11 @@ pub struct Runner {
     pub eye: u8,
     pub body: u8,
     pub hands: u8,
+    pub nerve: u8,
+    /// the trait flags the run reads (Full Design, The record in a run)
+    pub quirks: Quirks,
+    /// stamina without the bond bonus
+    base_stamina: i32,
     pub lantern_on: bool,
     pub dimming: bool,
     pub sneaking: bool,
@@ -113,27 +118,78 @@ pub struct Runner {
     pub pose: Pose,
 }
 
+/// The trait flags a run reads, parsed once from the record's flag list.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Quirks {
+    pub see_plus_1: bool,
+    pub noise_plus_1: bool,
+    pub melee_noise_minus_1: bool,
+    pub melee_plus_1: bool,
+    pub ranged_plus_2: bool,
+    pub sprint_plus: bool,
+    pub regen_x1_2: bool,
+    pub walk_minus: bool,
+    pub water_at_walk: bool,
+    pub deposit_plus_1: bool,
+    pub eye_plus_1_dark: bool,
+    pub fever_immune: bool,
+}
+
+impl Quirks {
+    pub fn from_flags(flags: &[String]) -> Quirks {
+        let has = |f: &str| flags.iter().any(|x| x == f);
+        Quirks {
+            see_plus_1: has("see_plus_1"),
+            noise_plus_1: has("noise_plus_1"),
+            melee_noise_minus_1: has("melee_noise_minus_1"),
+            melee_plus_1: has("melee_plus_1"),
+            ranged_plus_2: has("ranged_plus_2"),
+            sprint_plus: has("sprint_plus_0_5"),
+            regen_x1_2: has("stamina_regen_x1_2"),
+            walk_minus: has("walk_minus_0_3"),
+            water_at_walk: has("water_at_walk"),
+            deposit_plus_1: has("deposit_plus_1"),
+            eye_plus_1_dark: has("eye_plus_1_dark"),
+            fever_immune: has("fever_immune"),
+        }
+    }
+}
+
+/// The stat scale (Full Design, The record in a run): 0.8 + 0.04 x stat, 1.0 at 5.
+pub fn stat_scale(stat: u8) -> f32 {
+    0.8 + 0.04 * stat as f32
+}
+
+/// Damage lean from a stat: (stat - 5) / 2 toward zero.
+pub fn stat_lean(stat: u8) -> i32 {
+    (stat as i32 - 5) / 2
+}
+
 impl Runner {
-    pub fn new(rules: &RunnerRules, tile: (i32, i32), rig: Rig, body: u8) -> Runner {
-        let scale = 0.8 + 0.04 * body as f32;
+    pub fn new(rules: &RunnerRules, tile: (i32, i32), rig: Rig, setup: &people::RunnerSetup) -> Runner {
+        let scale = stat_scale(setup.body);
         let max: [i32; 4] = [0, 1, 2, 3].map(|i| (rules.sections[i] as f32 * scale).round() as i32);
+        let stamina = (rules.stamina as f32 * stat_scale(setup.nerve)).round() as i32 * 100;
         Runner {
             x: tile.0 * FP + FP / 2,
             y: tile.1 * FP + FP / 2,
             facing: 1,
             sections: max,
             max_sections: max,
-            stamina: rules.stamina * 100,
-            max_stamina: rules.stamina * 100,
+            stamina,
+            max_stamina: stamina,
             since_spend: 0,
             statuses: Vec::new(),
             action: Action::Idle,
             life: Life::Up,
             rig,
-            veins: 2,
-            eye: 3,
-            body,
-            hands: 5,
+            veins: setup.veins,
+            eye: setup.eye,
+            body: setup.body,
+            hands: setup.hands,
+            nerve: setup.nerve,
+            quirks: Quirks::from_flags(&setup.flags),
+            base_stamina: stamina,
             lantern_on: true,
             dimming: false,
             sneaking: false,
@@ -143,6 +199,15 @@ impl Runner {
             melee_cd: 0,
             last_spend: 0,
             pose: Pose::Walk,
+        }
+    }
+
+    /// A bonded partner within 6 tiles is +1 Nerve: +4 stamina on the pool (Full Design, Bonds).
+    pub fn set_bond_near(&mut self, near: bool) {
+        let want = self.base_stamina + if near { 400 } else { 0 };
+        if want != self.max_stamina {
+            self.max_stamina = want;
+            self.stamina = self.stamina.min(self.max_stamina);
         }
     }
 
@@ -201,18 +266,20 @@ impl Runner {
     /// wading shallow water x0.75; swimming deep water is sneak speed.
     pub fn speed(&self, rules: &RunnerRules, overweight: bool, pose: Pose) -> i32 {
         let sprint_ok = self.sprinting && !self.legs_out() && pose == Pose::Walk;
+        let walk = if self.quirks.walk_minus { rules.walk - 0.3 } else { rules.walk };
+        let sprint = if self.quirks.sprint_plus { rules.sprint + 0.5 } else { rules.sprint };
         let mut tps = if pose == Pose::Swim {
-            rules.sneak
+            if self.quirks.water_at_walk { walk } else { rules.sneak }
         } else if self.sneaking {
             rules.sneak
         } else if sprint_ok {
-            if overweight { rules.sprint * 0.5 } else { rules.sprint }
+            if overweight { sprint * 0.5 } else { sprint }
         } else {
-            rules.walk
+            walk
         };
         match pose {
             Pose::Crawl => tps *= 0.7,
-            Pose::Wade => tps *= 0.75,
+            Pose::Wade if !self.quirks.water_at_walk => tps *= 0.75,
             _ => {}
         }
         if self.legs_out() {
@@ -281,7 +348,9 @@ impl Runner {
         }
         self.since_spend += 1;
         if self.since_spend > ticks(rules.regen_delay_s) && self.stamina < self.max_stamina {
-            self.stamina = (self.stamina + rules.regen_per_s * 100 / crate::creature::TICK_HZ).min(self.max_stamina);
+            let per_tick = rules.regen_per_s * 100 / crate::creature::TICK_HZ;
+            let per_tick = if self.quirks.regen_x1_2 { per_tick * 12 / 10 } else { per_tick };
+            self.stamina = (self.stamina + per_tick).min(self.max_stamina);
         }
         self.last_spend = 0;
         bled
@@ -289,6 +358,13 @@ impl Runner {
 
     /// The melee weapon in hand: (damage, noise, reach), the fist when nothing is wielded.
     pub fn melee(&self, table: &ItemTable) -> (i32, i32, i32) {
+        let (dmg, noise, reach) = self.melee_gear(table);
+        let dmg = (dmg + stat_lean(self.hands) + if self.quirks.melee_plus_1 { 1 } else { 0 }).max(1);
+        let noise = (noise - if self.quirks.melee_noise_minus_1 { 1 } else { 0 }).max(0);
+        (dmg, noise, reach)
+    }
+
+    fn melee_gear(&self, table: &ItemTable) -> (i32, i32, i32) {
         for h in self.rig.gear.hands.iter().flatten() {
             let d = table.def(h.def);
             if let (Some(g), Some(st)) = (&d.gear, h.gear_stats(d)) {
@@ -301,13 +377,19 @@ impl Runner {
         (3, 1, 1)
     }
 
+    /// Dig time in seconds for this body: the table's x (1.25 - 0.05 x Hands).
+    pub fn dig_s(&self, rules: &RunnerRules) -> f32 {
+        rules.dig_s * (1.25 - 0.05 * self.hands as f32)
+    }
+
     /// The ranged weapon in hand, if any: (damage, noise, mag).
     pub fn ranged(&self, table: &ItemTable) -> Option<(i32, i32, i32)> {
         for h in self.rig.gear.hands.iter().flatten() {
             let d = table.def(h.def);
             if let (Some(g), Some(st)) = (&d.gear, h.gear_stats(d)) {
                 if g.kind == "ranged" {
-                    return Some((st.dmg, st.noise, st.mag.max(1)));
+                    let dmg = (st.dmg + stat_lean(self.eye) + if self.quirks.ranged_plus_2 { 2 } else { 0 }).max(1);
+                    return Some((dmg, st.noise, st.mag.max(1)));
                 }
             }
         }

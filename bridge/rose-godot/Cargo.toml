@@ -17,4 +17,6 @@ inventory = { path = "../../core/crates/inventory" }
 bench = { path = "../../core/crates/bench" }
 save = { path = "../../core/crates/save" }
 run = { path = "../../core/crates/run" }
+people = { path = "../../core/crates/people" }
+toml.workspace = true
 postcard.workspace = true

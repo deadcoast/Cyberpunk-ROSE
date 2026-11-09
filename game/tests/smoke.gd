@@ -9,6 +9,7 @@ var frames := 0
 var failures: Array[String] = []
 var sim_sent_handle := -1
 var screen_ids: Array = []
+var smoke_runner := -1
 var screen_i := -1
 var frames_on_screen := 0
 var resolved_per_screen := {}
@@ -149,6 +150,28 @@ func _verify_current() -> void:
 			sim.bench_slot = scr._item(chrome2)
 			sim_sent_handle = chrome2
 			_check(not sim.bench_slot.is_empty() and not st.best_recipe(chrome2).is_empty(), "stash: craft hand-off empty or no recipe takes a lamp core")
+		"slimo":
+			var pp: RosePeople = sim.ensure_people()
+			_check(pp.count() == 6 and scr.ids.size() == 6, "slimo: founders %d, roster rows %d" % [pp.count(), scr.ids.size()])
+			var el: PackedInt32Array = pp.eligible()
+			_check(el.size() >= 3, "slimo: only %d founders can run" % el.size())
+			var rec: Dictionary = pp.record(scr.selected)
+			_check(not rec.is_empty() and rec.traits.size() == 2 and rec.skills.size() == 8 and int(rec.needs.mood) == 60, "slimo: record %s" % str(rec.keys()))
+			var st_: Dictionary = rec.stats
+			for k in ["body", "nerve", "hands", "eye", "matsense", "voice"]:
+				_check(int(st_[k]) >= 1 and int(st_[k]) <= 10, "slimo: stat %s = %d" % [k, int(st_[k])])
+			# a priority cell cycles and the utility follows it
+			var jobs: PackedStringArray = pp.jobs()
+			var scav := jobs.find("Scav")
+			var u0 := float(rec.utility[scav])
+			pp.set_priority(scr.selected, scav, 4)
+			var u4 := float(pp.record(scr.selected).utility[scav])
+			_check(u4 < 0.0 or u0 < 0.0 or u4 >= u0, "slimo: priority 4 did not raise Scav utility (%.2f -> %.2f)" % [u0, u4])
+			pp.set_priority(scr.selected, scav, 0)
+			_check(float(pp.record(scr.selected).utility[scav]) <= 0.0, "slimo: priority 0 should mean never")
+			pp.set_priority(scr.selected, scav, 2)
+			_check(scr.card_frame.get_child_count() > 40, "slimo: card drawn thin (%d nodes)" % scr.card_frame.get_child_count())
+			smoke_runner = int(el[0])
 		"bench":
 			var st: RoseStash = scr.stash
 			_check(scr.recipes.size() == 60 and int(st.tier_open()) == 1, "bench: %d recipes, tier %d open" % [scr.recipes.size(), int(st.tier_open())])
@@ -206,9 +229,20 @@ func _verify_current() -> void:
 			_check(scr.pack_handles.size() == 1, "route: the pry bar (1x3) should ride in the pack, pack %s" % str(scr.pack_handles))
 			scr._select(0)
 			# depart: the rig leaves the Stash and the launch carries it; the harness opens the run itself
-			var rig: PackedByteArray = st.pack_rig(scr.hand_handle, PackedInt32Array(scr.quick_handles), PackedInt32Array(scr.pack_handles))
+			_check(scr.runner_id == smoke_runner and scr.follower_ids.size() == 2, "route: crew from the roster (runner %d, followers %s)" % [scr.runner_id, str(scr.follower_ids)])
+			var pp: RosePeople = sim.ensure_people()
+			var rs: Dictionary = pp.runner_setup(scr.runner_id)
+			_check(int(rs.rig_rows) >= 3 and float(rs.carry_kg) >= 14.0 and scr.carry == float(rs.carry_kg), "route: runner setup %s" % str(rs))
+			var rig: PackedByteArray = st.pack_rig(scr.hand_handle, PackedInt32Array(scr.quick_handles), PackedInt32Array(scr.pack_handles), int(rs.rig_rows), float(rs.carry_kg))
 			_check(not rig.is_empty() and st.count() == before - 5, "route: pack_rig left the Stash at %d of %d" % [st.count(), before])
-			sim.launch = {"stratum": 1, "seed": sim.route_seed(1), "name": sim.region_name(1), "rig": rig, "followers": [{"id": 101, "name": "Pell", "body": 5, "damage": 4}, {"id": 102, "name": "Rook", "body": 4, "damage": 4}], "body": 5, "runner": "Sable"}
+			var followers := []
+			var fids := PackedInt32Array()
+			for fid in scr.follower_ids:
+				followers.append(pp.follower_setup(fid, scr.runner_id))
+				fids.append(fid)
+			pp.depart(scr.runner_id, fids)
+			_check(String(pp.record(scr.runner_id).status) == "on a run" and not pp.eligible().has(scr.runner_id), "route: depart did not mark the crew out")
+			sim.launch = {"stratum": 1, "seed": sim.route_seed(1), "name": sim.region_name(1), "rig": rig, "followers": followers, "runner": rs, "runner_id": scr.runner_id, "runner_name": String(rs.name)}
 		"run":
 			var r: RoseRun = scr.route
 			_check(scr.seed_value == sim.route_seed(1) and String(r.runner().hand) == "ger_pipe", "run: the launch did not carry the route and the rig (seed %d, hand %s)" % [scr.seed_value, String(r.runner().hand)])
@@ -343,6 +377,17 @@ func _verify_current() -> void:
 			_check(PackedInt32Array(oc.get("followers_extracted", PackedInt32Array())).size() + PackedInt32Array(oc.get("followers_stranded", PackedInt32Array())).size() == 2, "run: outcome lost a follower")
 			_check(oc.has("report") and int(oc.report.pulls) >= 1, "run: outcome carries no cadence report")
 			_check(sim.day >= 2 and not sim.last_outcome.is_empty(), "run: the colony did not take the outcome")
+			# the roster took the run: the Runner is home with a run on the record and Scav XP from the pulls
+			var pp: RosePeople = sim.ensure_people()
+			var rr: Dictionary = pp.record(smoke_runner)
+			_check(not rr.is_empty() and int(rr.runs) == 1 and int(rr.survived) == 1 and String(rr.status) == "idle", "run: the Runner's record did not take the run (%s)" % str(rr.get("status", "")))
+			_check(int(rr.hauls) == int(oc.pulls) and int(rr.skills[0].xp) + int(rr.skills[0].level) > 0, "run: hauls %d vs pulls %d, Scav xp %d" % [int(rr.hauls), int(oc.pulls), int(rr.skills[0].xp)])
+			# four shifts have ended: the first fed a Pit (Fed back to 100), then three at -15; Rest slept +15 x3
+			# (clamped) then the run's -12, a run being the shift's work
+			_check(int(rr.needs.fed) == 55 and int(rr.needs.rest) == 88, "run: the shift did not move the Runner's needs (fed %d rest %d)" % [int(rr.needs.fed), int(rr.needs.rest)])
+			for b in rr.bonds:
+				_check(int(b.runs) == 1, "run: bond runs %d after one run together" % int(b.runs))
+			_check(rr.bonds.size() == 2, "run: %d bonds counted for two followers" % rr.bonds.size())
 			_check(scr.cadence_path != "" and FileAccess.file_exists(scr.cadence_path), "run: cadence log not written (%s)" % scr.cadence_path)
 			var log_text := FileAccess.get_file_as_string(scr.cadence_path)
 			_check(log_text.contains("LAND") and log_text.contains("budget"), "run: cadence log lacks entries or the report")

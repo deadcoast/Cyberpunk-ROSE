@@ -29,8 +29,9 @@ const B_TAKE := 256
 const B_LANTERN := 512
 const B_DROP := 32768
 const ORDER_SHIFT := 13
-const FOLLOWERS := [{"id": 101, "name": "Pell", "body": 5, "damage": 4}, {"id": 102, "name": "Rook", "body": 4, "damage": 4}]
-const RUNNER_NAME := "Sable"
+## A run without the Route Board (tests): two plain followers and the plain Runner (RosePeople.plain_runner).
+const FOLLOWERS := [{"id": 101, "name": "Pell", "body": 5, "damage": 4, "back_off_pct": 30, "bonded": false}, {"id": 102, "name": "Rook", "body": 4, "damage": 4, "back_off_pct": 30, "bonded": false}]
+const RUNNER_NAME := "the Runner"
 
 var world: WorldView
 var fog: FogOverlay
@@ -41,6 +42,7 @@ var seed_value := 11
 var stratum := 1
 var route_name := "SUMP EAST"
 var runner_name := RUNNER_NAME
+var crew := {}                    # {runner_id, followers} from the Route Board; empty for a run without records
 var sim_accum := 0.0
 var clock := 0.0
 var frame := 0
@@ -116,7 +118,10 @@ func _ready() -> void:
 		stratum = int(launch.get("stratum", stratum))
 		seed_value = int(launch.get("seed", seed_value))
 		route_name = String(launch.get("name", route_name))
-		runner_name = String(launch.get("runner", runner_name))
+		runner_name = String(launch.get("runner_name", runner_name))
+		crew = {"runner_id": int(launch.get("runner_id", -1)), "followers": launch.get("followers", [])}
+		if int(crew.runner_id) < 0:
+			crew = {}
 	screen_title = "RUN  -  S%d %s" % [stratum, route_name]
 	# the simulation first: the HUD is built from the route (chunk count) in _build_content
 	route = RoseRun.new()
@@ -129,11 +134,11 @@ func _ready() -> void:
 		route.restore_memory(memory_bits)
 	var rig: PackedByteArray = launch.get("rig", PackedByteArray())
 	var followers: Array = launch.get("followers", FOLLOWERS)
-	var body := int(launch.get("body", BODY))
+	var runner_setup: Dictionary = launch.get("runner", RosePeople.plain_runner(BODY))
 	if rig.is_empty():
-		route.begin_run(Sim.run_nonce(), Sim.runs_of(stratum, seed_value), Sim.day, PackedStringArray(KIT), WEAPON, body, followers, Sim.corpses_on(stratum, seed_value))
+		route.begin_run(Sim.run_nonce(), Sim.runs_of(stratum, seed_value), Sim.day, PackedStringArray(KIT), WEAPON, runner_setup, followers, Sim.corpses_on(stratum, seed_value))
 	else:
-		route.begin_run_rig(Sim.run_nonce(), Sim.runs_of(stratum, seed_value), Sim.day, rig, body, followers, Sim.corpses_on(stratum, seed_value))
+		route.begin_run_rig(Sim.run_nonce(), Sim.runs_of(stratum, seed_value), Sim.day, rig, runner_setup, followers, Sim.corpses_on(stratum, seed_value))
 	super._ready()
 	nav.visible = false
 	world = WorldView.new()
@@ -536,7 +541,7 @@ func _finish_run() -> void:
 	var o: Dictionary = route.outcome()
 	if o.is_empty():
 		return
-	Sim.take_outcome(stratum, seed_value, RUNNER_NAME, o)
+	Sim.take_outcome(stratum, seed_value, runner_name, o, crew)
 	var parts := []
 	parts.append(String(o.result).to_upper())
 	parts.append("%d kills" % int(o.kills))
@@ -557,6 +562,9 @@ func _finish_run() -> void:
 	var rep: Dictionary = o.get("report", {})
 	if not rep.is_empty() and int(rep.get("pulls", 0)) >= 2:
 		parts.append("a pull every %d s" % int(round(float(rep.pull_gap_median))))
+	var lines: PackedStringArray = Sim.last_outcome.get("record_lines", PackedStringArray())
+	for i in mini(lines.size(), 2):
+		parts.append(String(lines[i]))
 	summary.text = "   ".join(parts)
 	summary.add_theme_color_override("font_color", UiTheme.OOZE_GLOW if String(o.result) == "extracted" else UiTheme.HOT_PINK)
 	_write_cadence_log(o)

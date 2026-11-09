@@ -64,14 +64,13 @@ var stash: RoseStash
 var strata_open := 3
 ## Region names per stratum at launch (Full Design, The Route Board).
 const REGIONS := {1: "SUMP EAST", 2: "CULVERT NORTH", 3: "STORM DRAIN"}
-## The crew the Phase B sim carries until Phase C brings slimo records: the Runner first, then who can follow.
-const CREW := [
-	{"id": 100, "name": "Sable", "body": 5, "damage": 4, "role": "runner", "sprite": "slimo.d2.idle"},
-	{"id": 101, "name": "Pell", "body": 5, "damage": 4, "role": "follower", "sprite": "slimo.d3.idle"},
-	{"id": 102, "name": "Rook", "body": 4, "damage": 4, "role": "follower", "sprite": "slimo.d2.idle"},
-]
-## What the Route Board hands the Run: {stratum, seed, name, rig: PackedByteArray, followers: [...], body}. Empty: the Run's own defaults.
+## The roster (people crate through RosePeople): every slimo's record, founded from the save's seed on first use.
+var people: RosePeople
+## What the Route Board hands the Run: {stratum, seed, name, rig: PackedByteArray, runner: RosePeople.runner_setup,
+## runner_id, followers: [RosePeople.follower_setup...]}. Empty: the Run's own defaults.
 var launch := {}
+## The last shift's record lines (XP, bonds, injuries, unrest) from the roster, shown on the Stash with the report.
+var people_lines: PackedStringArray = PackedStringArray()
 ## The last shift's report from the ledger ({sold, earned, fed, eddies, deliveries}), shown once on the Stash.
 var shift_report := {}
 ## The item the Stash sent to the Bench with Craft (a RoseStash.items() entry), consumed by the Bench screen.
@@ -91,15 +90,41 @@ func market_name(i: int) -> String:
 func pit_name(i: int) -> String:
 	return "HEART" if i == 0 else "RELAY %d" % i
 
-## Shift end: the queues resolve, the ledger takes the eddies, the Pits take the nutrient, the genome drifts.
+## Shift end: the queues resolve, the ledger takes the eddies, the Pits take the nutrient, the genome drifts, and
+## the roster takes the shift (needs, Mood, the shift's crafts and sales as XP to the highest utility).
 func end_shift() -> void:
 	var st := ensure_stash()
+	var crafts_before := st.bench_jobs().size()
 	var r: Dictionary = st.resolve_shift()
 	var city := ensure()
+	var fed := false
 	for d in r.get("deliveries", []):
 		city.feed_pit(int(d.pit), float(d.nutrient))
 		city.drift_genome(d.drift)
+		fed = true
 	shift_report = r
+	var crafts := crafts_before - st.bench_jobs().size()
+	# everyone is on the signalled Mat until the colony's zones exist (PAC-041); the Mat lights them when its own
+	# glow (2 + lume gene x 6, run::light::mat_emit) is at or above dim (3)
+	var ctx := {"signalled": true, "lit": 2.0 + float(city.gene(4)) * 6.0 >= 3.0, "wet": false, "fed": fed or int(r.get("fed", 0)) > 0}
+	people_lines = ensure_people().end_shift(ctx, maxi(crafts, 0), int(r.get("sold", 0)), 0)
+
+## The roster, founded once per session from the save's seed (Full Design, Creation).
+func ensure_people() -> RosePeople:
+	if people == null:
+		people = RosePeople.new()
+		people.found(seed_value, day)
+	return people
+
+## The crew's names, for the Route Board's stranded line and the Run's chips.
+func slimo_name(id: int) -> String:
+	var rec: Dictionary = ensure_people().record(id)
+	if rec.is_empty():
+		for m in ensure_people().memorial():
+			if int(m.id) == id:
+				return String(m.full_name)
+		return "#%d" % id
+	return String(rec.full_name)
 
 ## The Stash, created once for the session with its starting haul.
 func ensure_stash() -> RoseStash:
@@ -127,11 +152,28 @@ func corpses_on(stratum: int, seed_value: int) -> Array:
 			out.append(c)
 	return out
 
-## Record what a run gave back (RoseRun.outcome()) and advance the shift.
-func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Dictionary) -> void:
+## Record what a run gave back (RoseRun.outcome()) and advance the shift. `crew` is the launch's {runner_id,
+## followers} (empty for a run without a record: tests).
+func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Dictionary, crew: Dictionary = {}) -> void:
 	last_outcome = o.duplicate()
 	last_outcome["stratum"] = stratum
 	last_outcome["seed"] = seed_value
+	# the roster takes the run: XP, bonds, injuries, the dead to the memorial
+	if crew.has("runner_id"):
+		var fids := PackedInt32Array()
+		for f in crew.get("followers", []):
+			fids.append(int(f.id))
+		var rep := {
+			"runner": int(crew.runner_id), "followers": fids,
+			"extracted": String(o.get("result", "")) == "extracted", "runner_died": String(o.get("result", "")) == "died",
+			"followers_extracted": o.get("followers_extracted", PackedInt32Array()),
+			"followers_stranded": o.get("followers_stranded", PackedInt32Array()),
+			"followers_dead": o.get("followers_dead", PackedInt32Array()),
+			"pulls": int(o.get("pulls", 0)), "items_taken": int(o.get("items_taken", 0)), "kills": int(o.get("kills", 0)),
+			"hits_survived": int(o.get("hits_survived", 0)), "follower_strikes": int(o.get("follower_strikes", 0)),
+			"injuries": o.get("injuries", PackedStringArray()),
+		}
+		last_outcome["record_lines"] = ensure_people().apply_run(rep)
 	if String(o.get("result", "")) == "extracted":
 		pending_haul = o.get("rig", PackedByteArray())
 		pending_haul_from = "S%d route %d" % [stratum, seed_value]

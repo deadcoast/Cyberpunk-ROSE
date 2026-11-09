@@ -48,6 +48,10 @@ pub struct Follower {
     /// carrying the downed Runner: tiles of carry left
     pub carrying: Option<i32>,
     pub carried_units: i32,
+    /// HP percentage under which the follower stops seeking fights (Full Design, Followers): 30, Coward 60, Fearless 0
+    pub back_off_pct: u8,
+    /// bonded to the Runner (Full Design, Bonds)
+    pub bonded: bool,
     field_target: Option<(i32, i32)>,
     field: Vec<u16>,
 }
@@ -86,6 +90,8 @@ impl Follower {
             cooldown_left: 0,
             carrying: None,
             carried_units: 0,
+            back_off_pct: 30,
+            bonded: false,
             field_target: None,
             field: Vec::new(),
         }
@@ -232,7 +238,9 @@ pub fn update(f: &mut Follower, cx: &FollowerContext, runner_pos: &mut (i32, i32
             return out;
         }
     }
-    // ---- fight: the nearest living creature within reach (Guard: within GUARD_REACH of the post)
+    // ---- fight: the nearest living creature within reach (Guard: within GUARD_REACH of the post); a follower
+    // under its back-off line only strikes what stands beside it
+    let backing_off = f.hp * 100 < f.max_hp * f.back_off_pct as i32;
     let reach_from = if f.order == Order::Guard { f.post } else { me };
     let mut nearest: Option<(usize, i32)> = None;
     for (i, c) in cx.creatures.iter().enumerate() {
@@ -242,10 +250,14 @@ pub fn update(f: &mut Follower, cx: &FollowerContext, runner_pos: &mut (i32, i32
         let ct = c.tile();
         let d2 = (ct.0 - me.0).pow(2) + (ct.1 - me.1).pow(2);
         let from_post = (ct.0 - reach_from.0).pow(2) + (ct.1 - reach_from.1).pow(2);
-        let engage = match f.order {
-            Order::Guard => from_post <= GUARD_REACH * GUARD_REACH,
-            Order::Hold => d2 <= 2,
-            Order::Follow => d2 <= 4 * 4,
+        let engage = if backing_off {
+            d2 <= 2
+        } else {
+            match f.order {
+                Order::Guard => from_post <= GUARD_REACH * GUARD_REACH,
+                Order::Hold => d2 <= 2,
+                Order::Follow => d2 <= 4 * 4,
+            }
         };
         if engage && nearest.is_none_or(|(_, bd)| d2 < bd) {
             nearest = Some((i, d2));

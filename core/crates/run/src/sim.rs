@@ -135,6 +135,10 @@ pub struct FollowerSetup {
     pub name: String,
     pub body: u8,
     pub damage: i32,
+    /// HP percentage under which the follower stops seeking fights (30; Coward 60; Fearless 0)
+    pub back_off_pct: u8,
+    /// bonded to the Runner: +1 Nerve for the Runner within 6 tiles
+    pub bonded: bool,
 }
 
 /// What a run gives back to the colony. The run never reaches into the colony; the colony reads this.
@@ -160,6 +164,12 @@ pub struct Outcome {
     /// the cadence log of the whole run, with its report
     pub log: crate::telemetry::CadenceLog,
     pub report: crate::telemetry::Report,
+    /// what the roster reads for XP (Full Design, Skills and XP): items taken, hits the Runner survived, strikes
+    /// the followers landed, and the statuses the Runner carries home as injuries
+    pub items_taken: u32,
+    pub hits_survived: u32,
+    pub follower_strikes: u32,
+    pub injuries: Vec<&'static str>,
 }
 
 #[derive(Clone, Debug)]
@@ -177,6 +187,8 @@ pub struct RunSim {
     pub tick: u64,
     /// the cadence log: landings, losses, decisions with their ticks
     pub log: crate::telemetry::CadenceLog,
+    /// strikes the followers landed, for their Guard XP
+    pub follower_strikes: u32,
     /// the shift: ticks the route gives before overtime (ShiftRules)
     pub shift_ticks: u64,
     /// overtime minutes already answered
@@ -222,7 +234,8 @@ pub struct RunSetup<'a> {
     pub route_runs: u16,
     pub day: u32,
     pub rig: Rig,
-    pub body: u8,
+    /// the record's body for the run (Full Design, The record in a run)
+    pub runner: people::RunnerSetup,
     pub followers: Vec<FollowerSetup>,
     /// corpses of earlier Runners on this route, with the day they died; the raider roll runs here
     pub corpses: Vec<Corpse>,
@@ -235,7 +248,7 @@ impl RunSim {
         let loot = LootState::new(&map, &tables, setup.run_nonce, setup.route_runs, setup.day);
         let creatures = creature::spawn_all(&map, &defs, &mut rng);
         let start = map.entry.get(1).or(map.entry.first()).copied().unwrap_or((1, 12));
-        let mut runner = Runner::new(&defs.runner, (start.0 as i32, start.1 as i32), setup.rig, setup.body);
+        let mut runner = Runner::new(&defs.runner, (start.0 as i32, start.1 as i32), setup.rig, &setup.runner);
         if let Some((dmg, _, mag)) = runner.ranged(&table) {
             let _ = dmg;
             runner.ammo = mag;
@@ -245,7 +258,10 @@ impl RunSim {
         for (k, fs) in setup.followers.iter().take(2).enumerate() {
             // beside the Runner on the Mat edge
             let tile = map.entry.get(if k == 0 { 0 } else { 2 }).copied().unwrap_or(start);
-            followers.push(Follower::new(fs.id, &fs.name, (tile.0 as i32, tile.1 as i32), follower::hp_for(fs.body, runner_total), fs.damage.max(4)));
+            let mut f = Follower::new(fs.id, &fs.name, (tile.0 as i32, tile.1 as i32), follower::hp_for(fs.body, runner_total), fs.damage.max(4));
+            f.back_off_pct = fs.back_off_pct;
+            f.bonded = fs.bonded;
+            followers.push(f);
         }
         // the dead of earlier runs: raiders roll once per day since each death, 10 % + 5 % per stratum
         let mut loot = loot;
@@ -279,6 +295,7 @@ impl RunSim {
             salt: vec![false; n],
             tick: 0,
             log: crate::telemetry::CadenceLog::new(),
+            follower_strikes: 0,
             shift_ticks,
             overtime_minutes: 0,
             next_creature_id,
@@ -469,7 +486,7 @@ impl RunSim {
     }
 
     fn runner_sound(&mut self, sound: Sound) {
-        self.senses.runner_sound(&self.map, sound);
+        self.senses.runner_sound(&self.map, sound, if self.runner.quirks.noise_plus_1 { 1 } else { 0 });
     }
 
     /// One tick.
@@ -514,7 +531,10 @@ impl RunSim {
         self.senses.lume.gear = self.runner.gear_light(&self.table);
         self.senses.lume.dimmed = self.runner.dimming;
         self.senses.lume.soaked = self.runner.has(StatusKind::Soaked);
-        self.senses.eye = if self.runner.has(StatusKind::Blinded) { 0 } else { self.runner.eye };
+        let dark_here = self.senses.light.level[rt.1 as usize * self.map.w + rt.0 as usize] < crate::light::DIM_MIN;
+        let eye = if self.runner.quirks.eye_plus_1_dark && dark_here { self.runner.eye + 1 } else { self.runner.eye };
+        self.senses.eye = if self.runner.has(StatusKind::Blinded) { 0 } else { eye };
+        self.senses.see_bonus = if self.runner.quirks.see_plus_1 { 1 } else { 0 };
         self.senses.motion = motion;
         for c in &self.creatures {
             if c.kind == Kind::Scout && !c.dead {
@@ -649,14 +669,15 @@ impl RunSim {
                     if self.runner.arms_out() && self.tick % 2 == 0 {
                         gain = 0;
                     }
-                    let need = creature::ticks(rules.dig_s);
+                    let need = creature::ticks(self.runner.dig_s(rules));
                     let p = progress + gain;
                     self.runner_sound(Sound::Dig);
                     if p >= need {
                         let was_deposit = self.map.substrate[self.idx(x, y)] == sub::DEPOSIT;
                         let chunk = self.map.chunk_of[self.idx(x, y)];
                         self.map.dig(x as usize, y as usize);
-                        let pile = if was_deposit { Some(self.loot.add_pile(&self.tables, &self.table, x as usize, y as usize, if chunk == crate::map::NO_CHUNK { 0 } else { chunk })) } else { None };
+                        let extra = if self.runner.quirks.deposit_plus_1 { 1 } else { 0 };
+                        let pile = if was_deposit { Some(self.loot.add_pile(&self.tables, &self.table, x as usize, y as usize, if chunk == crate::map::NO_CHUNK { 0 } else { chunk }, extra)) } else { None };
                         self.events.push(Event::Dug { x, y, pile });
                         self.runner.action = Action::Idle;
                     } else {
@@ -908,7 +929,7 @@ impl RunSim {
                 self.burst(x, y, d, 1, id);
             }
             let skind = if kind == Kind::Scout { SourceKind::ScoutBody } else { SourceKind::RatCorpse };
-            let src = self.loot.add_open_source(&self.tables, &self.table, skind, x as usize, y as usize, chunk);
+            let src = self.loot.add_open_source(&self.tables, &self.table, skind, x as usize, y as usize, chunk, 0);
             self.events.push(Event::CreatureDied { id, kind, x, y, source: Some(src) });
         } else {
             // being hit is a stimulus: it knows where you are
@@ -928,7 +949,9 @@ impl RunSim {
             self.events.push(Event::RunnerHit { section: sec, damage: dealt, by });
             self.runner.add_status(StatusKind::Blinded, creature::ticks(rules.blind_s));
             self.runner.add_status(StatusKind::Soaked, creature::ticks(rules.soaked_s));
-            self.runner.add_status(StatusKind::FungalFever, i32::MAX);
+            if !self.runner.quirks.fever_immune {
+                self.runner.add_status(StatusKind::FungalFever, i32::MAX);
+            }
             if down {
                 self.events.push(Event::Down);
             }
@@ -992,6 +1015,9 @@ impl RunSim {
         if self.followers.is_empty() {
             return;
         }
+        let rt = self.runner.tile();
+        let bond_near = self.followers.iter().any(|f| f.bonded && f.life == FollowerLife::Up && (f.tile().0 - rt.0).pow(2) + (f.tile().1 - rt.1).pow(2) <= 36);
+        self.runner.set_bond_near(bond_near);
         let runner_down = matches!(self.runner.life, Life::Down { .. });
         let exit = self.nearest_extraction();
         let walk = follower::walk_units(rules.walk);
@@ -1045,6 +1071,7 @@ impl RunSim {
         for (ci, dmg, behind, fid) in strikes {
             if ci < self.creatures.len() && !self.creatures[ci].dead {
                 let cid = self.creatures[ci].id;
+                self.follower_strikes += 1;
                 self.events.push(Event::FollowerStrike { id: fid, creature: cid, damage: dmg });
                 self.damage_creature(ci, dmg, behind);
             }
@@ -1158,6 +1185,9 @@ impl RunSim {
         }
         let report = self.log.report(self.tick, blind_value, if matches!(result, RunResult::Extracted { .. }) { "extracted" } else { "died" });
         let log = self.log.clone();
+        let items_taken = log.entries.iter().filter(|e| e.kind == "take").map(|e| e.value.max(0) as u32).sum();
+        let hits_survived = if matches!(result, RunResult::Extracted { .. }) { log.entries.iter().filter(|e| e.kind == "hit").count() as u32 } else { 0 };
+        let injuries: Vec<&'static str> = self.runner.statuses.iter().map(|st| st.kind.name()).filter(|n| *n != "grabbed").collect();
         self.outcome = Some(Outcome {
             result,
             ticks: self.tick,
@@ -1174,6 +1204,10 @@ impl RunSim {
             blind_value,
             log,
             report,
+            items_taken,
+            hits_survived,
+            follower_strikes: self.follower_strikes,
+            injuries,
         });
     }
 
@@ -1237,7 +1271,7 @@ impl RunSim {
                             let (x, y) = self.creatures[i].tile();
                             self.burst(x, y, damage, radius, id);
                             let chunk = self.creatures[i].chunk;
-                            let src = self.loot.add_open_source(&self.tables, &self.table, SourceKind::RatCorpse, x as usize, y as usize, chunk);
+                            let src = self.loot.add_open_source(&self.tables, &self.table, SourceKind::RatCorpse, x as usize, y as usize, chunk, 0);
                             self.events.push(Event::CreatureDied { id, kind, x, y, source: Some(src) });
                         }
                     }
@@ -1270,7 +1304,7 @@ impl RunSim {
                     self.burst(x, y, damage, radius, id);
                     let (cx, cy) = (x, y);
                     let chunk = self.creatures[i].chunk;
-                    let src = self.loot.add_open_source(&self.tables, &self.table, SourceKind::RatCorpse, cx as usize, cy as usize, chunk);
+                    let src = self.loot.add_open_source(&self.tables, &self.table, SourceKind::RatCorpse, cx as usize, cy as usize, chunk, 0);
                     self.events.push(Event::CreatureDied { id, kind, x: cx, y: cy, source: Some(src) });
                 }
                 Attack::Shot { damage } => {
@@ -1347,11 +1381,64 @@ mod tests {
         rig.quick = vec![Some(lantern), Some(pry), Some(anti), Some(salt)];
         let (_, pipe) = inventory::instance(&table, "ger_pipe").unwrap();
         rig.gear.hands[0] = Some(pipe);
-        RunSim::new(m, table, LootTables::shipped(), CreatureFile::shipped(), RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, body: 5, followers, corpses })
+        RunSim::new(m, table, LootTables::shipped(), CreatureFile::shipped(), RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, runner: people::RunnerSetup::plain(5), followers, corpses })
+    }
+
+    #[test]
+    fn the_record_bends_the_run_by_one_rule_per_stat() {
+        // Body 10, Nerve 10, Hands 9, Eye 7, veins 3; Brawler, Night Eyes, Quick, Scrounger, Sewer Lungs
+        let l = ChunkLib::from_toml(crate::CHUNKS_TOML).unwrap();
+        let m = RouteMap::compile(&l, &route(&l, 3, 1).unwrap());
+        let table = ItemTable::from_toml(ITEMS).unwrap();
+        let mut rig = Rig::new(8, 7, 4, 23.0);
+        let (_, pipe) = inventory::instance(&table, "ger_pipe").unwrap();
+        rig.gear.hands[0] = Some(pipe.clone());
+        let setup = people::RunnerSetup {
+            id: 7,
+            name: "Vex".into(),
+            body: 10,
+            nerve: 10,
+            hands: 9,
+            eye: 7,
+            veins: 3,
+            rig_rows: 7,
+            carry_bonus_kg: 0.0,
+            flags: ["melee_plus_1", "see_plus_1", "sprint_plus_0_5", "stamina_regen_x1_2", "deposit_plus_1", "fever_immune"].iter().map(|s| s.to_string()).collect(),
+        };
+        let strong = RunSim::new(m.clone(), table.clone(), LootTables::shipped(), CreatureFile::shipped(), RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, runner: setup, followers: Vec::new(), corpses: Vec::new() });
+        let plain = sim(3, 1);
+        let rules = &plain.defs.runner;
+        // Body 10: sections x1.2; Nerve 10: 120 stamina
+        assert_eq!(strong.runner.max_sections[1], (rules.sections[1] as f32 * 1.2).round() as i32);
+        assert_eq!(strong.runner.max_stamina, 120 * 100);
+        assert_eq!(plain.runner.max_stamina, 100 * 100);
+        // Hands 9: melee +2 and Brawler +1 over the pipe; dig 6 s x 0.8
+        let (pd, pn, _) = plain.runner.melee(&table);
+        let (sd, sn, _) = strong.runner.melee(&table);
+        assert_eq!(sd, pd + 3);
+        assert_eq!(sn, pn);
+        assert!((strong.runner.dig_s(rules) - rules.dig_s * 0.8).abs() < 1e-4);
+        assert!((plain.runner.dig_s(rules) - rules.dig_s).abs() < 1e-4);
+        // veins and Eye reach the senses; Night Eyes adds a tile
+        assert_eq!(strong.runner.veins, 3);
+        assert_eq!(strong.runner.eye, 7);
+        assert!(strong.runner.quirks.see_plus_1 && strong.runner.quirks.fever_immune);
+        // Quick: a sprint is half a tile a second faster
+        let mut q = strong.runner.clone();
+        q.sprinting = true;
+        let mut p = plain.runner.clone();
+        p.sprinting = true;
+        assert_eq!(q.speed(rules, false, Pose::Walk), crate::creature::speed_units(rules.sprint + 0.5));
+        assert_eq!(p.speed(rules, false, Pose::Walk), crate::creature::speed_units(rules.sprint));
+        // the stand-in is the Phase B runner
+        let plain_setup = people::RunnerSetup::plain(5);
+        assert_eq!((plain_setup.nerve, plain_setup.hands, plain_setup.eye, plain_setup.veins), (5, 5, 3, 2));
+        assert_eq!(plain_setup.back_off_pct(), 30);
+        assert!((plain_setup.carry_kg() - 18.0).abs() < 1e-6);
     }
 
     fn two_followers() -> Vec<FollowerSetup> {
-        vec![FollowerSetup { id: 101, name: "Pell".into(), body: 5, damage: 4 }, FollowerSetup { id: 102, name: "Rook".into(), body: 4, damage: 4 }]
+        vec![FollowerSetup { id: 101, name: "Pell".into(), body: 5, damage: 4, back_off_pct: 30, bonded: false }, FollowerSetup { id: 102, name: "Rook".into(), body: 4, damage: 4, back_off_pct: 30, bonded: false }]
     }
 
     fn walk(s: &mut RunSim, dx: i8, dy: i8, n: usize, sprint: bool) {
@@ -1702,7 +1789,7 @@ mod tests {
             table.clone(),
             LootTables::shipped(),
             CreatureFile::shipped(),
-            RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 9, route_runs: 3, day: 41, rig: Rig::new(8, 5, 4, 18.0), body: 5, followers: Vec::new(), corpses: vec![corpse(1)] },
+            RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 9, route_runs: 3, day: 41, rig: Rig::new(8, 5, 4, 18.0), runner: people::RunnerSetup::plain(5), followers: Vec::new(), corpses: vec![corpse(1)] },
         );
         let own = s3.loot.sources.iter().find(|src| src.kind == SourceKind::OwnCorpse).unwrap();
         assert!(own.items.is_empty() && own.state == SourceState::Empty, "a forty-day-old body was not stripped");

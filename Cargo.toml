@@ -6,6 +6,7 @@ members = [
   "core/crates/items",
   "core/crates/inventory",
   "core/crates/bench",
+  "core/crates/people",
   "core/crates/save",
   "core/crates/render",
   "core/crates/run",

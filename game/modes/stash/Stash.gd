@@ -321,6 +321,9 @@ func _draw_queue() -> void:
 	elif not Sim.shift_report.is_empty():
 		var r: Dictionary = Sim.shift_report
 		foot = "last shift: sold %d for %d e, fed %d, crafted %d" % [int(r.sold), int(r.earned), int(r.fed), int(r.get("crafted", 0))]
+		# the roster's first line of the shift (who worked what, a level gained); the rest are on the Slimo card
+		if Sim.people_lines.size() > 0:
+			foot += "   " + String(Sim.people_lines[0]).left(40)
 	else:
 		foot = "nothing queued   shift ends after a run"
 	make_label(queue_panel, foot, Vector2(6, 70), UiTheme.DUST)

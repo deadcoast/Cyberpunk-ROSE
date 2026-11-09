@@ -423,6 +423,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
+name = "people"
+version = "0.2.0"
+dependencies = [
+ "mat",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "png"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -498,9 +507,11 @@ dependencies = [
  "items",
  "logistics",
  "mat",
+ "people",
  "postcard",
  "run",
  "save",
+ "toml",
 ]
 
 [[package]]
@@ -520,6 +531,7 @@ dependencies = [
  "inventory",
  "items",
  "mat",
+ "people",
  "serde",
  "toml",
 ]
@@ -540,6 +552,7 @@ dependencies = [
  "bench",
  "inventory",
  "items",
+ "people",
  "postcard",
  "serde",
 ]

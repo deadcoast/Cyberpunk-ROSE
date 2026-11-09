@@ -341,7 +341,7 @@ fn cmd_route(t: &Term, out: &Path, seed: u64, stratum: u8, chunks: usize, sweep:
     senses.tick(&m);
     let lit_seen = senses.visible.iter().filter(|&&v| v).count();
     let lit_exp = (senses.exposure, senses.notice_range());
-    let reached = senses.runner_sound(&m, run::Sound::SprintStep);
+    let reached = senses.runner_sound(&m, run::Sound::SprintStep, 0);
     let light_img = render::route_light_view(&m, &senses.light, Some(&senses.noise), 4);
     senses.lume = run::Lume { veins: 2, gear: 0, mat_bonus: 0, dimmed: true, soaked: false };
     senses.tick(&m);

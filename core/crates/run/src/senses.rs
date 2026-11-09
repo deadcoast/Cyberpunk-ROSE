@@ -93,6 +93,8 @@ pub struct Senses {
     pub runner: (usize, usize),
     pub lume: Lume,
     pub eye: u8,
+    /// Night Eyes: tiles added to the see radius
+    pub see_bonus: i32,
     pub motion: Motion,
     /// transient light sources for this tick (muzzle flashes, carried lamps of others)
     pub flashes: Vec<Source>,
@@ -115,6 +117,7 @@ impl Senses {
             runner: (start.0 as usize, start.1 as usize),
             lume: Lume { veins: 2, gear: 0, mat_bonus: 0, dimmed: false, soaked: false },
             eye: 3,
+            see_bonus: 0,
             motion: Motion::Still,
             flashes: Vec::new(),
             exposure: 0,
@@ -144,7 +147,7 @@ impl Senses {
     fn compute_visible(&mut self, map: &RouteMap) {
         self.visible.iter_mut().for_each(|v| *v = false);
         let (rx, ry) = (self.runner.0 as i32, self.runner.1 as i32);
-        let see = self.lume.see_radius(self.eye);
+        let see = self.lume.see_radius(self.eye) + self.see_bonus;
         let see2 = see * see;
         let (w, h) = (map.w as i32, map.h as i32);
         let light = &self.light.level;
@@ -168,9 +171,9 @@ impl Senses {
     }
 
     /// A footstep or action by the Runner at their tile, with the surface add. Returns tiles reached.
-    pub fn runner_sound(&mut self, map: &RouteMap, sound: Sound) -> usize {
+    pub fn runner_sound(&mut self, map: &RouteMap, sound: Sound, extra: u8) -> usize {
         let (x, y) = self.runner;
-        let loud = (sound.loudness() + surface_add(map.substrate[y * map.w + x])).min(crate::noise::MAX_NOISE);
+        let loud = (sound.loudness() + surface_add(map.substrate[y * map.w + x]) + extra).min(crate::noise::MAX_NOISE);
         self.noise.emit(map, x, y, loud, self.tick, 0)
     }
 
@@ -280,7 +283,7 @@ mod tests {
         let mut s = Senses::new(&m, 0.5, None);
         s.runner = (m.entry[1].0 as usize + 6, m.entry[1].1 as usize);
         s.tick(&m);
-        let reached = s.runner_sound(&m, Sound::SprintStep);
+        let reached = s.runner_sound(&m, Sound::SprintStep, 0);
         assert!(reached > 20);
         assert_eq!(s.noise.at(s.runner.0, s.runner.1), 7 + surface_add(m.substrate[m.idx(s.runner.0, s.runner.1)]));
         let rgb = s.overlay_rgb();

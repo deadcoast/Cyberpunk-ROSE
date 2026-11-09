@@ -36,6 +36,7 @@ func _shot(name: String) -> void:
 	shots += 1
 
 var t0 := 0
+var runner_id := -1
 
 func _process(_delta: float) -> bool:
 	t += 1
@@ -52,6 +53,7 @@ func _process(_delta: float) -> bool:
 		return false
 	if t == 12:
 		_shot("00_board")
+		runner_id = scr.runner_id
 		scr._depart()
 		scr = screens.current
 		t0 = t
@@ -198,6 +200,15 @@ func _process(_delta: float) -> bool:
 		15:
 			if t % 10 == 5:
 				_shot("10_stash")
+				# the Runner's card after the run: a run on the record, needs moved, Scav XP
+				screens.show_screen("slimo")
+				scr = screens.current
+				scr.selected = runner_id
+				scr._redraw()
+				phase = 16
+		16:
+			if t % 10 == 5:
+				_shot("11_slimo")
 				print("[play] %d frames, %d shots -> %s" % [t, shots, out_dir])
 				quit(0)
 				return true

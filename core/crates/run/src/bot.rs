@@ -285,7 +285,7 @@ pub fn bot_rig(table: &ItemTable) -> Rig {
 /// Play one seeded run with the bot and return its outcome (with the cadence log and report).
 pub fn play(map: RouteMap, table: ItemTable, tables: LootTables, defs: CreatureFile, nonce: u64, route_runs: u16, day: u32, memory: Option<&[u8]>) -> Outcome {
     let rig = bot_rig(&table);
-    let setup = RunSetup { mat_lume_gene: 0.5, memory, run_nonce: nonce, route_runs, day, rig, body: 5, followers: Vec::new(), corpses: Vec::new() };
+    let setup = RunSetup { mat_lume_gene: 0.5, memory, run_nonce: nonce, route_runs, day, rig, runner: people::RunnerSetup::plain(5), followers: Vec::new(), corpses: Vec::new() };
     let mut sim = RunSim::new(map, table, tables, defs, setup);
     let mut bot = Bot::new();
     while sim.result.is_none() && sim.tick < MAX_TICKS {
@@ -314,7 +314,7 @@ mod tests {
         let m = RouteMap::compile(&lib, &route(&lib, 11, 1).unwrap());
         let table = ItemTable::from_toml(ITEMS).unwrap();
         let rig = bot_rig(&table);
-        let setup = RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, body: 5, followers: Vec::new(), corpses: Vec::new() };
+        let setup = RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, runner: people::RunnerSetup::plain(5), followers: Vec::new(), corpses: Vec::new() };
         let mut sim = RunSim::new(m, table, LootTables::shipped(), CreatureFile::shipped(), setup);
         let mut bot = Bot::new();
         while sim.result.is_none() && sim.tick < 6000 {

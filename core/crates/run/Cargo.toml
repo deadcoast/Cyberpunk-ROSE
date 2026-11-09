@@ -9,5 +9,6 @@ license.workspace = true
 mat = { path = "../mat" }
 items = { path = "../items" }
 inventory = { path = "../inventory" }
+people = { path = "../people" }
 serde.workspace = true
 toml.workspace = true
