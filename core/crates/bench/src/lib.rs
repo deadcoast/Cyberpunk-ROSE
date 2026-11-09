@@ -256,10 +256,18 @@ impl BenchQueue {
 
     /// Shift end: every job loses a shift; finished ones become products (plus anything still waiting for room).
     pub fn end_shift(&mut self, table: &ItemTable, file: &RecipeFile) -> Vec<ItemInstance> {
+        self.end_shift_slots(table, file, usize::MAX)
+    }
+
+    /// Shift end with the Bench's slots (Full Design, The 24 structures: a Tweak slot finishes one job a shift):
+    /// the oldest `slots` jobs lose a shift, the rest wait.
+    pub fn end_shift_slots(&mut self, table: &ItemTable, file: &RecipeFile, slots: usize) -> Vec<ItemInstance> {
         let mut out: Vec<ItemInstance> = std::mem::take(&mut self.waiting);
         let mut keep = Vec::new();
-        for mut job in std::mem::take(&mut self.jobs) {
-            job.shifts_left = job.shifts_left.saturating_sub(1);
+        for (k, mut job) in std::mem::take(&mut self.jobs).into_iter().enumerate() {
+            if k < slots {
+                job.shifts_left = job.shifts_left.saturating_sub(1);
+            }
             if job.shifts_left > 0 {
                 keep.push(job);
                 continue;

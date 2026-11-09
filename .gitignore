@@ -14,8 +14,8 @@ out/
 # Python
 __pycache__/
 *.py[oc]
-build/
-dist/
+/build/
+/dist/
 wheels/
 *.egg-info
 .venv

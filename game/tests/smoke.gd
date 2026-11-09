@@ -10,6 +10,7 @@ var failures: Array[String] = []
 var sim_sent_handle := -1
 var screen_ids: Array = []
 var smoke_runner := -1
+var smoke_ghost := -1
 var screen_i := -1
 var frames_on_screen := 0
 var resolved_per_screen := {}
@@ -78,6 +79,39 @@ func _verify_current() -> void:
 					wv = ch
 			_check(wv != null and wv.substrate.get_used_cells().size() > 1000, "colony: world tiles not painted")
 			_check(wv != null and wv.matlayer.get_used_cells().size() > 300, "colony: Mat tiles not painted")
+			# the city founded on the Mat: the Heart, the Route Board, a Bench, a Pit per Relay; 24 defs
+			var rs: RoseSim = sim.ensure()
+			var defs: Array = rs.structure_defs()
+			_check(defs.size() == 24, "colony: %d structure defs" % defs.size())
+			var founded: Array = rs.structures()
+			_check(founded.size() >= 4 and String(founded[0].def) == "heart" and String(founded[1].def) == "route_board" and String(founded[2].def) == "bench", "colony: founding %s" % str(founded.map(func(x): return x.def)))
+			# the build tool: a Lantern Post ghost on the first tile near the Heart that takes it; two cheap Parts in
+			# the Stash pay for it (the cheapest go first), so the Bench's housing stays
+			var st0: RoseStash = sim.ensure_stash()
+			st0.add(RoseItems.new().find("prt_wire"), 50, false)
+			st0.add(RoseItems.new().find("prt_cloth"), 50, false)
+			sim.build_tool = "lantern"
+			scr.tool = "build"
+			var hx := int(founded[0].x) + 1
+			var hy := int(founded[0].y) + 1
+			smoke_ghost = -1
+			for r in range(2, 12):
+				if smoke_ghost >= 0:
+					break
+				for dy in range(-r, r + 1):
+					if smoke_ghost >= 0:
+						break
+					for dx in range(-r, r + 1):
+						if absi(dx) != r and absi(dy) != r:
+							continue
+						smoke_ghost = scr.place_ghost(hx + dx, hy + dy)
+						if smoke_ghost >= 0:
+							break
+			_check(smoke_ghost >= 0, "colony: no tile near the Heart takes a lantern (%s)" % scr.cursor_reason)
+			_check(String(rs.can_place("vault", hx, hy)) != "", "colony: a Vault should refuse without the Heart at tier 2")
+			_check(rs.structures().size() == founded.size() + 1 and not bool(rs.structures()[-1].built), "colony: the ghost is not a ghost")
+			sim.build_tool = ""
+			scr.tool = "feed"
 			scr.set_view(2)
 			scr.apply_tool(96, 24)
 		"stash":
@@ -170,6 +204,9 @@ func _verify_current() -> void:
 			pp.set_priority(scr.selected, scav, 0)
 			_check(float(pp.record(scr.selected).utility[scav]) <= 0.0, "slimo: priority 0 should mean never")
 			pp.set_priority(scr.selected, scav, 2)
+			var sched: PackedStringArray = pp.record(scr.selected).schedule
+			_check(Array(sched) == ["Work", "Rest", "Any"], "slimo: default schedule %s" % str(sched))
+			_check(String(pp.cycle_schedule(scr.selected, 1)) == "Any" and String(pp.cycle_schedule(scr.selected, 1)) == "Work" and String(pp.cycle_schedule(scr.selected, 1)) == "Rest", "slimo: schedule does not cycle")
 			_check(scr.card_frame.get_child_count() > 40, "slimo: card drawn thin (%d nodes)" % scr.card_frame.get_child_count())
 			smoke_runner = int(el[0])
 		"bench":
@@ -382,9 +419,28 @@ func _verify_current() -> void:
 			var rr: Dictionary = pp.record(smoke_runner)
 			_check(not rr.is_empty() and int(rr.runs) == 1 and int(rr.survived) == 1 and String(rr.status) == "idle", "run: the Runner's record did not take the run (%s)" % str(rr.get("status", "")))
 			_check(int(rr.hauls) == int(oc.pulls) and int(rr.skills[0].xp) + int(rr.skills[0].level) > 0, "run: hauls %d vs pulls %d, Scav xp %d" % [int(rr.hauls), int(oc.pulls), int(rr.skills[0].xp)])
-			# four shifts have ended: the first fed a Pit (Fed back to 100), then three at -15; Rest slept +15 x3
-			# (clamped) then the run's -12, a run being the shift's work
-			_check(int(rr.needs.fed) == 55 and int(rr.needs.rest) == 88, "run: the shift did not move the Runner's needs (fed %d rest %d)" % [int(rr.needs.fed), int(rr.needs.rest)])
+			# four shifts have ended; the Mat under the Heart feeds whoever stands there (nutrient at the Heart is
+			# never short in this seed), Rest falls 12 a shift worked and rises 15 asleep on the Mat
+			_check(int(rr.needs.fed) == 100, "run: the Mat did not feed the Runner (fed %d)" % int(rr.needs.fed))
+			# Rest: the three shifts before the run were Dim (day 1, the default row works it) with more slots
+			# than slimos, so the Runner worked each (-12), then the run's -12
+			_check(int(rr.needs.rest) == 52, "run: Rest %d after three worked shifts and a run" % int(rr.needs.rest))
+			for a in sim.last_shift.get("assignments", []):
+				_check(int(a.slimo) != smoke_runner, "run: the Runner was given a job on the shift they ran")
+			# the colony's shift: the founding Bench's slot was worked, the lantern ghost paid for (2 Parts) and built
+			var rs: RoseSim = sim.ensure()
+			var last: Dictionary = sim.last_shift
+			_check(not last.is_empty() and last.has("assignments") and last.assignments.size() > 0, "run: the colony handed out no jobs")
+			var lantern := {}
+			for st in rs.structures():
+				if int(st.id) == smoke_ghost:
+					lantern = st
+			_check(not lantern.is_empty() and bool(lantern.built) and bool(lantern.paid), "run: the lantern ghost did not get built (%s)" % str(lantern))
+			# the first district: the Heart's node with the Board, the Bench and the lantern around it, a foreman elected
+			var ds: Array = rs.districts(pp)
+			_check(ds.size() == 1 and int(ds[0].foreman) >= 0 and ds[0].structures.size() >= 3, "run: the Heart's district did not form (%s)" % str(ds))
+			var fm: Dictionary = pp.record(int(ds[0].foreman))
+			_check(not fm.is_empty() and ds[0].members.has(int(ds[0].foreman)), "run: the foreman is not a member")
 			for b in rr.bonds:
 				_check(int(b.runs) == 1, "run: bond runs %d after one run together" % int(b.runs))
 			_check(rr.bonds.size() == 2, "run: %d bonds counted for two followers" % rr.bonds.size())

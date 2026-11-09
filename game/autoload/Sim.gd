@@ -15,6 +15,8 @@ func ensure() -> RoseSim:
 	if sim == null:
 		sim = RoseSim.new()
 		sim.start_scale(seed_value, agents, grow_ticks)
+		# the city on the grown Mat: the Heart, a Route Board, a Bench, a Pit on every Relay
+		sim.found_city()
 	return sim
 
 func _process(delta: float) -> void:
@@ -71,6 +73,8 @@ var people: RosePeople
 var launch := {}
 ## The last shift's record lines (XP, bonds, injuries, unrest) from the roster, shown on the Stash with the report.
 var people_lines: PackedStringArray = PackedStringArray()
+## The whole last shift (RoseSim.colony_end_shift): report, lines, assignments, waiting ghosts, elections, petitions.
+var last_shift := {}
 ## The last shift's report from the ledger ({sold, earned, fed, eddies, deliveries}), shown once on the Stash.
 var shift_report := {}
 ## The item the Stash sent to the Bench with Craft (a RoseStash.items() entry), consumed by the Bench screen.
@@ -90,24 +94,18 @@ func market_name(i: int) -> String:
 func pit_name(i: int) -> String:
 	return "HEART" if i == 0 else "RELAY %d" % i
 
-## Shift end: the queues resolve, the ledger takes the eddies, the Pits take the nutrient, the genome drifts, and
-## the roster takes the shift (needs, Mood, the shift's crafts and sales as XP to the highest utility).
+## Shift end, whole (RoseSim.colony_end_shift): the colony hands out the jobs and pays the ghosts from the Stash,
+## the Stash resolves its queues and the Bench's slots, the Pits take the nutrient and the genome drifts, the
+## colony's products land, and every record takes its work and its context (home, meal, light, water, sleep).
 func end_shift() -> void:
 	var st := ensure_stash()
-	var crafts_before := st.bench_jobs().size()
-	var r: Dictionary = st.resolve_shift()
 	var city := ensure()
-	var fed := false
-	for d in r.get("deliveries", []):
-		city.feed_pit(int(d.pit), float(d.nutrient))
-		city.drift_genome(d.drift)
-		fed = true
-	shift_report = r
-	var crafts := crafts_before - st.bench_jobs().size()
-	# everyone is on the signalled Mat until the colony's zones exist (PAC-041); the Mat lights them when its own
-	# glow (2 + lume gene x 6, run::light::mat_emit) is at or above dim (3)
-	var ctx := {"signalled": true, "lit": 2.0 + float(city.gene(4)) * 6.0 >= 3.0, "wet": false, "fed": fed or int(r.get("fed", 0)) > 0}
-	people_lines = ensure_people().end_shift(ctx, maxi(crafts, 0), int(r.get("sold", 0)), 0)
+	last_shift = city.colony_end_shift(ensure_people(), st, day)
+	shift_report = last_shift.get("report", {})
+	people_lines = last_shift.get("lines", PackedStringArray())
+
+## The structure def the Colony's build tool places next ("" none); set by the Build menu.
+var build_tool := ""
 
 ## The roster, founded once per session from the save's seed (Full Design, Creation).
 func ensure_people() -> RosePeople:

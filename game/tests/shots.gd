@@ -30,6 +30,31 @@ func _initialize() -> void:
 
 func _process(_delta: float) -> bool:
 	frames_on_screen += 1
+	if frames_on_screen == 6 and screen_i >= 0 and screen_ids[screen_i] == "colony":
+		# the Street view on the Heart with the founding structures, a pod ghost placed and a shift ended so the
+		# Heart's district has formed and the ghost is paid for; the cursor hovers a tile
+		var scr: Node = screens.current
+		var rs: RoseSim = sim.ensure()
+		var heart: Dictionary = rs.structures()[0]
+		sim.build_tool = "pod"
+		scr.tool = "build"
+		var placed := -1
+		for r in range(2, 12):
+			if placed >= 0:
+				break
+			for dy in range(-r, r + 1):
+				if placed >= 0:
+					break
+				for dx in range(-r, r + 1):
+					if absi(dx) != r and absi(dy) != r:
+						continue
+					placed = scr.place_ghost(int(heart.x) + 1 + dx, int(heart.y) + 1 + dy)
+					if placed >= 0:
+						break
+		sim.end_shift()
+		scr.set_view(0)
+		scr.cam.position = Vector2((int(heart.x) + 1) * 32 + 16, (int(heart.y) + 1) * 32 + 16)
+		scr.hover_tile(int(heart.x) + 6, int(heart.y) + 4)
 	if frames_on_screen == 6 and screen_i >= 0 and screen_ids[screen_i] == "stash":
 		# the Stash with a card open and a sale and a feed queued
 		var scr: Node = screens.current
@@ -68,15 +93,18 @@ func _process(_delta: float) -> bool:
 				break
 	if frames_on_screen == 12 and screen_i >= 0:
 		var id: String = screen_ids[screen_i]
-		if id == "colony":
-			screens.current.set_view(0)
 		var img: Image = root.get_viewport().get_texture().get_image()
 		img.save_png(out_dir + "/" + id + ".png")
 		if id == "colony":
-			screens.current.set_view(2)
+			screens.current.set_view(1)
+	if frames_on_screen == 14 and screen_i >= 0 and screen_ids[screen_i] == "colony":
+		var img: Image = root.get_viewport().get_texture().get_image()
+		img.save_png(out_dir + "/colony_district.png")
+		screens.current.set_view(2)
 	if frames_on_screen == 16 and screen_i >= 0 and screen_ids[screen_i] == "colony":
 		var img: Image = root.get_viewport().get_texture().get_image()
 		img.save_png(out_dir + "/colony_stack.png")
+		sim.build_tool = ""
 	if frames_on_screen == 13 and screen_i >= 0 and screen_ids[screen_i] == "run":
 		# a second Run shot: standing at the first crate or locker with its manifest unrolled
 		var scr: Node = screens.current
@@ -98,7 +126,7 @@ func _process(_delta: float) -> bool:
 		if screen_i < screen_ids.size():
 			screens.show_screen(screen_ids[screen_i])
 		else:
-			print("[shots] wrote %d screens to %s" % [screen_ids.size() + 2, out_dir])
+			print("[shots] wrote %d screens to %s" % [screen_ids.size() + 3, out_dir])
 			quit(0)
 			return true
 	return false

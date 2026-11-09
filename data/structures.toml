@@ -1,0 +1,336 @@
+# The 24 structures (Full Design v3.9, Colony mode: Building and The 24 structures). footprint [w, h] in tiles on
+# Cord or Node; sigma: signal the footprint needs; node: a Node under the anchor; grate: a grate within 2 tiles;
+# relay: on a Relay. cost is tier 1 (tier 2 x2, tier 3 x3); build: points (a builder adds Hands per shift).
+# hosts: the job the structure gives slots to, slots per tier; gate: the level of that job's skill a slimo needs for the slot. Per-tier numbers are arrays indexed by tier - 1
+# (the Heart has four). hp is per tier. art: the manifest slot.
+
+[[structure]]
+id = "heart"
+name = "Heart"
+footprint = [3, 3]
+sigma = 0.0
+node = true
+prebuilt = true
+tiers = 4
+cost = { parts = 0, chrome = 0, eddies = 0 }
+build = 0
+hp = 200
+light = [4, 4, 4, 4]
+stock = [40, 80, 160, 320]
+stash_grid = [[10, 6], [12, 8], [14, 10], [16, 12]]
+text = "The first node grown into a chamber. The Stash lives here; the city's tier is its tier."
+art = "struct.heart"
+
+[[structure]]
+id = "pit"
+name = "Pit"
+footprint = [1, 1]
+sigma = 0.3
+cost = { parts = 4, chrome = 0, eddies = 0 }
+build = 8
+hosts = "tend"
+slots = [1, 1, 1]
+hp = 100
+stock = [20, 40, 60]
+text = "A scrap trough on a cord. Chrome and Relics fed here become nutrient; a Tend slimo makes it release faster."
+art = "struct.pit"
+
+[[structure]]
+id = "pod"
+name = "Hab-Pod"
+footprint = [2, 2]
+sigma = 0.3
+cost = { parts = 6, chrome = 0, eddies = 0 }
+build = 10
+hp = 100
+beds = [1, 1, 1]
+rest = [30, 30, 30]
+text = "One bed in an ooze housing. Rest +30 asleep here in Dark; a home a tier under the city's costs Mood."
+art = "struct.pod"
+
+[[structure]]
+id = "bunkhouse"
+name = "Bunkhouse"
+footprint = [3, 2]
+sigma = 0.3
+cost = { parts = 10, chrome = 0, eddies = 0 }
+build = 16
+hp = 100
+beds = [6, 8, 10]
+rest = [20, 20, 20]
+text = "Six bunks under one tarp. Rest +20 asleep here in Dark; a Pack Animal likes it, a Hermit does not."
+art = "struct.bunkhouse"
+
+[[structure]]
+id = "forge"
+name = "Scrap Forge"
+footprint = [2, 2]
+sigma = 0.3
+cost = { parts = 8, chrome = 2, eddies = 0 }
+build = 14
+hosts = "build"
+slots = [2, 3, 4]
+hp = 100
+text = "Anvil, torch and a pile of plate. Build points double in its district; a builder here mends 10 HP a shift."
+art = "struct.forge"
+
+[[structure]]
+id = "bench"
+name = "Tweaker Bench"
+footprint = [2, 2]
+sigma = 0.3
+cost = { parts = 8, chrome = 2, eddies = 0 }
+build = 14
+hosts = "tweak"
+slots = [1, 2, 3]
+hp = 100
+recipe_tier = [1, 2, 3]
+text = "The crafting table. A slot finishes one Bench job a shift; higher tiers open higher recipe tiers."
+art = "struct.bench"
+
+[[structure]]
+id = "lume_farm"
+name = "Lume Farm"
+footprint = [2, 2]
+sigma = 0.5
+node = true
+cost = { parts = 6, chrome = 4, eddies = 0 }
+build = 16
+hosts = "tend"
+slots = [1, 1, 1]
+hp = 100
+light = [4, 6, 8]
+attention = [2, 2, 2]
+text = "Bulbs grown on a Node. Light for every home within reach, and Attention at any grate within ten tiles."
+art = "struct.lume_farm"
+
+[[structure]]
+id = "lung"
+name = "Lung Housing"
+footprint = [2, 2]
+sigma = 0.5
+node = true
+cost = { parts = 10, chrome = 4, eddies = 0 }
+build = 18
+hosts = "cook"
+gate = 5
+slots = [1, 2, 3]
+hp = 100
+brine = [1, 2, 3]
+dry_radius = [6, 6, 6]
+text = "A Lung organ in a housing: the clinic. Each Cook here (Medic 5) treats one injury a shift; brine for the Still and the Salt Works; homes within six tiles count dry."
+art = "struct.lung"
+
+[[structure]]
+id = "market"
+name = "Seep Market"
+footprint = [2, 2]
+sigma = 0.3
+grate = true
+cost = { parts = 8, chrome = 0, eddies = 0 }
+build = 12
+hosts = "haul"
+slots = [1, 2, 3]
+hp = 100
+glut_bonus = [5, 10, 15]
+text = "A stall under a grate. The ledger sells here; a Haul slimo staffs it and learns Trade."
+art = "struct.market"
+
+[[structure]]
+id = "gate"
+name = "Sphincter Gate"
+footprint = [1, 1]
+sigma = 0.3
+cost = { parts = 4, chrome = 2, eddies = 0 }
+build = 8
+hosts = "guard"
+slots = [1, 1, 1]
+hp = 100
+text = "A ring of muscle in a scrap frame across a cord. Shut to creatures; a Guard stands it."
+art = "struct.gate"
+
+[[structure]]
+id = "pen"
+name = "Sewerat Pen"
+footprint = [2, 2]
+sigma = 0.3
+cost = { parts = 6, chrome = 0, eddies = 0 }
+build = 10
+hosts = "tend"
+slots = [1, 1, 1]
+hp = 100
+capacity = [2, 4, 6]
+text = "Wire and tarp for tamed sewerats: guard, pack or hunter."
+art = "struct.pen"
+
+[[structure]]
+id = "still"
+name = "Downer Still"
+footprint = [2, 2]
+sigma = 0.3
+cost = { parts = 10, chrome = 4, eddies = 20 }
+build = 18
+hosts = "cook"
+slots = [1, 2, 3]
+hp = 100
+attention = [8, 8, 8]
+text = "Brine, ooze enzyme and an Enzyme-tag Part into a dose a shift per Cook. Every faction buys; the Oathkeepers burn Stills first."
+art = "struct.still"
+
+[[structure]]
+id = "vault"
+name = "Reliquary Vault"
+footprint = [2, 2]
+sigma = 0.5
+node = true
+heart_tier = 2
+cost = { parts = 12, chrome = 6, eddies = 0 }
+build = 20
+hp = 100
+capacity = [4, 8, 12]
+text = "A sealed ooze chamber. Relics and Blackline inside show nothing at the grate."
+art = "struct.vault"
+
+[[structure]]
+id = "shrine"
+name = "Relay Shrine"
+footprint = [1, 1]
+sigma = 0.3
+relay = true
+cost = { parts = 6, chrome = 2, eddies = 0 }
+build = 10
+hp = 100
+mood = [5, 5, 5]
+text = "The Relay's rules board and the hub of its district. Members hold their Mood target 5 higher."
+art = "struct.relay"
+
+[[structure]]
+id = "rack"
+name = "Stockpile Rack"
+footprint = [2, 1]
+sigma = 0.3
+cost = { parts = 4, chrome = 0, eddies = 0 }
+build = 6
+hp = 100
+cells = [8, 12, 16]
+text = "Shelving on a cord. Anchors a stockpile zone with a filter."
+art = "struct.rack"
+
+[[structure]]
+id = "cold_store"
+name = "Cold Store"
+footprint = [2, 2]
+sigma = 0.3
+cost = { parts = 8, chrome = 2, eddies = 0 }
+build = 12
+hp = 100
+cells = [8, 12, 16]
+text = "A chilled housing. Organics inside lose no condition."
+art = "struct.cold_store"
+
+[[structure]]
+id = "turret"
+name = "Scrap Turret"
+footprint = [1, 1]
+sigma = 0.5
+cost = { parts = 6, chrome = 4, eddies = 0 }
+build = 12
+hosts = "guard"
+slots = [1, 1, 1]
+hp = 100
+damage = [6, 8, 10]
+range = [6, 6, 6]
+text = "A mounted scrap gun. Fires with a Guard in the seat."
+art = "struct.turret"
+
+[[structure]]
+id = "watch_post"
+name = "Watch Post"
+footprint = [1, 1]
+sigma = 0.3
+cost = { parts = 4, chrome = 0, eddies = 0 }
+build = 6
+hosts = "guard"
+slots = [1, 1, 1]
+hp = 100
+range = [12, 16, 20]
+text = "A ladder and a lamp hook. Extends the danger overlay."
+art = "struct.watch_post"
+
+[[structure]]
+id = "memorial"
+name = "Memorial"
+footprint = [2, 1]
+sigma = 0.3
+cost = { parts = 4, chrome = 0, eddies = 0 }
+build = 6
+hp = 100
+capacity = [10, 20, 40]
+text = "Names cut into plate. A death's Mood hit is halved in a district with one."
+art = "struct.memorial"
+
+[[structure]]
+id = "charter_board"
+name = "Charter Board"
+footprint = [2, 1]
+sigma = 0.3
+cost = { parts = 6, chrome = 0, eddies = 0 }
+build = 8
+hp = 100
+text = "Where a district's laws are posted. One per district; no Board, no laws there."
+art = "struct.charter_board"
+
+[[structure]]
+id = "appraisal"
+name = "Appraisal Table"
+footprint = [2, 1]
+sigma = 0.3
+cost = { parts = 6, chrome = 2, eddies = 0 }
+build = 10
+hosts = "appraise"
+gate = 3
+slots = [1, 2, 3]
+hp = 100
+identify = [2, 2, 2]
+text = "Loupe, scale and a lamp. Each Appraise slot identifies two items a shift."
+art = "struct.appraisal"
+
+[[structure]]
+id = "route_board"
+name = "Route Board"
+footprint = [2, 1]
+sigma = 0.0
+prebuilt = true
+cost = { parts = 0, chrome = 0, eddies = 0 }
+build = 0
+hp = 100
+crew = [2, 3, 3]
+text = "Cards for every open stratum, pinned at the Heart. Where runs begin."
+art = "struct.route_board"
+
+[[structure]]
+id = "lantern"
+name = "Lantern Post"
+footprint = [1, 1]
+sigma = 0.3
+cost = { parts = 2, chrome = 0, eddies = 0 }
+build = 4
+hp = 100
+light = [3, 3, 3]
+upkeep = [1, 1, 1]
+text = "Oil light without Lume: no Attention, one eddy a shift, dark when the ledger is dry."
+art = "struct.lantern"
+
+[[structure]]
+id = "salt_works"
+name = "Salt Works"
+footprint = [2, 2]
+sigma = 0.3
+cost = { parts = 8, chrome = 0, eddies = 0 }
+build = 12
+hosts = "cook"
+slots = [1, 1, 1]
+hp = 100
+salt = [1, 2, 3]
+text = "Brine pans over a burner. A Cook turns Lung brine into salt."
+art = "struct.salt_works"

@@ -505,6 +505,8 @@ pub struct Record {
     pub injuries: Vec<(Injury, u8)>,
     /// job priorities 0-4 in Job::all order (0 never)
     pub priorities: [u8; 9],
+    /// the schedule row: Dim, Dark, Flood
+    pub schedule: [Duty; 3],
     pub status: Status,
     pub runs: u32,
     pub survived: u32,
@@ -516,6 +518,34 @@ pub struct Record {
     /// the job they are working this shift (for the Mood lean and XP); None when idle, resting or out
     pub shift_job: Option<Job>,
 }
+
+/// A schedule row's entry for one shift of the day (Full Design, Homes, meals, light, water, sleep: Schedules).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Duty {
+    Work,
+    Rest,
+    Any,
+}
+
+impl Duty {
+    pub fn name(self) -> &'static str {
+        match self {
+            Duty::Work => "Work",
+            Duty::Rest => "Rest",
+            Duty::Any => "Any",
+        }
+    }
+    pub fn next(self) -> Duty {
+        match self {
+            Duty::Work => Duty::Rest,
+            Duty::Rest => Duty::Any,
+            Duty::Any => Duty::Work,
+        }
+    }
+}
+
+/// The default row: Work in Dim, Rest in Dark, Any in Flood.
+pub const DEFAULT_SCHEDULE: [Duty; 3] = [Duty::Work, Duty::Rest, Duty::Any];
 
 /// What the run needs from a record (Full Design: Technical architecture).
 #[derive(Clone, Debug, PartialEq)]
@@ -574,6 +604,14 @@ impl Record {
     }
     pub fn has_trait(&self, id: &str) -> bool {
         self.traits.iter().any(|t| t == id)
+    }
+    /// On duty this shift of the day (0 Dim, 1 Dark, 2 Flood): Work yes, Rest no, Any while Rest is 40 or more.
+    pub fn on_duty(&self, shift_of_day: u8) -> bool {
+        match self.schedule[(shift_of_day % 3) as usize] {
+            Duty::Work => true,
+            Duty::Rest => false,
+            Duty::Any => self.need(Need::Rest) >= 40,
+        }
     }
     pub fn is_up(&self) -> bool {
         matches!(self.status, Status::Idle | Status::Working(_) | Status::Resting)
@@ -818,6 +856,11 @@ impl Record {
 impl Record {
     /// Utility for a job now: None when the slimo cannot or will not take it (Full Design: Jobs by utility).
     pub fn utility(&self, traits: &TraitFile, job: Job) -> Option<f32> {
+        self.utility_at(traits, job, self.priorities[job.index()])
+    }
+
+    /// Utility with a priority from outside: the district's, where the foreman's is higher than the slimo's own.
+    pub fn utility_at(&self, traits: &TraitFile, job: Job, pri: u8) -> Option<f32> {
         if !self.depth.can_act() || !self.is_up() {
             return None;
         }
@@ -827,7 +870,6 @@ impl Record {
         if self.depth == Depth::D1 && job == Job::Tend {
             return None;
         }
-        let pri = self.priorities[job.index()];
         if pri == 0 {
             return None;
         }
@@ -1009,6 +1051,7 @@ impl Roster {
             mood_target: 60,
             injuries: Vec::new(),
             priorities,
+            schedule: DEFAULT_SCHEDULE,
             status: if depth == Depth::D5 { Status::Down } else { Status::Idle },
             runs: 0,
             survived: 0,

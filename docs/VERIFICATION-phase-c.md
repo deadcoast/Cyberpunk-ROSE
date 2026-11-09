@@ -57,3 +57,58 @@ pulls, Scav XP, needs moved, bonds counted).
 Known gaps: the roster lives for the session (the save file is not yet written to disk — the Game shell PAC);
 Fracture never happens in the run yet; Nerve does not reach dodge or dimming until Phase D's combat pass; the
 colony's zones, meals and sleep (PAC-041) will replace the flat shift context (everyone on the signalled Mat).
+
+## PAC-041 — `colony` crate: zones, structures with tiers, districts, foremen (2026-11-09)
+
+Full Design v3.9 first (Colony mode): Building (an anchor on Cord or Node with the structure's signal, the rest of
+the footprint on walkable floor or Mat; the Stash pays on the first Build shift; a builder adds Hands a shift, a
+Forge doubles it; tiers 2 and 3 cost ×2 and ×3 and need the Quarter and the City), the 24 structures as a table of
+footprint, cost, build points, the job each hosts with its slots, and per-tier numbers; zones and filters; homes,
+meals, light, water and sleep, which are the record's `ShiftContext`; schedules (Work / Rest / Any per shift of the
+day, Work / Rest / Any by default, so a city sleeps in Dark); districts and foremen; petitions. Research 14 (the
+Dwarf Fortress mayor) decided the election (Voice + Mood / 20, Orator ×2, a term of ten shifts, an election at
+once when the foreman dies or leaves) and turned the mayor's mandates into petitions with a deadline and a Mood
+consequence, with no punishments and no rooms for the office. `data/structures.toml` holds the 24; the loader
+rejects a missing core structure, an unknown hosted job, a free or pointless build.
+
+`core/crates/colony`: `StructureFile`, `Colony` (found, can_place / place / place_built / cancel / upgrade,
+paint_zone with `Filter`, assign_homes, form_districts, elect, priority_for, assign_jobs, end_shift → `ShiftOutcome`),
+saved in v7. The founding stands the Heart on its node, a Route Board and a tier-1 Bench beside it, and a Pit on every
+Relay. `people` gained `Duty` and a schedule row on the record, `utility_at` (the foreman's priority where higher)
+and `on_duty`. `bench` gained `end_shift_slots` so the Bench's Tweak slots set how many jobs advance.
+
+The game: `RoseSim` founds the city with the Mat and runs the whole shift in one call (`colony_end_shift`): the
+colony hands out the slots and pays ghosts out of the Stash (the cheapest Parts first), the Stash resolves its queues
+and the Bench's slots, the Pits take the nutrient and the genome drifts, the shift's salt, doses and identifications
+land, lanterns and paste come out of the ledger, and the roster takes the work, the clinic's treatments and every
+slimo's context. The Build menu reads the 24 from the crate with their numbers and arms the Colony's build tool; the
+Colony draws structures and ghosts on their footprints with a build bar, a ghost cursor that names why a tile is
+refused, right-click to cancel an unpaid ghost, a city line (tier, day and shift, built, ghosts, beds, districts, what
+a ghost waits for) and, in District view, each district's reach, name, foreman and petition. The Slimo card shows the
+slimo's bed, last shift's job and district (FOREMAN), and the schedule row.
+
+Reviewed by eye (`docs/shots/colony.png`, `colony_district.png`, `build.png`, `play_11_slimo.png`): the first
+placement rule asked every footprint tile to be Mat, and the probe found no Bunkhouse anchor anywhere on a grown
+Mat (cords are one tile wide) — the rule became anchor-on-Mat, footprint-on-floor, written into the design; zones
+follow the same logic. The Colony's text ran over lit tiles — framed; district labels drew at world scale and
+floated outside the reach — drawn at screen scale inside it on a dark backing; the Build previews were cropped and
+the Heart's text broke mid-word — fitted and wrapped; the Heart has four tiers and the art three — `t4` added. The
+Runner's card showed a Tend shift on the shift they ran: a run is the shift's work, so the colony skips anyone whose
+shift job a run set, and they do not count as asleep (tested). The smoke then read Rest 52 where 88 was expected:
+ten slots and six slimos meant everyone worked every shift — the rules were right and the design's schedules were
+missing, so the schedule went in (tested: Dark sleeps by default, Any sleeps under Rest 40). The card's Mood target
+of 65 for the Runner is the shift's carried-home injuries (Bleeding, Soaked, Fever at −5 each) counted before the
+one-shift ones heal. `.gitignore`'s Python `build/` rule had kept `game/modes/build/` out of the repo since Phase A;
+anchored to the root, and the Build screen is committed for the first time.
+
+Tests: 9 in `colony` (the 24 load and the founding; placement by Mat, signal and footprint; building pays once then
+adds Hands and needs the Quarter to upgrade; homes, meals, light and sleep reach the contexts; a district forms,
+elects by Voice and petitions for a failing need, answered by a lantern; zones by cell and filter; the schedule;
+jobs to the highest utility one slot each; a Runner home from a run takes no slot), the save round trip carries a
+colony; 106 in the workspace. The smoke places a lantern ghost from the Colony's tool, checks a Vault refuses at
+Heart tier 1, and after the run finds the lantern paid for and built, the Heart's district formed with a foreman
+who is a member, and the Runner with no job on the shift they ran.
+
+Known gaps: haulers do not yet carry Stash items to stockpiles by filter, and a foreman's cargo demand waits for
+the routing pass (PAC-043); unrest lines are read off the gauge but strike, defection and the Charter are PAC-042;
+structures take no damage until floods and raiders (Phase D); the Heart's tier does not yet grow the Stash grid.

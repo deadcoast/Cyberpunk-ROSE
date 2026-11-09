@@ -12,6 +12,9 @@ var substrate: TileMapLayer
 var matlayer: TileMapLayer
 var props: TileMapLayer
 var crowd: Node2D
+var buildings: Node2D  # the colony's structures and ghosts, drawn from RoseSim.structures()
+var districts: Node2D  # hub rings and names, District view
+var show_districts := false
 var sources := {}      # slot key -> [source_id, frames]
 var w := 0
 var h := 0
@@ -33,6 +36,12 @@ func _ready() -> void:
 	crowd = Node2D.new()
 	crowd.draw.connect(_draw_crowd)
 	add_child(crowd)
+	buildings = Node2D.new()
+	buildings.draw.connect(_draw_buildings)
+	add_child(buildings)
+	districts = Node2D.new()
+	districts.draw.connect(_draw_districts)
+	add_child(districts)
 	if bind_sim:
 		var sim: RoseSim = Sim.ensure()
 		w = sim.width()
@@ -120,6 +129,65 @@ func _on_tick() -> void:
 		for i in changed:
 			_paint_mat(i % w, i / w, int(hy[i]), sig[i])
 	crowd.queue_redraw()
+
+## Structures stand on their footprint: the sprite's bottom edge on the footprint's bottom row, its width the
+## footprint's. A ghost is half-transparent with its build progress as a bar; a damaged one shows its HP.
+func _draw_buildings() -> void:
+	if not bind_sim:
+		return
+	var sim: RoseSim = Sim.ensure()
+	for st in sim.structures():
+		var tex := Assets.texture(String(st.art), "t%d" % int(st.tier))
+		if tex == null:
+			continue
+		var fw := int(st.w) * TILE
+		var fh := int(st.h) * TILE
+		var dst := Rect2(int(st.x) * TILE, int(st.y) * TILE + fh - tex.get_height(), tex.get_width(), tex.get_height())
+		var built := bool(st.built)
+		buildings.draw_texture_rect(tex, dst, false, Color(1, 1, 1, 1.0 if built else 0.45))
+		# the footprint's outline on the floor, Cyan for a ghost
+		buildings.draw_rect(Rect2(int(st.x) * TILE, int(st.y) * TILE, fw, fh), UiTheme.CYAN if not built else Color(UiTheme.OOZE_GLOW, 0.5), false, 1.0)
+		if not built or int(st.upgrading_to) > 0:
+			var total := maxi(1, int(st.build_total))
+			var frac := clampf(float(st.progress) / total, 0.0, 1.0)
+			buildings.draw_rect(Rect2(int(st.x) * TILE, int(st.y) * TILE + fh + 2, fw, 3), UiTheme.SUMP)
+			buildings.draw_rect(Rect2(int(st.x) * TILE, int(st.y) * TILE + fh + 2, fw * frac, 3), UiTheme.ACID if bool(st.paid) else UiTheme.HOT_PINK)
+		elif int(st.hp) < int(st.hp_max):
+			var frac := float(st.hp) / maxf(1.0, float(st.hp_max))
+			buildings.draw_rect(Rect2(int(st.x) * TILE, int(st.y) * TILE + fh + 2, fw * frac, 2), UiTheme.HOT_PINK)
+
+## District view: a ring of the district's reach around its hub, its name and foreman.
+func _draw_districts() -> void:
+	if not bind_sim or not show_districts:
+		return
+	var sim: RoseSim = Sim.ensure()
+	var cam := get_viewport().get_camera_2d()
+	var k := 1.0 / (cam.zoom.x if cam != null else 1.0)   # the pixel font is 6 px on screen whatever the zoom
+	var font := UiTheme.pixel_font()
+	for d in sim.districts(Sim.ensure_people()):
+		var hx := int(d.hub_x) * TILE + TILE / 2
+		var hy := int(d.hub_y) * TILE + TILE / 2
+		var r := 8 * TILE + TILE / 2
+		districts.draw_rect(Rect2(hx - r, hy - r, r * 2, r * 2), Color(UiTheme.CYAN, 0.7), false, 2.0 * k)
+		districts.draw_circle(Vector2(hx, hy), 3.0 * k, UiTheme.CYAN)
+		var name := String(d.name).to_upper()
+		if String(d.foreman_name) != "":
+			name += "   FOREMAN " + String(d.foreman_name).to_upper()
+		# the name inside the top-left corner of the reach on a dark backing, the petition inside the bottom-left
+		districts.draw_set_transform(Vector2(hx - r + 3 * k, hy - r + 8 * k), 0.0, Vector2(k, k))
+		districts.draw_rect(Rect2(-2, -6, name.length() * 4 + 3, 8), Color(UiTheme.SUMP, 0.85))
+		districts.draw_string(font, Vector2.ZERO, name, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.CYAN)
+		var pet: Dictionary = d.petition
+		if not pet.is_empty():
+			var ptext := "PETITION: %s   %d SHIFTS" % [String(pet.need).to_upper(), int(pet.shifts_left)]
+			districts.draw_set_transform(Vector2(hx - r + 3 * k, hy + r - 3 * k), 0.0, Vector2(k, k))
+			districts.draw_rect(Rect2(-2, -6, ptext.length() * 4 + 3, 8), Color(UiTheme.SUMP, 0.85))
+			districts.draw_string(font, Vector2.ZERO, ptext, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.HOT_PINK if bool(pet.missed) else UiTheme.ACID)
+		districts.draw_set_transform(Vector2.ZERO)
+
+func redraw_city() -> void:
+	buildings.queue_redraw()
+	districts.queue_redraw()
 
 func _draw_crowd() -> void:
 	if not draw_crowd or not bind_sim:

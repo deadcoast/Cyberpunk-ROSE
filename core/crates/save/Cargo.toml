@@ -10,5 +10,6 @@ items = { path = "../items" }
 inventory = { path = "../inventory" }
 bench = { path = "../bench" }
 people = { path = "../people" }
+colony = { path = "../colony" }
 serde.workspace = true
 postcard.workspace = true

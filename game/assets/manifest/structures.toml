@@ -1,23 +1,23 @@
-# Structures: three visual tiers each (t1 scrap and tarp, t2 welded plate and ooze housing, t3 chrome-plated with lume trim). Phase A ships eight; the rest arrive with Phase C.
+# Structures: three visual tiers each (t1 scrap and tarp, t2 welded plate and ooze housing, t3 chrome-plated with lume trim). Sprite size is the footprint (data/structures.toml) x 32 wide and one tile taller, the side view standing on its tiles. All 24 of Full Design v3.9.
 
 [[slot]]
 id = "struct.heart"
 kind = "sprite"
-size = [96, 96]
+size = [96, 128]
 frames = 1
-states = ["t1", "t2", "t3"]
+states = ["t1", "t2", "t3", "t4"]
 ramp = "industrial"
 silhouette = "rect"
 tag = "HRT"
 anchor = "anchor.tile"
-prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; the Heart: the first ooze node grown into a chamber; t1 a bulb in a culvert, t2 a bulb with scrap walls, t3 ooze arches with hung lamps"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; the Heart: the first ooze node grown into a chamber; t1 a bulb in a culvert, t2 a bulb with scrap walls, t3 ooze arches with hung lamps, t4 a cathedral of cords with a chrome-ringed vault"
 negative = "green, outline on every edge, gradient"
 status = "placeholder"
 
 [[slot]]
 id = "struct.pit"
 kind = "sprite"
-size = [64, 32]
+size = [32, 64]
 frames = 1
 states = ["t1", "t2", "t3"]
 ramp = "industrial"
@@ -31,7 +31,7 @@ status = "placeholder"
 [[slot]]
 id = "struct.pod"
 kind = "sprite"
-size = [64, 64]
+size = [64, 96]
 frames = 1
 states = ["t1", "t2", "t3"]
 ramp = "industrial"
@@ -45,7 +45,7 @@ status = "placeholder"
 [[slot]]
 id = "struct.bench"
 kind = "sprite"
-size = [64, 64]
+size = [64, 96]
 frames = 1
 states = ["t1", "t2", "t3"]
 ramp = "industrial"
@@ -59,7 +59,7 @@ status = "placeholder"
 [[slot]]
 id = "struct.market"
 kind = "sprite"
-size = [96, 64]
+size = [64, 96]
 frames = 1
 states = ["t1", "t2", "t3"]
 ramp = "industrial"
@@ -87,7 +87,7 @@ status = "placeholder"
 [[slot]]
 id = "struct.still"
 kind = "sprite"
-size = [96, 64]
+size = [64, 96]
 frames = 1
 states = ["t1", "t2", "t3"]
 ramp = "industrial"
@@ -109,5 +109,229 @@ silhouette = "rect"
 tag = "RLY"
 anchor = "anchor.tile"
 prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Relay Shrine: a pole of chrome with an ooze bulb at the top, a built nerve"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.bunkhouse"
+kind = "sprite"
+size = [96, 96]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "BNK"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Bunkhouse: six bunks under one tarp between two cords, blankets of sacking, a hung lamp"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.forge"
+kind = "sprite"
+size = [64, 96]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "FRG"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Scrap Forge: anvil, torch, a pile of plate, sparks"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.lume_farm"
+kind = "sprite"
+size = [64, 96]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "LUM"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Lume Farm: glowing bulbs grown on a node in a wire trellis, purple light"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.lung"
+kind = "sprite"
+size = [64, 96]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "LNG"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Lung Housing: a breathing organ in a scrap housing with brine pipes and a cot beside it"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.pen"
+kind = "sprite"
+size = [64, 96]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "PEN"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Sewerat Pen: wire and tarp, a water dish, rat eyes in the dark"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.vault"
+kind = "sprite"
+size = [64, 96]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "VLT"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Reliquary Vault: a sealed ooze chamber with a chrome hatch"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.rack"
+kind = "sprite"
+size = [64, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "RCK"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Stockpile Rack: scrap shelving on a cord with crates and sacks"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.cold_store"
+kind = "sprite"
+size = [64, 96]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "CLD"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Cold Store: a chilled housing with frost on the door and a dim bulb"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.turret"
+kind = "sprite"
+size = [32, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "TRT"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Scrap Turret: a mounted scrap gun on a tripod with a seat"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.watch_post"
+kind = "sprite"
+size = [32, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "WCH"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Watch Post: a ladder to a lamp hook with a tin shade"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.memorial"
+kind = "sprite"
+size = [64, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "MEM"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Memorial: names cut into a plate propped on the cord, a candle"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.charter_board"
+kind = "sprite"
+size = [64, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "CHB"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Charter Board: a plank board with pinned paper and a lantern"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.appraisal"
+kind = "sprite"
+size = [64, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "APR"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; an Appraisal Table: a table with a loupe, a scale and a lamp"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.route_board"
+kind = "sprite"
+size = [64, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "RTB"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Route Board: pinned route cards and a string map under a lamp"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.lantern"
+kind = "sprite"
+size = [32, 64]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "LTN"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Lantern Post: an oil lantern on a pipe post, warm light"
+negative = "green, outline on every edge, gradient"
+status = "placeholder"
+
+[[slot]]
+id = "struct.salt_works"
+kind = "sprite"
+size = [64, 96]
+frames = 1
+states = ["t1", "t2", "t3"]
+ramp = "industrial"
+silhouette = "rect"
+tag = "SLT"
+anchor = "anchor.tile"
+prompt = "a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Salt Works: brine pans over a burner, white crust, steam"
 negative = "green, outline on every edge, gradient"
 status = "placeholder"

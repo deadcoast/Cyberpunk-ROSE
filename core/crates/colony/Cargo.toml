@@ -1,0 +1,12 @@
+[package]
+name = "colony"
+description = "Cyberpunk: ROSE - the city on the Mat: the 24 structures, building, zones, homes, districts, foremen, petitions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mat = { path = "../mat" }
+people = { path = "../people" }
+serde.workspace = true
+toml.workspace = true

@@ -1,6 +1,6 @@
 # Cyberpunk: ROSE — Full Design
 
-Nov 7, 2026 · @heat · v3.8 Nov 9: Phase B written to its numbers (PAC-020–028, research 07–13); Phase C begins with the slimo record written to its numbers (PAC-040): Mod-Depth, creation, skills and XP, the forty traits, needs and Mood, job utility, bonds, what the record does in a run
+Nov 7, 2026 · @heat · v3.9 Nov 9: Phase B written to its numbers (PAC-020–028, research 07–13); Phase C: the slimo record (PAC-040) and the colony's structures, zones, homes, districts, foremen and petitions written to their numbers (PAC-041, research 14)
 
 ## The game
 
@@ -173,7 +173,7 @@ Every slimo is a full character record; a Runner is a slimo you have taken on a 
 
 **The record in a run.** The Route Board hands the run a `RunnerSetup` read off the record, and the run's numbers bend to it by one rule per stat. Body scales the four sections and the stamina pool's twin, carry: sections × (0.8 + 0.04 × Body) (Body 5 is the table's numbers, 10 is ×1.2, 1 is ×0.84) and a carry limit of 18 kg + 1 kg per point of Body above 5 (−1 below) + the traits' carry. Nerve scales stamina the same way: 100 × (0.8 + 0.04 × Nerve), so Nerve 10 is 120 stamina and Nerve 1 is 84; a bonded partner within 6 tiles is +1 Nerve, +4 stamina. Hands moves melee damage by (Hands − 5) / 2 rounded toward zero (Hands 10 +2, Hands 1 −2, never below 1) and dig time by × (1.25 − 0.05 × Hands) (Hands 5 the table's 6 s, Hands 10 4.5 s, Hands 1 7.2 s). Eye is already the see radius (2 + lume + Eye / 2) and moves ranged damage as Hands moves melee. Veins are the depth's and set lume. The backpack is 8 × (5 + the traits' rows), 3–8 rows. The trait flags the run reads: Night Eyes see radius +1; Loud every Runner sound +1; Steady Hands melee noise −1; Brawler melee +1; Dead Shot ranged +2; Quick sprint +0.5 tiles/s and stamina regen ×1.2; Lumbering walk −0.3; Webbed wades and swims at walk speed; Scrounger a dug pile rolls one more item; Sharp Nose Eye +1 on a tile darker than dim; Sewer Lungs no Fungal Fever; Coward and Fearless the follower back-off line above. The rest of the forty are the colony's (PAC-041/042) or the Bench's. Dodge and dimming read Nerve in Phase D's combat pass; until then they are the table's.
 
-**Injuries** persist: Bleeding (treat with antiseptic), Fracture (splint; −Hands or −legs for 3 shifts), Chrome Shock (locks an implant socket until a Bench clears it), Soaked, Blinded, Fungal Fever (from a Burster; Ferality gain doubles until a Lung treats it). A Medic job at a Lung Housing treats injuries over shifts; without it they heal at a quarter rate.
+**Injuries** persist: Bleeding (treat with antiseptic), Fracture (splint; −Hands or −legs for 3 shifts), Chrome Shock (locks an implant socket until a Bench clears it), Soaked, Blinded, Fungal Fever (from a Burster; Ferality gain doubles until a Lung treats it). A Cook at a Lung Housing — the Cook job reads the Medic skill, and the clinic's slot asks Medic 5 — treats injuries over shifts; without it they heal at a quarter rate.
 
 **Gear slots**: head, body, feet, two hands, chest rig, backpack, four implants. Implants are permanent and visible on the sprite.
 
@@ -218,7 +218,44 @@ The city has every system a player of the genre expects to find, and each one is
 - Attention: wealth and light you show at a grate bring the white light down; three stages, each with salvage.
 - The handoff: a strain with Plasticity and Conductance above 0.7 proposes its own reroutes.
 
-**Structures at launch (24)**: Heart (4 tiers), Pit, Hab-Pod, Bunkhouse, Scrap Forge, Tweaker Bench, Lume Farm, Lung Housing, Seep Market, Sphincter Gate, Sewerat Pen, Downer Still, Reliquary Vault, Relay Shrine, Stockpile Rack, Cold Store, Scrap Turret, Watch Post (extends danger overlay), Memorial, Charter Board, Appraisal Table, Route Board (run entry), Lantern Post (light without Lume), Salt Works (makes salt from Lung brine).
+**Building.** A structure stands on the Mat by its anchor — the top-left tile of its footprint — which must be Cord or Node carrying signal at or above the structure's need (0.3 for most, 0.5 for the organs: Lume Farm, Lung Housing, Reliquary Vault, Scrap Turret); the Mat is filaments and nodes, not floors, so the rest of the footprint rests on walkable sewer floor (open, pipe, brick, grate, deposit; never rock, concrete, water or a collapse) or on more Mat. The ones marked *Node* need a Node under the anchor, a Seep Market a grate within two tiles, a Relay Shrine a Relay. Footprints never overlap. Placing makes a ghost; the first Build shift pays the cost out of the Stash — Parts are any Parts-category items (the cheapest first), Chrome any Chrome-category items, eddies from the ledger — and a ghost the Stash cannot pay for waits and says what it lacks. Building is the Build job: every slimo on Build adds their Hands in build points per shift (a Scrap Forge in the district doubles them); a structure is up when its points are met. Three visual tiers (the Heart four), upgraded in place: tier 2 costs twice tier 1 and needs the Quarter, tier 3 three times and needs the City; the Heart's tier is the city's. HP is 100 × tier (the Heart 200 × tier); floods and raiders take it (Phase D), a Build slimo mends 10 a shift.
+
+**The 24 structures** (`data/structures.toml`; cost is tier 1 in Parts P, Chrome C, eddies E; the slots are the job the structure hosts and how many per tier):
+
+| Structure | Footprint | Cost · build points | Hosts | Tier 1 / 2 / 3 |
+| --- | --- | --- | --- | --- |
+| Heart | 3 × 3 Node, prebuilt | — | — | Stash grid 10 × 6 / 12 × 8 / 14 × 10 / 16 × 12; Pit stock 40 / 80 / 160 / 320; lights 4 tiles; a Vault slot per tier from 2 |
+| Pit | 1 × 1 | 4 P · 8 | Tend 1 | stock 20 / 40 / 60; a tended Pit releases × (1 + Shepherd / 10) |
+| Hab-Pod | 2 × 2 | 6 P · 10 | — | one bed; Rest +30 asleep in Dark; a home a tier under the city's costs 5 Mood target per tier |
+| Bunkhouse | 3 × 2 | 10 P · 16 | — | 6 / 8 / 10 beds; Rest +20 asleep in Dark; Pack Animal +10, Hermit −10 |
+| Scrap Forge | 2 × 2 | 8 P 2 C · 14 | Build 2 / 3 / 4 | build points × 2 in its district; mends 10 HP a shift per builder |
+| Tweaker Bench | 2 × 2 | 8 P 2 C · 14 | Tweak 1 / 2 / 3 | a slot finishes one Bench job a shift; tier 2 opens recipe tier 2, tier 3 tier 3 (with the blueprint) |
+| Lume Farm | 2 × 2 Node, σ 0.5 | 6 P 4 C · 16 | Tend 1 | light within 4 / 6 / 8 tiles; +2 Attention a shift at a grate within 10 |
+| Lung Housing | 2 × 2 Node, σ 0.5 | 10 P 4 C · 18 | Cook 1 / 2 / 3 (Medic 5) | the clinic: each Cook here treats one injury a shift (Medic XP); brine 1 / 2 / 3 a shift; homes within 6 tiles count dry |
+| Seep Market | 2 × 2 at a grate | 8 P · 12 | Haul 1 / 2 / 3 | the ledger's market; a slot sells (Trade XP); glut recovers +5 % a tier faster |
+| Sphincter Gate | 1 × 1 | 4 P 2 C · 8 | Guard 1 | HP 100 / 200 / 300; shut to creatures (Phase D) |
+| Sewerat Pen | 2 × 2 | 6 P · 10 | Tend 1 | 2 / 4 / 6 tamed sewerats (Phase D) |
+| Downer Still | 2 × 2 | 10 P 4 C 20 E · 18 | Cook 1 / 2 / 3 | a slot turns 1 brine + 1 Enzyme-tag Part into 1 dose a shift; +8 Attention a shift |
+| Reliquary Vault | 2 × 2 Node, σ 0.5, Heart 2 | 12 P 6 C · 20 | — | 4 / 8 / 12 Relics or Blackline, outside Attention |
+| Relay Shrine | 1 × 1 on a Relay | 6 P 2 C · 10 | — | the Relay's Nerve rules (4, Phase D); the hub of its district; members +5 Mood target |
+| Stockpile Rack | 2 × 1 | 4 P · 6 | — | anchors a stockpile zone of 8 / 12 / 16 cells |
+| Cold Store | 2 × 2 | 8 P 2 C · 12 | — | 8 / 12 / 16 cells; Organics inside lose no condition |
+| Scrap Turret | 1 × 1, σ 0.5 | 6 P 4 C · 12 | Guard 1 | 6 / 8 / 10 damage at 6 tiles with a Guard in it (Phase D) |
+| Watch Post | 1 × 1 | 4 P · 6 | Guard 1 | danger overlay 12 / 16 / 20 tiles |
+| Memorial | 2 × 1 | 4 P · 6 | — | the dead's records; a death's Mood hit is halved for members of a district with one; 10 / 20 / 40 names |
+| Charter Board | 2 × 1 | 6 P · 8 | — | a district passes laws only with one (PAC-042); one per district |
+| Appraisal Table | 2 × 1 | 6 P 2 C · 10 | Appraise 1 / 2 / 3 (Appraise 3) | a slot identifies 2 items a shift |
+| Route Board | 2 × 1 at the Heart, prebuilt | — | — | crew 1 + 1 / 1 + 2 / 1 + 2 and a pack sewerat; cards per stratum open |
+| Lantern Post | 1 × 1 | 2 P · 4 | — | light within 3 tiles without Lume; 1 E a shift for oil, dark when the ledger is dry |
+| Salt Works | 2 × 2 | 8 P · 12 | Cook 1 | 1 brine into 1 / 2 / 3 salt a shift |
+
+**Zones** are painted cells on signalled Mat (σ ≥ 0.3, Cord or Node) or on walkable floor touching it: a **stockpile** (around a Rack or Cold Store, with a filter — categories, a tier floor, a condition floor — that decides what haulers bring; one stack a cell), a **hab** zone (beds inside it are assigned before any other), a **quarantine** zone (a slimo with Fungal Fever sleeps and works inside it), a **kill** zone (Guards strike and turrets fire at anything inside without an order). A cell belongs to one zone.
+
+**Homes, meals, light, water, sleep.** Each slimo takes a bed — in a hab zone first, then the nearest free bed to the Heart; a Hermit takes a Pod over a Bunkhouse and a Pack Animal the reverse — and sleeps on the Mat when there is none (Rest +15, never +30). A shift is Dim, Dark or Flood in turn (shift *s* of the day is *s* mod 3), and the Pod's +30 is Dark's. **Schedules**: each slimo's row gives the three shifts Work, Rest or Any — Work takes a slot, Rest sleeps, Any takes a slot while Rest is 40 or more and sleeps below it; the default row is Work / Rest / Any, so a city sleeps in Dark; Curfew (PAC-042) overrides the row. A slimo whose shift was a run worked it and takes no slot. A slimo eats when the Mat under its home carries nutrient ≥ 0.2 on signalled tissue (the meal takes 0.05 from the cell); when it does not, two eddies of paste from the ledger feed it; when the ledger is dry it goes hungry. A home is lit when it is within a Lume Farm's, a Lantern Post's or the Heart's light; dry when its cell is not water or a Lung stands within 6; signalled at σ ≥ 0.3. These are the `ShiftContext` the record's needs read.
+
+**Districts and foremen** (research 14). A district forms where a Node — or a Relay with a Shrine — has three built structures within 8 tiles; the Node is its hub, the structures within 8 tiles that no nearer hub claims are its own, the members are the slimos whose bed is in it, else whose job is. The city tier caps districts at 1 / 3 / 8 / 20 (the Heart's own is the first). A district holds an election the shift it forms and every ten shifts after, and at once when the foreman dies or leaves: each member's weight is Voice + Mood / 20 (Orator × 2; a slimo on a run or stranded cannot stand), the highest wins, ties to the longer-serving. The foreman's job priorities stand over a member's where they are higher, the foreman posts the district's cargo demand (PAC-043), and the foreman petitions. A district whose foreman dies holds a one-shift wake (no jobs) and its members' Mood target falls by the dead slimo's Voice.
+
+**Petitions** are the foreman's mandates. When a district's members average under 30 in a need for two shifts running the foreman asks for the structure that answers it — Fed a Pit, Lit a Lume Farm (a Lantern Post will do), Dry a Lung Housing, Rest a Bunkhouse (a Pod will do), Signal a Relay Shrine — with five shifts to build it in the district. One petition stands at a time; met, the members' Mood target gains 10 for three shifts; missed, it loses 10 until the structure stands. The petition is a line on the Colony HUD's alert queue and on the Slimo card of the foreman; the strike, defection and petition lines of a single slimo's Mood are the Charter's (PAC-042).
 
 ## Economy
 
@@ -420,8 +457,7 @@ rose/
     crates/bench             recipes by craft tag (data/recipes.toml), slotting, outcome from parts, the Bench queue
     crates/people            slimo records: creation, stats, skills and XP, traits (data/traits.toml), needs and Mood, job utility, bonds, the roster
     crates/inventory         grids, containers, rigs, Stash tiers
-    crates/people            slimo records, stats, skills, traits, injuries, needs, jobs, bonds
-    crates/colony            zones, structures, tiers, districts, foremen, Charter, unrest, events, Attention
+    crates/colony            the 24 structures (data/structures.toml), placement and building, zones and filters, homes, meals, light, districts, foremen, petitions; the Charter, unrest, events and Attention follow
     crates/run               chunk · assemble · map · fov · light · noise · fog · senses · loot · creature · runner · follower · board · sim (the 20 Hz run) · telemetry · bot
     crates/economy           vendors, stock tiers, contracts, chains, glut, Downer chain
     crates/progress          tech tree, strain classes, Authority, city tiers, collections, endings

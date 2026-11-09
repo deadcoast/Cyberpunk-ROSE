@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 6;
+pub const SAVE_VERSION: u16 = 7;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -91,6 +91,8 @@ pub struct SaveFile {
     pub bench: bench::BenchQueue,
     /// the slimos: records, the memorial (v6)
     pub roster: people::Roster,
+    /// the city: structures, zones, districts, homes (v7)
+    pub colony: colony::Colony,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -138,6 +140,7 @@ impl SaveFile {
             ledger: inventory::Ledger::new(),
             bench: bench::BenchQueue::new(),
             roster: people::Roster::new(),
+            colony: colony::Colony::new(),
         }
     }
 
@@ -293,9 +296,11 @@ mod tests {
         save.corpses.push(CorpseRecord { seed: 11, stratum: 1, x: 40, y: 13, chunk: "sump_culvert".into(), day: 3, runner: "Pell".into(), rig: vec![1, 2, 3], raided: false });
         // the roster rides along (v6): six founders with their records
         save.roster.found(&people::TraitFile::shipped(), &people::NameFile::shipped(), 7, 1);
+        save.colony.zones.push(colony::Zone { id: 9, kind: colony::ZoneKind::Stockpile, cells: vec![1, 2, 3], filter: colony::Filter { categories: vec!["chrome".into()], min_tier: 1, min_condition: 20 }, anchor: None });
         let back = SaveFile::decode(&save.encode()).unwrap();
         assert_eq!(back.roster, save.roster);
         assert_eq!(back.roster.records.len(), 6);
+        assert_eq!(back.colony, save.colony);
         assert_eq!(back.route_memory(11, 1).unwrap().bits[0], 0x0F);
         assert!(back.route_memory(99, 1).is_none());
         assert_eq!(back.corpses_on(11, 1).len(), 1);

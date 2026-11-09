@@ -342,35 +342,35 @@ structures.toml
 
 ### struct.heart
 
-- kind sprite · one frame 96x96 · 1 frame · states t1, t2, t3
+- kind sprite · one frame 96x128 · 1 frame · states t1, t2, t3, t4
 - anchor `anchor.tile` · ramp industrial · status placeholder
-- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; the Heart: the first ooze node grown into a chamber; t1 a bulb in a culvert, t2 a bulb with scrap walls, t3 ooze arches with hung lamps
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; the Heart: the first ooze node grown into a chamber; t1 a bulb in a culvert, t2 a bulb with scrap walls, t3 ooze arches with hung lamps, t4 a cathedral of cords with a chrome-ringed vault
 - negative: green, outline on every edge, gradient
 
 ### struct.pit
 
-- kind sprite · one frame 64x32 · 1 frame · states t1, t2, t3
+- kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Feeding Pit: a scrap-lined trough on a cord with chrome scrap in it
 - negative: green, outline on every edge, gradient
 
 ### struct.pod
 
-- kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
+- kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Hab-Pod: a sleeping capsule of plate and tarp with a round hatch
 - negative: green, outline on every edge, gradient
 
 ### struct.bench
 
-- kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
+- kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Tweaker Bench: a workbench of pipe and plate with hanging tools and a lamp
 - negative: green, outline on every edge, gradient
 
 ### struct.market
 
-- kind sprite · one frame 96x64 · 1 frame · states t1, t2, t3
+- kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Seep Market: a stall under a grate with a canopy, crates, a counter
 - negative: green, outline on every edge, gradient
@@ -384,7 +384,7 @@ structures.toml
 
 ### struct.still
 
-- kind sprite · one frame 96x64 · 1 frame · states t1, t2, t3
+- kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Downer Still: copper coils, glass, a dripping spout, purple fluid
 - negative: green, outline on every edge, gradient
@@ -394,6 +394,118 @@ structures.toml
 - kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Relay Shrine: a pole of chrome with an ooze bulb at the top, a built nerve
+- negative: green, outline on every edge, gradient
+
+### struct.bunkhouse
+
+- kind sprite · one frame 96x96 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Bunkhouse: six bunks under one tarp between two cords, blankets of sacking, a hung lamp
+- negative: green, outline on every edge, gradient
+
+### struct.forge
+
+- kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Scrap Forge: anvil, torch, a pile of plate, sparks
+- negative: green, outline on every edge, gradient
+
+### struct.lume_farm
+
+- kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Lume Farm: glowing bulbs grown on a node in a wire trellis, purple light
+- negative: green, outline on every edge, gradient
+
+### struct.lung
+
+- kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Lung Housing: a breathing organ in a scrap housing with brine pipes and a cot beside it
+- negative: green, outline on every edge, gradient
+
+### struct.pen
+
+- kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Sewerat Pen: wire and tarp, a water dish, rat eyes in the dark
+- negative: green, outline on every edge, gradient
+
+### struct.vault
+
+- kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Reliquary Vault: a sealed ooze chamber with a chrome hatch
+- negative: green, outline on every edge, gradient
+
+### struct.rack
+
+- kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Stockpile Rack: scrap shelving on a cord with crates and sacks
+- negative: green, outline on every edge, gradient
+
+### struct.cold_store
+
+- kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Cold Store: a chilled housing with frost on the door and a dim bulb
+- negative: green, outline on every edge, gradient
+
+### struct.turret
+
+- kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Scrap Turret: a mounted scrap gun on a tripod with a seat
+- negative: green, outline on every edge, gradient
+
+### struct.watch_post
+
+- kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Watch Post: a ladder to a lamp hook with a tin shade
+- negative: green, outline on every edge, gradient
+
+### struct.memorial
+
+- kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Memorial: names cut into a plate propped on the cord, a candle
+- negative: green, outline on every edge, gradient
+
+### struct.charter_board
+
+- kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Charter Board: a plank board with pinned paper and a lantern
+- negative: green, outline on every edge, gradient
+
+### struct.appraisal
+
+- kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; an Appraisal Table: a table with a loupe, a scale and a lamp
+- negative: green, outline on every edge, gradient
+
+### struct.route_board
+
+- kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Route Board: pinned route cards and a string map under a lamp
+- negative: green, outline on every edge, gradient
+
+### struct.lantern
+
+- kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Lantern Post: an oil lantern on a pipe post, warm light
+- negative: green, outline on every edge, gradient
+
+### struct.salt_works
+
+- kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
+- anchor `anchor.tile` · ramp industrial · status placeholder
+- prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Salt Works: brine pans over a burner, white crust, steam
 - negative: green, outline on every edge, gradient
 
 tiles.toml

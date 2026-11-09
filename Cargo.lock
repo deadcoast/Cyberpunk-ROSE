@@ -144,6 +144,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "colony"
+version = "0.2.0"
+dependencies = [
+ "mat",
+ "people",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -502,6 +512,7 @@ name = "rose-godot"
 version = "0.2.0"
 dependencies = [
  "bench",
+ "colony",
  "godot",
  "inventory",
  "items",
@@ -550,6 +561,7 @@ name = "save"
 version = "0.2.0"
 dependencies = [
  "bench",
+ "colony",
  "inventory",
  "items",
  "people",

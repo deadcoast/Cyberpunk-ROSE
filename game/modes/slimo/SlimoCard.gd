@@ -107,9 +107,27 @@ func _draw_card() -> void:
 	make_label(card_frame, String(rec.full_name).to_upper(), Vector2(80, 4), UiTheme.CYAN)
 	var runs := int(rec.runs)
 	make_label(card_frame, "%s %s   Past %s   %s   %d run%s, %d survived" % [String(rec.depth), String(rec.depth_name), String(rec.past), String(rec.status), runs, "" if runs == 1 else "s", int(rec.survived)], Vector2(80, 16), UiTheme.DUST)
+	# the city's hold on them: bed, last shift's job, district and the foreman's chair (Full Design v3.9)
+	var csim: RoseSim = Sim.ensure()
+	var city_line := "sleeps on the Mat"
+	var homes: Dictionary = csim.homes()
+	if homes.has(selected):
+		for st in csim.structures():
+			if int(st.id) == int(homes[selected]):
+				city_line = "sleeps in the %s at %d,%d" % [String(st.name), int(st.x), int(st.y)]
+	for a in Sim.last_shift.get("assignments", []):
+		if int(a.slimo) == selected:
+			city_line += "   last shift %s at the %s" % [String(a.job).to_lower(), String(a.structure_name)]
+	for d in csim.districts(people):
+		var members: PackedInt32Array = d.members
+		if members.has(selected):
+			city_line += "   %s" % String(d.name)
+			if int(d.foreman) == selected:
+				city_line += " (FOREMAN)"
+	make_label(card_frame, city_line.left(70), Vector2(80, 26), UiTheme.OOZE_GLOW if city_line.contains("FOREMAN") else UiTheme.DUST)
 	# ---- stats as gauges
 	var st: Dictionary = rec.stats
-	var y := 30
+	var y := 38
 	for key in ["body", "nerve", "hands", "eye", "matsense", "voice"]:
 		var v := int(st[key])
 		make_label(card_frame, ("MAT-SENSE" if key == "matsense" else key.to_upper()), Vector2(80, y), UiTheme.DUST)
@@ -117,8 +135,8 @@ func _draw_card() -> void:
 		make_label(card_frame, str(v), Vector2(224, y), UiTheme.CHALK)
 		y += 11
 	# ---- skills as ten-step bars with XP to next
-	make_label(card_frame, "SKILLS", Vector2(250, 30), UiTheme.CYAN)
-	y = 42
+	make_label(card_frame, "SKILLS", Vector2(250, 38), UiTheme.CYAN)
+	y = 50
 	for sk in rec.skills:
 		var lv := int(sk.level)
 		make_label(card_frame, String(sk.name).to_upper(), Vector2(250, y), UiTheme.DUST)
@@ -132,7 +150,7 @@ func _draw_card() -> void:
 		make_label(card_frame, xp_text, Vector2(396, y), UiTheme.CHALK if lv < 10 else UiTheme.OOZE_GLOW)
 		y += 10
 	# ---- traits with their effects in words
-	y = 100
+	y = 108
 	make_label(card_frame, "TRAITS", Vector2(8, y), UiTheme.CYAN)
 	y += 12
 	for t in rec.traits:
@@ -140,8 +158,8 @@ func _draw_card() -> void:
 		make_label(card_frame, String(t.get("text", "")).left(58), Vector2(8, y + 10), UiTheme.DUST)
 		y += 22
 	# ---- needs as six bars with the Mood target marked
-	make_label(card_frame, "NEEDS", Vector2(250, 126), UiTheme.CYAN)
-	y = 138
+	make_label(card_frame, "NEEDS", Vector2(250, 134), UiTheme.CYAN)
+	y = 146
 	var needs: Dictionary = rec.needs
 	var target := int(rec.mood_target)
 	for key in ["fed", "lit", "dry", "signal", "rest", "mood"]:
@@ -154,8 +172,8 @@ func _draw_card() -> void:
 	var line := int(rec.unrest_line)
 	if line > 0:
 		make_label(card_frame, ["", "below the strike line", "below the defection line", "below the petition line"][line], Vector2(250, y), UiTheme.HOT_PINK)
-	# ---- injuries, the record line, bonds (under the two traits, which end at 152)
-	y = 160
+	# ---- injuries, the record line, bonds (under the two traits, which end at 164)
+	y = 170
 	var inj: Array = rec.injuries
 	if inj.size() > 0:
 		var parts := []
@@ -201,6 +219,17 @@ func _draw_card() -> void:
 		cell.add_child(b)
 		if allowed:
 			make_label(card_frame, "%.1f" % float(util[j]), Vector2(x + 2, y + 29), UiTheme.DUST)
+	# ---- the schedule row: Dim, Dark, Flood; click to cycle Work / Rest / Any
+	make_label(card_frame, "SCHEDULE", Vector2(8, 286), UiTheme.CYAN)
+	var row: PackedStringArray = rec.schedule
+	for k in 3:
+		var x := 60 + k * 76
+		make_label(card_frame, ["DIM", "DARK", "FLOOD"][k], Vector2(x, 286), UiTheme.DUST)
+		var kk := k
+		var b := make_button(card_frame, String(row[k]).to_upper(), Vector2(x + 26, 282), func():
+			people.cycle_schedule(selected, kk)
+			_draw_card())
+		b.modulate = Color.WHITE if String(row[k]) != "Rest" else Color(0.6, 0.6, 0.65)
 	# ---- send on a run
 	if bool(rec.can_run):
 		make_button(card_frame, "SEND ON A RUN", Vector2(340, 282), func():

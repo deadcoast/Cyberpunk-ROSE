@@ -11,9 +11,9 @@ use crate::data_text;
 #[class(base=RefCounted, init)]
 pub struct RosePeople {
     base: Base<RefCounted>,
-    traits: Option<TraitFile>,
+    pub(crate) traits: Option<TraitFile>,
     names: Option<people::NameFile>,
-    roster: Roster,
+    pub(crate) roster: Roster,
     /// the dead since the last shift end, for the survivors' Mood
     died_this_shift: Vec<Record>,
 }
@@ -49,7 +49,7 @@ fn strings(v: &[String]) -> PackedStringArray {
 
 #[godot_api]
 impl RosePeople {
-    fn ensure(&mut self) {
+    pub(crate) fn ensure(&mut self) {
         if self.traits.is_none() {
             self.traits = Some(TraitFile::from_toml(&data_text("traits.toml", people::TRAITS_TOML)).unwrap_or_else(|_| TraitFile::shipped()));
         }
@@ -178,6 +178,7 @@ impl RosePeople {
         }
         d.set("injuries", &inj);
         d.set("priorities", &PackedInt32Array::from(r.priorities.iter().map(|p| *p as i32).collect::<Vec<_>>().as_slice()));
+        d.set("schedule", &PackedStringArray::from(r.schedule.iter().map(|x| GString::from(x.name())).collect::<Vec<_>>().as_slice()));
         d.set("status", status_text(&r.status).as_str());
         d.set("can_run", r.can_run());
         d.set("runs", r.runs as i64);
@@ -214,6 +215,15 @@ impl RosePeople {
                 r.priorities[job as usize] = value.clamp(0, 4) as u8;
             }
         }
+    }
+
+    /// Cycle one shift of a slimo's schedule row (0 Dim, 1 Dark, 2 Flood): Work, Rest, Any.
+    #[func]
+    fn cycle_schedule(&mut self, id: i64, shift: i64) -> GString {
+        let Some(r) = self.roster.get_mut(id as u32) else { return GString::new() };
+        let k = shift.clamp(0, 2) as usize;
+        r.schedule[k] = r.schedule[k].next();
+        GString::from(r.schedule[k].name())
     }
 
     /// What the run needs from the record: {id, name, body, nerve, hands, eye, veins, rig_rows, carry_kg, flags}.
@@ -337,41 +347,47 @@ impl RosePeople {
         strings(&lines)
     }
 
-    /// Shift end for the city, before the colony exists (PAC-041): everyone is on the Mat; the shift's crafts, sales
-    /// and identifications go to the highest utility for Tweak, Haul (the hauler sells at the market and earns Trade)
-    /// and Appraise, whose shift job they become.
-    /// `ctx`: {signalled, lit, wet, fed}. Returns the record lines.
-    #[func]
-    fn end_shift(&mut self, ctx: VarDictionary, crafts: i64, sales: i64, identified: i64) -> PackedStringArray {
+    /// The shift from the colony (PAC-041): the assignments become shift jobs, the finished crafts and the sales
+    /// become XP for the slimos in those slots, the clinic treats, every record reads its context, and the dead's
+    /// Voice reaches the survivors. Returns the record lines.
+    pub(crate) fn shift_from_colony(&mut self, o: &colony::ShiftOutcome, sold: u32, crafted: u32) -> Vec<String> {
         self.ensure();
         let traits = self.traits.clone().unwrap();
-        let getb = |k: &str| ctx.get(k).and_then(|v| v.try_to::<bool>().ok()).unwrap_or(false);
-        let (signalled, lit, wet, fed) = (getb("signalled"), getb("lit"), getb("wet"), getb("fed"));
-        let mut work = ShiftWork::default();
         let mut lines: Vec<String> = Vec::new();
-        for (job, n) in [(Job::Tweak, crafts), (Job::Haul, sales), (Job::Appraise, identified)] {
-            if n <= 0 {
-                continue;
+        // the jobs of the shift
+        for (slimo, job, _) in &o.assignments {
+            if let Some(r) = self.roster.get_mut(*slimo) {
+                if r.is_up() && r.shift_job.is_none() {
+                    r.shift_job = Some(*job);
+                    r.status = Status::Working(*job);
+                }
             }
-            let best = self
-                .roster
-                .records
-                .iter()
-                .filter(|r| r.is_up() && r.status != Status::OnRun && r.status != Status::Stranded && r.shift_job.is_none())
-                .filter_map(|r| r.utility(&traits, job).map(|u| (u, r.id)))
-                .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal).then(b.1.cmp(&a.1)));
-            let Some((_, id)) = best else { continue };
-            if let Some(r) = self.roster.get_mut(id) {
-                r.shift_job = Some(job);
-                r.status = Status::Working(job);
+        }
+        // the work: finished crafts to the Tweak slots in turn, the sales split over the market's slots
+        let mut work = ShiftWork { tend_shifts_by: o.work.tend_shifts_by.clone(), identified_by: o.work.identified_by.clone(), ..Default::default() };
+        if !o.work.crafts_by.is_empty() {
+            for k in 0..crafted as usize {
+                work.crafts_by.push(o.work.crafts_by[k % o.work.crafts_by.len()]);
             }
-            match job {
-                Job::Tweak => work.crafts_by.extend(vec![id; n as usize]),
-                Job::Haul => work.sales_by.push((id, n as u32)),
-                _ => work.identified_by.extend(vec![id; n as usize]),
+        }
+        if !o.sellers.is_empty() && sold > 0 {
+            let each = (sold / o.sellers.len() as u32).max(1);
+            for s in &o.sellers {
+                work.sales_by.push((*s, each));
             }
-            let name = self.roster.get(id).map(|r| r.full_name()).unwrap_or_default();
-            lines.push(format!("{name} worked {}: {n}", job.name().to_lowercase()));
+        }
+        // the clinic: each treated patient by a medic in turn (Healer's Hands treats at 2x)
+        for (k, patient) in o.treated.iter().enumerate() {
+            let medic = o.work.treatments_by.get(k % o.work.treatments_by.len().max(1)).copied();
+            let healer = medic.and_then(|m| self.roster.get(m)).is_some_and(|m| m.has_flag(&traits, "treat_x2"));
+            if let Some(r) = self.roster.get_mut(*patient) {
+                if r.treat(&traits, healer) > 0 {
+                    if let Some(m) = medic {
+                        work.treatments_by.push(m);
+                    }
+                    lines.push(format!("{} was treated at the Lung", r.full_name()));
+                }
+            }
         }
         let before: Vec<Record> = self.roster.records.clone();
         let died = std::mem::take(&mut self.died_this_shift);
@@ -381,19 +397,9 @@ impl RosePeople {
             .iter()
             .map(|r| {
                 let stranded = r.status == Status::Stranded;
-                (
-                    r.id,
-                    ShiftContext {
-                        on_mat: !stranded,
-                        signalled: signalled && !stranded,
-                        lit,
-                        wet: wet || stranded,
-                        fed: fed && !stranded,
-                        asleep: r.shift_job.is_none() && !stranded,
-                        death_voice: self.roster.death_voice_for(r, &died),
-                        ..Default::default()
-                    },
-                )
+                let mut cx = o.contexts.get(&r.id).copied().unwrap_or(ShiftContext { on_mat: !stranded, wet: stranded, asleep: !stranded, ..Default::default() });
+                cx.death_voice = self.roster.death_voice_for(r, &died);
+                (r.id, cx)
             })
             .collect();
         self.roster.end_shift(&traits, &work, |r| contexts.get(&r.id).copied().unwrap_or_default());
@@ -418,7 +424,7 @@ impl RosePeople {
             }
             r.shift_job = None;
         }
-        strings(&lines)
+        lines
     }
 
     /// Serialise the roster (postcard) for the save; and back.
