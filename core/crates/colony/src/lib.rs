@@ -30,8 +30,10 @@ pub const PETITION_SHIFTS: u8 = 5;
 /// Shifts of a need under 30 before the foreman petitions.
 pub const PETITION_AFTER: u8 = 2;
 /// Nutrient a cell needs for a meal, and what the meal takes.
-/// A meal from the Mat: the tissue under the home must hold it, and it takes it (v3.12: `rose city` measured the
-/// tissue round a fed Heart at 0.13–0.19, so the 0.2 floor this replaced starved a fed city onto paste).
+/// A meal from the Mat: the signalled tissue at and about the home must hold it between them, and it is taken from
+/// them, the richest tile first (v3.12: `rose city` measured the tissue round a fed Heart at 0.13–0.19, so the 0.2
+/// floor this replaced starved a fed city onto paste; PAC-045: four sleepers drawing on one anchor tile starved two of
+/// them while the tiles about it held their meals).
 pub const MEAL_TAKES: f32 = 0.05;
 pub const PASTE_EDDIES: u32 = 2;
 /// City tiers by population: Hamlet, Quarter, City, Empire.
@@ -1747,6 +1749,15 @@ impl Colony {
             let i = y as usize * mat.w + x as usize;
             let on_mat = mat.hy[i] == hy::CORD || mat.hy[i] == hy::NODE;
             let signalled = on_mat && mat.sig[i] >= SIGNAL_FLOOR;
+            // the tissue a meal draws on: the stand and the eight tiles about it that are signalled Cord or Node
+            let table: Vec<usize> = (-1i32..=1)
+                .flat_map(|dy| (-1i32..=1).map(move |dx| (dx, dy)))
+                .filter_map(|(dx, dy)| {
+                    let (xx, yy) = (x + dx, y + dy);
+                    (xx >= 0 && yy >= 0 && (xx as usize) < mat.w && (yy as usize) < mat.h).then(|| yy as usize * mat.w + xx as usize)
+                })
+                .filter(|&j| (mat.hy[j] == hy::CORD || mat.hy[j] == hy::NODE) && mat.sig[j] >= SIGNAL_FLOOR)
+                .collect();
             let home = self.home_of(r.id).map(|h| (defs.structure[h.def].id.clone(), h.tier, h.district));
             let in_bunkhouse = home.as_ref().is_some_and(|h| h.0 == "bunkhouse");
             let in_pod = home.as_ref().is_some_and(|h| h.0 == "pod");
@@ -1757,8 +1768,20 @@ impl Colony {
             // a meal: the Mat's nutrient at the home, else paste; Rationing halves the draw
             let (takes, paste) = if rationed { (MEAL_TAKES * 0.5, PASTE_EDDIES / 2) } else { (MEAL_TAKES, PASTE_EDDIES) };
             let mut fed = false;
-            if signalled && mat.n[i] >= takes {
-                mat.n[i] -= takes;
+            let held: f32 = table.iter().map(|&j| mat.n[j]).sum();
+            if signalled && held >= takes {
+                // the richest tile first
+                let mut order = table.clone();
+                order.sort_by(|a, b| mat.n[*b].partial_cmp(&mat.n[*a]).unwrap().then(a.cmp(b)));
+                let mut left = takes;
+                for j in order {
+                    let t = mat.n[j].min(left);
+                    mat.n[j] -= t;
+                    left -= t;
+                    if left <= 0.0 {
+                        break;
+                    }
+                }
                 fed = true;
                 if let Some(d) = self.district_of(r.id).map(|d| d.id) {
                     *ate.entry(d).or_insert(0.0) += takes;
@@ -2108,6 +2131,23 @@ mod tests {
         assert_eq!(c.districts[0].cut, 2);
     }
 
+    /// The tiles a meal at (x, y) draws on set to `v`; returns their indices (the meal reads them as one table).
+    fn set_table(mat: &mut MatSim, x: usize, y: usize, v: f32) -> Vec<usize> {
+        let mut t = Vec::new();
+        for yy in y.saturating_sub(1)..=(y + 1).min(mat.h - 1) {
+            for xx in x.saturating_sub(1)..=(x + 1).min(mat.w - 1) {
+                let j = yy * mat.w + xx;
+                mat.n[j] = v;
+                t.push(j);
+            }
+        }
+        t
+    }
+
+    fn table_sum(mat: &MatSim, t: &[usize]) -> f32 {
+        t.iter().map(|&j| mat.n[j]).sum()
+    }
+
     #[test]
     fn rationing_halves_the_draw_and_costs_five_and_the_wave_reaches_the_heart_at_once() {
         let (mut c, defs, mut mat, r, t) = with_district();
@@ -2120,23 +2160,27 @@ mod tests {
         // a slimo with a bed on nutrient eats half a meal's draw
         let (who, home) = c.homes.iter().map(|(a, b)| (*a, *b)).next().unwrap();
         let h = c.get(home).unwrap();
-        let i = h.y as usize * mat.w + h.x as usize;
-        mat.n[i] = 0.5;
+        let (hx, hy_) = (h.x as usize, h.y as usize);
+        let tb = set_table(&mut mat, hx, hy_, 0.5);
+        let before = table_sum(&mat, &tb);
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
         assert!(o.contexts[&who].fed);
-        assert!((0.5 - mat.n[i] - MEAL_TAKES * 0.5).abs() < 1e-5, "draw {}", 0.5 - mat.n[i]);
+        let drew = before - table_sum(&mat, &tb);
+        assert!(drew >= MEAL_TAKES * 0.5 - 1e-5, "draw {drew}");
         assert!(o.contexts[&who].extra_target <= -5);
         assert!(o.laws_arrived.iter().any(|(l, _)| l == "rationing"));
         // paste costs 1 e
-        mat.n[i] = 0.0;
+        set_table(&mut mat, hx, hy_, 0.0);
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 1, &mut |_| true);
         assert!(o.contexts[&who].fed && o.paste_eddies >= 1);
         // a repeal is free and the Heart is clear of it the shift it is repealed
         c.repeal(&mat, "rationing").unwrap();
         assert_eq!(c.charter.authority, 0);
-        mat.n[i] = 0.5;
+        let tb = set_table(&mut mat, hx, hy_, 0.5);
+        let before = table_sum(&mat, &tb);
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
-        assert!((0.5 - mat.n[i] - MEAL_TAKES).abs() < 1e-5);
+        let drew = before - table_sum(&mat, &tb);
+        assert!(drew >= MEAL_TAKES - 1e-5 && drew < MEAL_TAKES * 2.0, "draw {drew}");
         assert!(o.contexts[&who].extra_target > -5);
     }
 
@@ -2336,13 +2380,12 @@ mod tests {
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
         assert!(!o.contexts[&who].pod_dark && o.contexts[&who].asleep);
         // meals: the Mat under the home feeds when it carries nutrient, else paste from the ledger
-        let i = y as usize * mat.w + x as usize;
-        mat.n[i] = 0.5;
-        let before = mat.n[i];
+        let tb = set_table(&mut mat, x as usize, y as usize, 0.5);
+        let before = table_sum(&mat, &tb);
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |_| true);
         assert!(o.contexts[&who].fed);
-        assert!((before - mat.n[i] - MEAL_TAKES).abs() < 1e-5);
-        mat.n[i] = 0.0;
+        assert!(before - table_sum(&mat, &tb) >= MEAL_TAKES - 1e-5);
+        set_table(&mut mat, x as usize, y as usize, 0.0);
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |_| true);
         assert!(!o.contexts[&who].fed, "no nutrient and no eddies: hungry");
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 2, &mut |_| true);

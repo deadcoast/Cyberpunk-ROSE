@@ -25,6 +25,13 @@ impl Default for Genome {
     }
 }
 
+/// The Mat's upkeep a hyphal cell a step at Thrift 0.5's multiplier of 1, and the decay of every cell's nutrient a
+/// step: an eighth of Pass 1's 0.0006 and 0.001, which it tuned on a feed of 0.6 a tick (75 a shift) where one S1
+/// haul feeds the Heart about 1.1. At an eighth that haul holds the Heart's Mat and a cord to a grate 25-30 tiles
+/// off; at half it holds the Heart's Mat alone (Full Design, The Mat's metabolism; measured in PAC-045).
+pub const MAINT: f32 = 0.0006 / 8.0;
+pub const DECAY: f32 = 0.001 / 8.0;
+
 impl Genome {
     pub fn with(mut self, gene: usize, value: f32) -> Self {
         self.0[gene] = value.clamp(0.0, 1.0);
@@ -37,7 +44,7 @@ impl Genome {
             theta_grow: 0.35 - 0.25 * g[VIGOR],
             branch_p: 0.08 + 0.42 * g[BRANCHING],
             theta_starve: 0.05 + 0.10 * (1.0 - g[THRIFT]),
-            maint: 0.0006 * (1.4 - 0.8 * g[THRIFT]),
+            maint: MAINT * (1.4 - 0.8 * g[THRIFT]),
             appetite: 0.02 + 0.30 * g[APPETITE],
             lume_r: 1.0 + 6.0 * g[LUME],
             heart_range: 24.0 + 32.0 * g[CONDUCTANCE],

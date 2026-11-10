@@ -1,8 +1,9 @@
-//! `rose city` (Full Design v3.12, The city's log; Build plan, Phase C's proof): the whole game headless for a
+//! `rose city` (Full Design v3.13, The city's log; Build plan, Phase C's proof): the whole game headless for a
 //! number of shifts. Each shift the steward gives its standing orders, the eligible slimo of best Scav runs the
-//! first route card of S1 as the bot with a rig packed from the Stash, the city ticks through the run at 2 Hz, the
-//! haul comes home and the shift ends in core. The steward's orders are this design's stand-in for a player, not a
-//! strategy the game recommends. The assertions and the merged run-and-city landing cadence go to the caller.
+//! first route card of S1 as the bot with a rig packed from the Stash, the city ticks through the run at the bot's
+//! pace, the haul comes home and the shift ends in core. The steward's orders are this design's stand-in for a
+//! player, not a strategy the game recommends. The assertions and the merged run-and-city landing cadence go to the
+//! caller.
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -17,13 +18,16 @@ use run::{ChunkLib, CreatureFile, LootTables, RouteMap, RunResult, RunSetup};
 use crate::log::Class;
 use crate::{store, World};
 
-/// The steward's build plan, one ghost at a time at the nearest anchor to the Heart — but the Pit, which goes at
-/// the nearest anchor to the first grate (Pass 2's first session: a Pod, then a second Pit baited toward the grate,
-/// then the market reached).
-pub const BUILD_PLAN: [&str; 8] = ["pod", "pit", "lantern", "rack", "pod", "bunkhouse", "charter_board", "salt_works"];
+/// The steward's build plan, one ghost at a time at the nearest anchor to the Heart; after the first Pod it waits
+/// while the cord to the first grate is lost and the steering has work (Pass 2's order: the Pod, then the grate).
+pub const BUILD_PLAN: [&str; 7] = ["pod", "lantern", "rack", "pod", "bunkhouse", "charter_board", "salt_works"];
+/// The steering beside it (Pass 1: a stratum is crossed with Relays; Pass 2: "breach a stratum with Relays"): when
+/// the cord to the first grate is lost, one Relay ghost at a time at the anchor nearest the grate on the Heart's side
+/// of the break, the next when it stands, until the Mat reaches the grate again; at most this many standing.
+pub const MAX_RELAYS: usize = 8;
 /// The Rack's stockpile: eight cells around it.
 pub const RACK_CELLS: usize = 8;
-/// The Heart's Pit and the grate's Pit each kept at 2 nutrient, Uncommon at most.
+/// The Heart's Pit kept at 2 nutrient, Uncommon at most.
 pub const HEART_KEEP: QuotaSet = QuotaSet { target: 2.0, ceiling: 1 };
 /// The kit the bot carries, packed from the Stash where the Stash has it: the pipe in the hand, the lantern, the
 /// pry bar, the antiseptic and the salt in the quick slots (run::bot::bot_rig's kit).
@@ -33,6 +37,12 @@ pub const KIT_QUICK: [&str; 4] = ["ger_lantern", "ger_pry_bar", "org_antiseptic"
 pub const IDLE_SHIFT_TICKS: u64 = 960;
 /// The city's clock is 2 Hz, the run's 20 Hz.
 pub const RUN_TICKS_PER_CITY_TICK: u64 = 10;
+/// The bot plays a route at BOT_FACTOR times a player's pace (run::telemetry), so the city keeps that pace through
+/// its run: BOT_FACTOR city ticks for every ten of the bot's run ticks, and a shift does to the city what a player's
+/// shift does (125 Mat steps in 12.5 minutes, The city's clock). The merged log is on the bot's clock.
+pub fn city_ticks(run_ticks: u64) -> u64 {
+    (run_ticks as f32 * run::telemetry::BOT_FACTOR / RUN_TICKS_PER_CITY_TICK as f32).round() as u64
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct ShiftRecord {
@@ -65,6 +75,10 @@ pub struct ShiftRecord {
     /// shipments of the last shift end still on the Mat when this shift's run ended
     pub late: usize,
     pub starving: usize,
+    /// at the shift's end: the Mat reaches the first grate's market from the Heart; the steering can win it back (a
+    /// Relay ghost out toward it, or room and an anchor for one)
+    pub reached: bool,
+    pub steering: bool,
     pub heart_signal: f32,
     pub alerts: Vec<String>,
     pub digest: u64,
@@ -88,7 +102,7 @@ struct Moment {
     what: String,
 }
 
-/// The nearest anchor to `from` (in tiles walked on the grid, ties by row then column) where the def may stand.
+/// The nearest anchor to `from` (tiles across plus tiles down, ties by row then column) where the def may stand.
 pub fn nearest_spot(w: &World, def: &str, from: (u16, u16)) -> Option<(u16, u16)> {
     let mut best: Option<(u32, u16, u16)> = None;
     for y in 0..w.city.sim.h as u16 {
@@ -105,6 +119,29 @@ pub fn nearest_spot(w: &World, def: &str, from: (u16, u16)) -> Option<(u16, u16)
     best.map(|b| (b.1, b.2))
 }
 
+/// The grate nearest the Heart (Pass 2's "a grate visible 40 tiles east"), by tiles across and up.
+pub fn first_grate(w: &World) -> Option<(u16, u16)> {
+    let (hx, hy) = heart_xy(w);
+    logistics::first_grate(&w.city.sim, hx as usize, hy as usize).map(|x| (x as u16, 0))
+}
+
+/// The anchor joined to the Heart where a Relay may stand nearest the first grate along the ground the Mat can grow
+/// on (a shaft that dead-ends under rock is not nearer for being close across; Mat cut off from the Heart is not the
+/// city's side of a break), ties by row then column.
+pub fn relay_spot(w: &World) -> Option<(u16, u16)> {
+    let (gx, _) = first_grate(w)?;
+    let way = logistics::ground_distance(&w.city.sim, gx as usize);
+    let joined = logistics::joined_to_heart(&w.city.sim);
+    let sw = w.city.sim.w;
+    (0..way.len()).filter(|&i| way[i] != usize::MAX && joined[i]).filter(|&i| w.colony.can_place(&w.defs, &w.city.sim, "relay", (i % sw) as u16, (i / sw) as u16).is_ok()).min_by_key(|&i| (way[i], i)).map(|i| ((i % sw) as u16, (i / sw) as u16))
+}
+
+/// Whether the Mat reaches the first grate's market from the Heart.
+pub fn reaches_first_grate(w: &World) -> bool {
+    let Some((gx, _)) = first_grate(w) else { return false };
+    w.city.markets.iter().position(|&m| m == gx as usize).is_some_and(|k| w.city.from_heart(logistics::Kind::Market, k as u32).is_some())
+}
+
 fn heart_xy(w: &World) -> (u16, u16) {
     w.city.sim.heart.map(|(x, y)| (x as u16, y as u16)).unwrap_or((0, 0))
 }
@@ -116,6 +153,8 @@ pub struct Steward {
     current: Option<u32>,
     rack_painted: bool,
     quota_set: bool,
+    /// the steering's Relay ghost
+    relay: Option<u32>,
 }
 
 impl Steward {
@@ -134,15 +173,29 @@ impl Steward {
             }
             self.quota_set = true;
         }
-        // every Curio and Tech sold at the first grate while the Mat reaches it from the Heart
-        if w.city.from_heart(logistics::Kind::Market, 0).is_some() {
+        // every Curio and Tech sold at the first market the Mat reaches from the Heart
+        if let Some(k) = (0..w.city.markets.len()).find(|&k| w.city.from_heart(logistics::Kind::Market, k as u32).is_some()) {
             let sell: Vec<u32> = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && matches!(w.table.def(it.def).category, Category::Curio | Category::Tech)).map(|(h, _, _)| h).collect();
             let n = sell.len();
             for h in sell {
-                w.ledger.queue(&mut w.stash, h, Verb::Sell { market: 0 }, w.day);
+                w.ledger.queue(&mut w.stash, h, Verb::Sell { market: k as u8 }, w.day);
             }
             if n > 0 {
-                Self::decide(w, format!("{n} Curio and Tech to sell at the first grate"), &mut out);
+                Self::decide(w, format!("{n} Curio and Tech to sell at grate {}", k + 1), &mut out);
+            }
+        }
+        // the steering: whenever the cord to the first grate is lost, a Relay ghost at the anchor nearest the grate on
+        // the Heart's side of the break, the next when it stands
+        if self.relay.and_then(|id| w.colony.get(id)).is_none_or(|s| s.built) {
+            self.relay = None;
+        }
+        let standing = w.colony.structures.iter().filter(|s| s.built && w.defs.structure[s.def].id == "relay").count();
+        if self.relay.is_none() && !reaches_first_grate(w) && standing < MAX_RELAYS {
+            if let Some((x, y)) = relay_spot(w) {
+                if let Ok(id) = w.colony.place(&w.defs, &w.city.sim, "relay", x, y) {
+                    self.relay = Some(id);
+                    Self::decide(w, format!("Relay placed at {x},{y} toward the first grate"), &mut out);
+                }
             }
         }
         // the build plan, one ghost at a time
@@ -151,22 +204,14 @@ impl Steward {
             if standing == Some(true) && BUILD_PLAN[self.next] == "rack" && !self.rack_painted {
                 self.paint_rack(w, self.current.unwrap(), &mut out);
             }
-            if standing == Some(true) && BUILD_PLAN[self.next] == "pit" {
-                let pit = self.current.unwrap();
-                w.colony.set_quota(&w.defs, pit, Some(HEART_KEEP));
-                Self::decide(w, "the grate's Pit keeps 2.0 nutrient, Uncommon at most".into(), &mut out);
-            }
             self.current = None;
             self.next += 1;
         }
-        if self.current.is_none() && self.next < BUILD_PLAN.len() {
+        // after the first Pod the grate comes first (Pass 2's order): the plan waits while the steering has work
+        let grate_first = self.next >= 1 && !reaches_first_grate(w) && self.steering(w);
+        if self.current.is_none() && self.next < BUILD_PLAN.len() && !grate_first {
             let def = BUILD_PLAN[self.next];
-            let mw = w.city.sim.w;
-            let from = match (def, w.city.market_cells.iter().flatten().next()) {
-                ("pit", Some(&g)) => ((g % mw) as u16, (g / mw) as u16),
-                _ => heart_xy(w),
-            };
-            if let Some((x, y)) = nearest_spot(w, def, from) {
+            if let Some((x, y)) = nearest_spot(w, def, heart_xy(w)) {
                 if let Ok(id) = w.colony.place(&w.defs, &w.city.sim, def, x, y) {
                     self.current = Some(id);
                     Self::decide(w, format!("{} placed at {x},{y}", w.defs.get(def).map_or(def, |d| d.name.as_str())), &mut out);
@@ -213,6 +258,13 @@ impl Steward {
             self.rack_painted = true;
             Self::decide(w, format!("stockpile {z} painted at the Rack, {} cells", pick.len()), out);
         }
+    }
+
+    /// Whether the steering can win the first grate: a Relay ghost out toward it, or room for one more Relay and an
+    /// anchor to put it on.
+    pub fn steering(&self, w: &World) -> bool {
+        let standing = w.colony.structures.iter().filter(|s| s.built && w.defs.structure[s.def].id == "relay").count();
+        self.relay.and_then(|id| w.colony.get(id)).is_some_and(|s| !s.built) || (standing < MAX_RELAYS && relay_spot(w).is_some())
     }
 
     pub fn plan_built(&self, w: &World) -> usize {
@@ -289,13 +341,13 @@ fn gaps(times: &mut [f32]) -> Vec<f32> {
     moments.windows(2).map(|p| p[1] - p[0]).collect()
 }
 
-/// Play the city for `shifts` shifts from `seed` (the game's founding: the stratum grown 500 ticks); `each` hears
-/// every shift as it ends.
+/// Play the city for `shifts` shifts from `seed` (the game's founding: the Mat steered to the first grate); `each`
+/// hears every shift as it ends.
 pub fn play(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -> CityRun {
     let table = ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
     let lib = ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
     let (tables, creatures) = (LootTables::shipped(), CreatureFile::shipped());
-    let mut w = World::found(seed, 500, table.clone());
+    let mut w = World::found(seed, table.clone());
     let mut steward = Steward::default();
     let route_seed = seed * 7 + 1;
     let map = RouteMap::compile(&lib, &run::route(&lib, route_seed, 1).expect("the first route of S1"));
@@ -327,8 +379,9 @@ pub fn play(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -
             run::bot::play_setup(map.clone(), table.clone(), tables.clone(), creatures.clone(), rs)
         });
         let run_ticks = outcome.as_ref().map_or(IDLE_SHIFT_TICKS * RUN_TICKS_PER_CITY_TICK, |o| o.ticks);
-        // the city through the run
-        for _ in 0..run_ticks / RUN_TICKS_PER_CITY_TICK {
+        // the city through the run, at the bot's pace
+        let ticks = if outcome.is_some() { city_ticks(run_ticks) } else { IDLE_SHIFT_TICKS };
+        for _ in 0..ticks {
             w.tick();
         }
         rec.late = w.ledger.in_flight.iter().filter(|s| riding.contains(&s.id)).count();
@@ -375,7 +428,7 @@ pub fn play(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -
         // the city's events on the same clock
         let mut city_times: Vec<f32> = Vec::new();
         for e in &w.log.events[log_from..] {
-            let t = (e.tick - start_tick) as f32 / 2.0;
+            let t = (e.tick - start_tick) as f32 / 2.0 / if outcome.is_some() { run::telemetry::BOT_FACTOR } else { 1.0 };
             if e.class == Class::Landing {
                 city_times.push(t);
             }
@@ -399,6 +452,8 @@ pub fn play(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -
         rec.mat_cells = (ms.tips + ms.cords + ms.nodes) as usize;
         rec.mat_nutrient = ms.nutrient;
         rec.starving = w.roster.records.iter().filter(|r| r.is_up() && r.need(people::Need::Fed) < 10).count();
+        rec.reached = reaches_first_grate(&w);
+        rec.steering = steward.steering(&w);
         rec.heart_signal = w.city.heart_cell().map_or(0.0, |i| w.city.sim.sig[i]);
         rec.alerts = w.alerts().into_iter().map(|a| a.text).collect();
         rec.digest = digest(&w);
@@ -419,6 +474,9 @@ pub fn play(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -
         }
     }
     for (k, r) in out.shifts.iter().enumerate() {
+        if !r.reached && !r.steering {
+            out.failures.push(format!("shift {}: the cord to the first grate is lost and no Relay can go out to win it back", k + 1));
+        }
         if r.starving > 0 {
             out.failures.push(format!("shift {}: {} starving", k + 1, r.starving));
         }

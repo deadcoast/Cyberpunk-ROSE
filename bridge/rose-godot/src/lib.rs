@@ -53,11 +53,11 @@ impl RoseSim {
         self.city = Some(logistics::scale_scenario(seed as u64, agents.max(0) as usize, grow_ticks.max(0) as u64));
     }
 
-    /// The game's city: the founding stratum grown for `grow_ticks`, the Mat on its own clock, no phantoms; the
-    /// movers are the roster and the cargo is the Stash's.
+    /// The game's city: the founding (the Mat steered to the first grate, logistics::founding), the Mat on its own
+    /// clock, no phantoms; the movers are the roster and the cargo is the Stash's.
     #[func]
-    fn start_city(&mut self, seed: i64, grow_ticks: i64) {
-        self.city = Some(City::game(logistics::founding_mat(seed as u64, grow_ticks.max(0) as u64), seed as u64));
+    fn start_city(&mut self, seed: i64) {
+        self.city = Some(City::game(logistics::founding(seed as u64), seed as u64));
     }
 
     /// Fresh stratum with a Heart at (x, y) and no city; feed it to make it grow.

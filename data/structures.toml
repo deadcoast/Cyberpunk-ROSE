@@ -210,7 +210,7 @@ name = "Relay"
 category = "mat"
 footprint = [1, 1]
 sigma = 0.3
-node = true
+node = false
 cost = { parts = 0, chrome = 6, eddies = 0 }
 build = 16
 hp = 100

@@ -8,7 +8,7 @@ use mat::sim::hy;
 use crate::{Level, World};
 
 fn world() -> World {
-    World::found(11, 500, ItemTable::from_toml(ITEMS_TOML).unwrap())
+    World::found(11, ItemTable::from_toml(ITEMS_TOML).unwrap())
 }
 
 /// A built structure of a def at the nearest anchor to the Heart that takes it.
@@ -134,11 +134,11 @@ fn salt_takes_a_bag_for_eight_and_a_cut_is_build_work_and_a_relay_raised_is_a_ne
     assert!(w.city.sim.salt[2 * w.city.sim.w + 10]);
     // a cut: marked now, done at shift end by Build at 8 points
     let mut cut = None;
-    'find: for dy in 3..12usize {
-        for dx in 0..20usize {
-            let (x, y) = (hx + dx, hy_ + dy);
+    'find: for y in 0..w.city.sim.h {
+        for x in 0..w.city.sim.w {
             let i = y * w.city.sim.w + x;
-            if w.city.sim.hy[i] == hy::CORD && w.colony.occupied(&w.defs, x as u16, y as u16).is_none() {
+            let by_heart = x.abs_diff(hx) <= 2 && y.abs_diff(hy_) <= 2;
+            if !by_heart && w.city.sim.hy[i] == hy::CORD && w.colony.occupied(&w.defs, x as u16, y as u16).is_none() {
                 cut = Some((x as u16, y as u16));
                 break 'find;
             }
@@ -154,7 +154,7 @@ fn salt_takes_a_bag_for_eight_and_a_cut_is_build_work_and_a_relay_raised_is_a_ne
     }
     assert!(w.colony.cuts.is_empty(), "nobody cut it in four shifts");
     assert!(w.city.sim.hy[cy as usize * w.city.sim.w + cx as usize] != hy::CORD, "the cord is severed");
-    // a Relay: a structure on a Node, built by Build; standing, it is a Mat relay
+    // a Relay: a structure on signalled Mat, built by Build; standing, it is a Mat relay
     let relays = w.city.sim.relays.len();
     let mut placed = None;
     'n: for y in 0..w.city.sim.h as u16 {
@@ -165,7 +165,7 @@ fn salt_takes_a_bag_for_eight_and_a_cut_is_build_work_and_a_relay_raised_is_a_ne
             }
         }
     }
-    let id = placed.expect("a Node takes a Relay");
+    let id = placed.expect("signalled Mat takes a Relay");
     let chrome = w.table.id_of("chr_street_eye").unwrap();
     for _ in 0..6 {
         let _ = w.stash.grid.auto_place(w.table.def(chrome), ItemInstance::new(chrome));
@@ -224,7 +224,8 @@ fn alerts_name_a_waiting_ghost_a_petition_and_cargo_held_at_the_heart() {
 fn the_city_log_has_the_cargo_landing_and_the_structure_built() {
     let mut w = world();
     let heart = w.colony.pits(&w.defs)[0];
-    w.colony.set_quota(&w.defs, heart, Some(colony::QuotaSet { target: 0.5, ceiling: 4 }));
+    // above the founding Pit's six Junk Chrome, so the Heart asks for a feed
+    w.colony.set_quota(&w.defs, heart, Some(colony::QuotaSet { target: 2.0, ceiling: 4 }));
     for it in w.stash.handles().into_iter().filter(|(_, _, it)| w.table.def(it.def).category == items::Category::Curio).map(|(h, _, _)| h).collect::<Vec<_>>() {
         w.ledger.queue(&mut w.stash, it, inventory::Verb::Sell { market: 0 }, 1);
     }

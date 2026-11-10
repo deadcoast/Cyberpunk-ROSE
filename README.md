@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city (PAC-020–028, PAC-040–044 done; PAC-045, the city holding twenty shifts, closes it).
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, is next.
 
     ./run.sh /path/to/godot4.5
 
@@ -56,6 +56,6 @@ step's noise footprint, with `--sweep` chunk, container and spawn averages and t
 with `--loot N` opens every container on N seeds per stratum and reports value per container, tier mix, notable rate and
 the stratum-to-stratum ratio.
 
-`rose city --shifts 20` plays the whole game headless — a bot run each shift, a steward's standing orders, the shift in `game` — twice, asserts that it replays bit-exact, that cargo lands within the next shift, that the build plan stands, that nobody starves and the Heart keeps its signal, and writes the merged run-and-city cadence to `docs/telemetry/city.md` (the full log to `out/city.log`). The game writes the city's log to `user://telemetry/city.log`.
+`rose city --shifts 20` plays the whole game headless — a bot run each shift, a steward's standing orders, the shift in `game` — twice, asserts that it replays bit-exact, that cargo lands within the next shift, that the build plan stands, that the cord to the first grate stands or a Relay can go out to win it back, that nobody starves and the Heart keeps its signal, and writes the merged run-and-city cadence to `docs/telemetry/city.md` (the full log to `out/city.log`). The game writes the city's log to `user://telemetry/city.log`.
 
 `rose cadence --runs 20 --strata 1,2,3` plays seeded runs with the cautious bot (`run::bot`) and writes every run's cadence report and the aggregate against the design's budget to `docs/telemetry/cadence.md` (`--logs DIR` keeps each run's full log). Every run played in the game writes the same log to `user://telemetry/`.

@@ -7,16 +7,15 @@ var tick_hz := 2.0
 var accum := 0.0
 var ticks_per_frame := 0   # headless tests: fixed ticks per frame instead of the clock
 var seed_value := 11
-var grow_ticks := 500
 signal ticked
 
-## The city (Full Design v3.11, The city's clock): the founding stratum, the Mat on its own clock, the roster's
-## slimos and the Stash's cargo — no phantoms. The Stash is bound so cargo lands into it as it arrives.
+## The city (Full Design, The city's clock; The founding): the Mat steered to the first grate, on its own clock,
+## the roster's slimos and the Stash's cargo — no phantoms. The Stash is bound so cargo lands into it as it arrives.
 func ensure() -> RoseSim:
 	if sim == null:
 		sim = RoseSim.new()
-		sim.start_city(seed_value, grow_ticks)
-		# the city on the grown Mat: the Heart, a Route Board, a Bench, a Pit on every Relay
+		sim.start_city(seed_value)
+		# the city on the founding Mat: the Heart, a Route Board, a Bench
 		sim.found_city()
 		sim.bind_stash(ensure_stash())
 		sim.refresh_movers(ensure_people(), day)

@@ -129,8 +129,11 @@ impl Grid {
         v.sort_by_key(|(_, p)| (p.y, p.x));
         v
     }
+    /// The items in handle order (the map's own order differs between processes).
     pub fn items(&self) -> impl Iterator<Item = &ItemInstance> {
-        self.items.values().map(|p| &p.item)
+        let mut v: Vec<(&Handle, &Placed)> = self.items.iter().collect();
+        v.sort_unstable_by_key(|(h, _)| **h);
+        v.into_iter().map(|(_, p)| &p.item)
     }
     pub fn count(&self) -> usize {
         self.items.len()
@@ -139,7 +142,8 @@ impl Grid {
         self.cells.iter().filter(|c| c.is_none()).count()
     }
     pub fn weight(&self, table: &ItemTable) -> f32 {
-        self.items.values().map(|p| table.def(p.item.def).weight).sum()
+        // summed in handle order, so a float sum is the same in every process
+        self.items().map(|i| table.def(i.def).weight).sum()
     }
     /// Re-pack every item first-fit in the given order, keeping each item's handle (anything not named keeps its
     /// relative order after them). A grid that held the items before holds them after.

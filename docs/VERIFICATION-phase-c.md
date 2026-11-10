@@ -284,3 +284,50 @@ tool down, the overlays cycle, the alerts) and checks the Stash founds from core
 Known gaps: the city does not yet hold twenty shifts (PAC-045); noise and danger overlays wait for the threats
 (Phase D); rescued bodies, defectors and hires arrive with their systems (Phase D); a stockpile is painted whole
 against its store and cannot be extended (erase and repaint); the organs, classes and Strainbook are PAC-080's.
+
+## PAC-045 — the city holds twenty shifts; Phase C closes (2026-11-09)
+
+The call between a smaller Mat, a different starting economy and a steward who feeds the cord to the market came
+out as all three, each at its measured part (Full Design v3.13: The founding, The Mat's metabolism, What PAC-045
+found). The founding is Pass 2's first session to 5:30 played before the first run: the Heart grows on Pass 1's
+feed with half of it painted ahead of the Mat toward the first grate until the Mat reaches it (77–439 steps, 86–336
+cells on seeds 11–26), then the Pit holds six Junk Chrome. The Mat's upkeep and decay are an eighth of Pass 1's,
+which it tuned on a feed about fifty times what a haul brings the Heart. The steward steers with Relays: whenever the
+cord to the first grate is lost, a Relay at a time on the anchor joined to the Heart nearest the grate along the
+ground the Mat can grow on, the build plan waiting after the first Pod while it does; the Relay stands on any
+signalled Cord or Node. Meals draw the tissue about the home, richest tile first.
+
+Measured on the way (scratch probes, not shipped): at half Pass 1's rates the founded cord is lost within 2–8 shifts
+on all sixteen seeds fed or not, at a quarter on nine (won back on five), at an eighth on two (both won back). From a
+founding fifteen tiles out, the haul painted ahead of the Mat reached the grate on 1 seed of 8 in twenty shifts, three
+hauls on 6, a Pit fed at the far end held a founded cord on 1 of 8, and a Relay a shift at the frontier reached it on
+8 of 8 in 5–8 shifts; Relays held to Nodes mostly found none near the frontier. Unsteered, the Mat on Pass 1's full
+feed for 6000 steps found the grate up its shaft on 2 seeds of 8. Left alone with the Deposits the founded cord holds
+on 13 of 16 unfed and 14 fed; with the Deposits off the map, 0 and 7 (two hauls) — the feed's weight against the
+ground is registered for PAC-061.
+
+What else it found and what changed: `rose city` ticked the city at 2 Hz on the bot's clock, so the Mat lived about
+35 of its 125 steps a shift — the city now takes three ticks for every ten of the bot's, the bot factor; the first
+Relays went up a shaft that dead-ends under rock because the steward measured across, not along, the ground — it
+walks the ground now; a Relay placed to win the cord back stood on Mat cut off from the Heart — it stands on the
+Heart's side of the break now; two processes disagreed on a replay of seed 26 at the fourth shift (the Pits drawn
+in a map's order, a rig's weight summed in a map's order) — both in a fixed order, and seeds 13, 21 and 26 replay
+across processes; `err.txt`, a probe's output committed with PAC-044, left the repo.
+
+`rose city --shifts 20` on seed 11: PASS — the cord held all twenty shifts, the plan stood by the eighth, eight
+slimos at the end (the flush joined), 114 eddies, nobody starving, cargo landed, the merged landing gap 7.5 s against
+the bot band of 3.3–10 s, bit-exact replay, 6 s. Over seeds 11–26 the cord holds or is won back on all sixteen and the
+plan stands on eleven; on 13, 14, 15, 23 and 26 the first route card kills 4–8 of twenty Runners and the city thins
+to 0–3 before its plan stands — the steward never changes card.
+
+Reviewed by eye (`docs/shots/colony*.png`, the play frames): the Stack view shows the founded Mat as one climbing
+strand from the Heart to the grate at the top edge; the District view the same strand in tiles; the Colony HUD reads
+seven slimos and one district on day 2. Tests: 17 in `colony` and 8 in `game` (a cut found anywhere on the founded
+Mat; the Heart's quota above the founding Pit), `mat`'s die-back check restated (no feed and no Deposits: 300 cells to 198 in forty shifts); the
+smoke checks the founded Mat reaches its grate, three founding structures, and Rest 88 for a Runner who slept the
+three shifts the founding's few slots left them; save v11 (the founding and the rates change what a seed and its
+inputs replay into).
+
+Known gaps: the feed-or-sell pressure on the Mat is the economy pass's (PAC-061); route choice when a card keeps
+killing is the player's and the Route Board's, and the steward never makes it; a Relay is two founder-shifts of Build
+at Hands 5–7, so a broken cord takes four to six shifts to win back.

@@ -81,20 +81,23 @@ func _verify_current() -> void:
 	match id:
 		"colony":
 			var s: Dictionary = sim.ensure().stats()
-			_check(int(s.get("tick", 0)) > 500, "colony: sim did not advance (tick %d)" % int(s.get("tick", 0)))
-			_check(int(s.get("cells", 0)) > 500, "colony: Mat did not grow")
+			# the founding: the Mat steered from the Heart to the first grate, its market reached
+			_check(int(s.get("tick", 0)) > 50, "colony: sim did not advance (tick %d)" % int(s.get("tick", 0)))
+			_check(int(s.get("cells", 0)) > 80, "colony: Mat did not grow (%d cells)" % int(s.get("cells", 0)))
+			var reached: PackedByteArray = sim.ensure().sites().get("markets_reached", PackedByteArray())
+			_check(reached.size() >= 1 and reached[0] == 1, "colony: the founding Mat does not reach the first grate")
 			var wv: Node = null
 			for ch in scr.get_children():
 				if ch.has_method("full_paint"):
 					wv = ch
 			_check(wv != null and wv.substrate.get_used_cells().size() > 1000, "colony: world tiles not painted")
-			_check(wv != null and wv.matlayer.get_used_cells().size() > 300, "colony: Mat tiles not painted")
-			# the city founded on the Mat: the Heart, the Route Board, a Bench, a Pit per Relay; 25 defs
+			_check(wv != null and wv.matlayer.get_used_cells().size() > 80, "colony: Mat tiles not painted")
+			# the city founded on the Mat: the Heart, the Route Board, a Bench; 25 defs
 			var rs: RoseSim = sim.ensure()
 			var defs: Array = rs.structure_defs()
 			_check(defs.size() == 25, "colony: %d structure defs" % defs.size())
 			var founded: Array = rs.structures()
-			_check(founded.size() >= 4 and String(founded[0].def) == "heart" and String(founded[1].def) == "route_board" and String(founded[2].def) == "bench", "colony: founding %s" % str(founded.map(func(x): return x.def)))
+			_check(founded.size() >= 3 and String(founded[0].def) == "heart" and String(founded[1].def) == "route_board" and String(founded[2].def) == "bench", "colony: founding %s" % str(founded.map(func(x): return x.def)))
 			# the build tool: a Lantern Post ghost on the first tile near the Heart that takes it; two cheap Parts in
 			# the Stash pay for it (the cheapest go first), so the Bench's housing stays
 			var st0: RoseStash = sim.ensure_stash()
@@ -506,9 +509,9 @@ func _verify_current() -> void:
 			# four shifts have ended; the Mat under the Heart feeds whoever stands there (nutrient at the Heart is
 			# never short in this seed), Rest falls 12 a shift worked and rises 15 asleep on the Mat
 			_check(int(rr.needs.fed) == 100, "run: the Mat did not feed the Runner (fed %d)" % int(rr.needs.fed))
-			# Rest: the three shifts before the run were Dim (day 1, the default row works it) with more slots
-			# than slimos, so the Runner worked each (-12), then the run's -12
-			_check(int(rr.needs.rest) == 52, "run: Rest %d after three worked shifts and a run" % int(rr.needs.rest))
+			# Rest: the founding's Heart, Route Board and Bench open fewer slots than the founders, and the Runner
+			# took none in the three shifts before the run, so slept them (Rest held at 100), then the run's -12
+			_check(int(rr.needs.rest) == 88, "run: Rest %d after three slept shifts and a run" % int(rr.needs.rest))
 			for a in sim.last_shift.get("assignments", []):
 				_check(int(a.slimo) != smoke_runner, "run: the Runner was given a job on the shift they ran")
 			# the colony's shift: the founding Bench's slot was worked, the lantern ghost paid for (2 Parts) and built

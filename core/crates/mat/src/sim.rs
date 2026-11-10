@@ -1,7 +1,7 @@
 //! The Mat: a stochastic cellular automaton coupled to a continuous nutrient field.
 //! Rule order and parameters follow the GDD (Mat spec) and the Python prototype that validated them.
 
-use crate::genome::{Genome, Params};
+use crate::genome::{Genome, Params, DECAY};
 use crate::rng::Pcg32;
 use std::collections::{HashMap, VecDeque};
 
@@ -114,7 +114,7 @@ impl MatSim {
             tick: 0,
             changed: Vec::new(),
             d: 0.11,
-            decay: 0.001,
+            decay: DECAY,
             uptake: 0.25,
             pit_rate: 0.30,
             grow_cost: 0.04,
@@ -309,7 +309,9 @@ impl MatSim {
 
     // ------------------------------------------------------------ nutrient
     fn draw_pits(&mut self) {
-        let keys: Vec<(usize, usize)> = self.pits.keys().copied().collect();
+        // in a fixed order: two Pits whose footprints touch share cells, and a map's order differs between processes
+        let mut keys: Vec<(usize, usize)> = self.pits.keys().copied().collect();
+        keys.sort_unstable();
         for (x, y) in keys {
             let stock = self.pits[&(x, y)];
             if stock <= 0.0 {
@@ -810,13 +812,22 @@ mod tests {
 
     #[test]
     fn unfed_network_dies_back() {
+        // with nothing to eat — no feed, no Deposits under it — the Mat spends what it holds and dies back; at an
+        // eighth of Pass 1's metabolism, after 350 steps of Pass 1's feed, it has lost a third by forty shifts
+        // (5000 steps; measured 300 cells to 198)
         let mut sim = fed_run(11, Genome::default(), 350);
-        let before = sim.hyphal_count();
-        for _ in 0..900 {
-            sim.step();
+        for v in sim.sub.iter_mut() {
+            if *v == sub::DEPOSIT {
+                *v = sub::OPEN;
+            }
         }
-        assert!(sim.hyphal_count() < before, "before {} after {}", before, sim.hyphal_count());
-        assert!(sim.stats().necro > 0 || sim.hyphal_count() < before / 2);
+        let before = sim.hyphal_count();
+        let mut peak = before;
+        for _ in 0..5000 {
+            sim.step();
+            peak = peak.max(sim.hyphal_count());
+        }
+        assert!(sim.hyphal_count() * 4 < peak * 3, "peak {} after {}", peak, sim.hyphal_count());
     }
 
     #[test]

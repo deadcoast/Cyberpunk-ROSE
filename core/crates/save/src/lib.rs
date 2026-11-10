@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 10;
+pub const SAVE_VERSION: u16 = 11;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -40,6 +40,8 @@ pub struct TimedInput {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Snapshot {
     pub tick: u64,
+    /// the Mat's state, opaque; the founding (steered to the first grate) and the Mat's metabolism (an eighth of
+    /// Pass 1's) changed what a seed and its inputs replay into (v11)
     pub mat: Vec<u8>,
     pub city: Vec<u8>,
     pub stash: Stash,

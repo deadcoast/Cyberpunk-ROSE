@@ -62,9 +62,10 @@ pub struct World {
 }
 
 impl World {
-    /// The founding: the stratum grown for `grow_ticks`, the city on it, the roster, the starting haul.
-    pub fn found(seed: u64, grow_ticks: u64, table: ItemTable) -> World {
-        let city = City::game(logistics::founding_mat(seed, grow_ticks), seed);
+    /// The founding (Full Design, The founding): the Sump with the Heart's Mat fifteen tiles out, the city on it,
+    /// the roster, the starting haul.
+    pub fn found(seed: u64, table: ItemTable) -> World {
+        let city = City::game(logistics::founding(seed), seed);
         let defs = StructureFile::shipped();
         let mut colony = Colony::new();
         colony.found(&defs, &city.sim).expect("the founding stratum takes the city");
