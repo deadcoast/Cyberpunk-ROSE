@@ -221,8 +221,9 @@ pub struct Closed {
 }
 
 /// Shift end on the Stash's side, after the cargo left: the Bench's Tweak slots finish (a slot finishes one job a
-/// shift) into the grid (or the Heart's held cargo) and the ledger closes the shift.
-pub fn close(stash: &mut Stash, ledger: &mut Ledger, bench: &mut BenchQueue, table: &ItemTable, recipes: &RecipeFile, bench_slots: usize) -> Closed {
+/// shift) into the grid (or the Heart's held cargo) and the ledger closes the shift, each market's glut recovering
+/// faster by `faster` (its Seep Market's bonus).
+pub fn close(stash: &mut Stash, ledger: &mut Ledger, bench: &mut BenchQueue, table: &ItemTable, recipes: &RecipeFile, bench_slots: usize, faster: &[f32]) -> Closed {
     let products = bench.end_shift_slots(table, recipes, bench_slots);
     let mut c = Closed::default();
     for p in products {
@@ -232,7 +233,7 @@ pub fn close(stash: &mut Stash, ledger: &mut Ledger, bench: &mut BenchQueue, tab
             Err(_) => bench.waiting.push(p),
         }
     }
-    c.report = ledger.close_shift(stash, table);
+    c.report = ledger.close_shift_by(stash, table, faster);
     c.waiting = bench.waiting.len();
     c
 }

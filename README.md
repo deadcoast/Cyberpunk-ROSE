@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, under way (PAC-060 done: Attention, Patrols, Sweeps, Cleansings, Blooms, Floods and raiders; the economy, PAC-061, is next).
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, under way (PAC-060 done: Attention, Patrols, Sweeps, Cleansings, Blooms, Floods and raiders; PAC-061 done: the surface's factions, their streets, demand, reputation, stock tiers, services and contract chains; the Market screen, PAC-062, is next).
 
     ./run.sh /path/to/godot4.5
 
@@ -13,7 +13,7 @@ Layout
 ------
 
     Cargo.toml         workspace root
-    core/crates/       mat · logistics · items · inventory · bench · people · colony · game · save · run · render · cli (`rose`)   — rules and numbers, no engine; `game` is the whole shift
+    core/crates/       mat · logistics · items · inventory · bench · people · colony · threat · economy · game · save · run · render · cli (`rose`)   — rules and numbers, no engine; `game` is the whole shift
     bridge/rose-godot  GDExtension: RoseSim, RoseItems, RoseStash, RoseRun, RosePeople                         — typed arrays only
     tools/             `rose-tools`: manifest -> placeholders, validate, prompts, contact sheet
     game/              Godot 4.5 project: Main, autoloads (Assets, Screens, Sim), ui/, modes/<screen>/, tests/
@@ -57,6 +57,8 @@ with `--loot N` opens every container on N seeds per stratum and reports value p
 the stratum-to-stratum ratio.
 
 `rose city --shifts 20` plays the whole game headless — a bot run each shift, a steward's standing orders, the shift in `game` — twice, asserts that it replays bit-exact, that cargo lands within the next shift, that the build plan stands, that the cord to the first grate stands or a Relay can go out to win it back, that nobody starves and the Heart keeps its signal, and writes the merged run-and-city cadence to `docs/telemetry/city.md` (the full log to `out/city.log`). The game writes the city's log to `user://telemetry/city.log`.
+
+`rose economy --seed 11 --shifts 30` is Phase D's proof of the economy (`data/factions.toml`, the `economy` crate, `game::trade`): the steward of `rose city` trades thirty shifts — its surplus to whichever stall in reach pays most, the contracts it can fill, protection when a Patrol is due at a Gang grate — and it asserts that every faction's demand stayed inside its band every day, then plays the seed again feeding the haul's Chrome to the Heart and compares reach, the cord and the eddies; the report is `docs/telemetry/economy.md`.
 
 `rose cleansing --seed 11 --shifts 10` is Phase D's proof: the steward of `rose city` plays ten shifts, then a Cleansing comes down the first grate twice from the same state — as the city stands, and with two Sphincter Gates and a manned Scrap Turret on the squads' way — and it asserts the designed spread (the Heart falls undefended and stands defended with most of its Mat) and writes both logs to `docs/telemetry/cleansing.md`. The threats (`data/threats.toml`, the `threat` crate) run in `rose city` and the game alike: Attention per grate zone, the stage that comes down at a zone's line, the white light and bleach on the Mat, Blooms from cut-off strains, Flood shifts in the city and on runs, raiders on routes.
 

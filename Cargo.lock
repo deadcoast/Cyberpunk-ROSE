@@ -175,6 +175,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 
 [[package]]
+name = "economy"
+version = "0.2.0"
+dependencies = [
+ "inventory",
+ "items",
+ "mat",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "embedded-io"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -218,6 +229,7 @@ version = "0.2.0"
 dependencies = [
  "bench",
  "colony",
+ "economy",
  "inventory",
  "items",
  "logistics",
@@ -516,6 +528,7 @@ name = "rose-cli"
 version = "0.2.0"
 dependencies = [
  "clap",
+ "economy",
  "game",
  "items",
  "logistics",
@@ -530,6 +543,7 @@ version = "0.2.0"
 dependencies = [
  "bench",
  "colony",
+ "economy",
  "game",
  "godot",
  "inventory",
@@ -582,6 +596,7 @@ version = "0.2.0"
 dependencies = [
  "bench",
  "colony",
+ "economy",
  "inventory",
  "items",
  "people",

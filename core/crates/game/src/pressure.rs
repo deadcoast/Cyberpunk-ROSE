@@ -18,12 +18,20 @@ pub fn note(log: &mut CityLog, tick: u64, notes: Vec<threat::Note>) {
     }
 }
 
-/// One city tick of the threats, after the cargo landed: the sales count toward their grate's Attention.
-pub fn tick(threats: &mut Threats, city: &mut City, colony: &mut Colony, defs: &StructureFile, posts: &threat::Posts, log: &mut CityLog, sold: &[(u8, u32)]) {
-    for &(m, e) in sold {
+/// One city tick of the threats, after the cargo landed: the sales and the Blackline sold count toward their grate's
+/// Attention.
+pub fn tick(threats: &mut Threats, city: &mut City, colony: &mut Colony, defs: &StructureFile, posts: &threat::Posts, log: &mut CityLog, landed: &crate::cargo::Landed) {
+    for s in &landed.sold {
+        if let Some(&g) = city.markets.get(s.market as usize) {
+            if let Some(z) = threats.zones.iter_mut().find(|z| z.grate == g) {
+                z.sold += s.eddies;
+            }
+        }
+    }
+    for &m in &landed.blackline {
         if let Some(&g) = city.markets.get(m as usize) {
             if let Some(z) = threats.zones.iter_mut().find(|z| z.grate == g) {
-                z.sold += e;
+                z.blackline += 1;
             }
         }
     }

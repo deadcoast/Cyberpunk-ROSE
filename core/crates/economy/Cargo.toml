@@ -1,0 +1,13 @@
+[package]
+name = "economy"
+description = "Cyberpunk: ROSE - the surface's factions: the streets above the grates, buy lists and demand on the surface's clock, reputation and stock tiers, buying and services, contract chains"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+inventory = { path = "../inventory" }
+items = { path = "../items" }
+mat = { path = "../mat" }
+serde.workspace = true
+toml.workspace = true

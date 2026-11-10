@@ -75,3 +75,61 @@ cut-off strain, Quarantine, the flood rising and falling, Gates holding a squad 
 looting, shooting the other gang and dropping a pile; a Flood raising each chunk's water and a Runner going Down under
 it; the card and the run agreeing on the Flood's moment); the smoke checks the zones and the Flood's clock on the run's
 shift and card. Save v12 (the threats). `cargo clippy` adds no warning in this work's code.
+
+## PAC-061 — the economy: streets, demand, reputation, stock tiers, services, contract chains (2026-11-10)
+
+Full Design v3.15 first (Economy: the streets above the grates, the vendors, demand on the surface's clock, price,
+reputation, stock tiers, buying and services, contracts, the Downer chain, the haul against the ground), research 19
+(RimWorld's trading and goodwill, Tarkov's loyalty levels). The factions, the surface's events, stock and contract
+templates are data (`data/factions.toml`); the rules are the `economy` crate on the surface's clock (a day is three
+shifts); a stall's `items::Book` prices a sale; the ledger keeps glut by market and category, the books and the
+orders; `game::trade` joins it all to the shift, the cords, the roster and the threats, and the bridge calls the same.
+
+**The proof** — `rose economy --seed 11 --shifts 30`: PASS. Every faction's demand for every category walked at most
+0.16 from its buy-list value over the ten days (band 0.30); over seeds 11–26 the widest is 0.16 on every seed. The
+trading steward sold 312 pieces at the Nomads' stall over grate 5, nearly all blind (no Appraisal Table in its plan):
+
+| category | sold | eddies | of base (× 0.4 blind) |
+|---|---|---|---|
+| chrome | 88 | 188 | 95 % |
+| contraband | 18 | 161 | 130 % (a few eddies rounding up) |
+| curio | 69 | 134 | 79 % |
+| gear | 64 | 209 | 82 % |
+| tech | 73 | 191 | 76 % (the Nomads' Tech 0.8) |
+
+The Nomads ended at +1 and tier 3 on their lever (five sold a shift) and 883 e traded; one three-link chain taken.
+
+**Trading against feeding** (the PAC-045 input, now the design's "The haul against the ground"), seeds 11–26, thirty
+shifts each: selling the haul's Chrome earned 11,671 e against feeding's 8,489 (more on fifteen of sixteen); the
+nearer grate fell in four cities either way; the selling cities went without a market 50 shifts in all, the feeding
+ones 24; on seed 21 the selling city lost its market for 25 shifts and ended with nothing, the fed one reached the
+nearer grate in shift 15. So the feed is insurance on the cord, not reach.
+
+What the proof found on the way, each now in the design: the glut read as a fifth of the units recovering a shift
+never cleared — a stall taking five a shift sat at the floor and sales fetched a fifth of their base — so the price
+recovers 20 points a shift (Pass 1's words), four units' worth; a city whose only reached street closed at −3 had
+nothing left that could earn favour there, so below 0 a faction comes round a favour a shift (RimWorld's goodwill
+drift); a sale could round to 0 e, so a stall that buys pays at least 1. The steward's own lessons are its orders, not
+the game's rules: a host it took became its best Scav and died on the run (a guest stays home now); it took two
+chains on the same Parts at once (one chain a faction); five-link chains asked more than one S1 route hauls in their
+shifts (three-link only).
+
+**The city with the economy** — `rose city --shifts 20` on seed 11: PASS, plan 7/7, 0 deaths, bit-exact. Over seeds
+11–26 against the same command before this work: the cord holds or is won back on all sixteen, the plan stands on
+twelve (ten before), eleven seeds' deaths unchanged; on 12, 13 and 15 more Runners die (7, 12, 12 against 4, 8, 7) —
+the same route card was killing every Runner from shift 9 or 10 there already, and clinic days and hosts brought more
+slimos to it (4, 9, 7 joined against 2, 2, 2). `rose cleansing` over 11–18: the spread holds on seven, 13 as before.
+
+**Reviewed by eye** (`docs/shots/colony_stack.png`, `stash.png`): G5's gauge carries NOMADS under its three pips; the
+Stash card of a Blackline Lamp Core reads "SELL no stall at GRATE 5 NOMADS buys this" with the verb greyed, and the
+bulk panel sends "TO GRATE 5 NOMADS". What changed for it: the markets were named by their index, so grate 5 read
+GRATE 1; a Blackline piece showed a price no stall would pay.
+
+**Tests**: `economy` 4 (the streets, the walk inside its band, reputation opening tiers and closing a faction and
+only the Corpo remnants' tier 3 fencing Blackline, a chain rising link by link and a miss breaking it); the ledger's
+glut recovering 20 points; `game` +2 (a delivery counting at its grate, a Relic riding home, Blackline sold adding
+Attention; protection holding off the Patrol due at a Gang grate); the save round trip with the economy (v13); the
+smoke checks the first grate's street and market name. `cargo clippy` adds no warning in this work's code. Not
+exercised in play: the steward buys only protection, at a Gang grate in reach; intel, timings, the convoy and hires
+are bought on the Market screen (PAC-062), and recover's body is planted on its route when that screen takes the
+offer.

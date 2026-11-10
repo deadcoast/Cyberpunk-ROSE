@@ -10,6 +10,7 @@ pub mod pressure;
 pub mod shift;
 pub mod siege;
 pub mod store;
+pub mod trade;
 pub mod world;
 
 pub use alerts::{Alert, Level};

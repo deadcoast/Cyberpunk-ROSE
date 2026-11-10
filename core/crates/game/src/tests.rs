@@ -221,6 +221,57 @@ fn alerts_name_a_waiting_ghost_a_petition_and_cargo_held_at_the_heart() {
 }
 
 #[test]
+fn a_delivery_counts_at_its_grate_a_relic_rides_home_and_blackline_sold_is_loud() {
+    let mut w = world();
+    let nomads = w.economy.file.index("nomads").unwrap();
+    assert_eq!(w.economy.faction_at(w.city.markets[0]), Some(nomads), "the founded grate is the Nomads' street");
+    // a deliver link of two Parts in hand; a Relic, which no stall buys, sent to sell at the same market
+    let t = w.economy.file.factions[nomads as usize].contracts.iter().position(|c| c.kind == "deliver" && c.category == "part").unwrap() as u16;
+    let mut c = w.economy.first_link(&economy::Offer { id: 99, faction: nomads, template: t, links: 3, until: 9, name: "N".into() }, 1);
+    (c.ask.n, c.ask.condition) = (2, 0);
+    let id = c.id;
+    w.economy.s.contracts.push(c);
+    let part = w.table.id_of("prt_pipe").unwrap();
+    for _ in 0..2 {
+        let h = w.stash.grid.auto_place(w.table.def(part), ItemInstance::new(part)).unwrap();
+        w.ledger.queue(&mut w.stash, h, inventory::Verb::Deliver { market: 0, contract: id }, 1);
+    }
+    let relic = (0..w.table.len()).find(|&k| w.table.defs[k].tier == items::Tier::Relic).unwrap();
+    let h = w.stash.grid.auto_place(&w.table.defs[relic], ItemInstance::new(items::ItemId(relic as u16))).unwrap();
+    w.ledger.queue(&mut w.stash, h, inventory::Verb::Sell { market: 0 }, 1);
+    let zone = w.threats.zones.iter().position(|z| z.grate == w.city.markets[0]).unwrap();
+    w.end_shift();
+    tick_n(&mut w, 400);
+    let got = w.economy.s.contracts.iter().find(|c| c.id == id).map(|c| c.got);
+    assert_eq!(got, Some(2), "{:?}", w.log.events.iter().map(|e| e.what.clone()).collect::<Vec<_>>());
+    assert!(w.log.events.iter().any(|e| e.what.starts_with("no stall at grate") && e.what.contains(&w.table.defs[relic].name)));
+    assert!(w.stash.handles().iter().any(|(_, _, it)| it.def.0 as usize == relic), "the Relic came home");
+    // Blackline sold at a grate counts five Attention there at the shift's end (only the Corpo remnants fence it)
+    let landed = crate::cargo::Landed { blackline: vec![0], ..Default::default() };
+    let before = w.threats.zones[zone].attention;
+    crate::pressure::tick(&mut w.threats, &mut w.city, &mut w.colony, &w.defs, &w.posts, &mut w.log, &landed);
+    w.end_shift();
+    assert!(w.threats.zones[zone].gained >= 5.0, "Attention at the grate {before} gained {}", w.threats.zones[zone].gained);
+}
+
+#[test]
+fn protection_holds_off_the_patrol_due_at_a_gang_grate() {
+    let mut w = world();
+    let gangs = w.economy.file.index("gangs").unwrap();
+    let zone = w.threats.zones.iter().position(|z| w.economy.faction_at(z.grate) == Some(gangs)).unwrap();
+    w.threats.zones[zone].attention = 40.0;
+    w.economy.s.protection = 1;
+    w.end_shift();
+    assert!(!w.threats.due.iter().any(|d| d.zone as usize == zone), "{:?}", w.threats.due);
+    assert!(w.log.events.iter().any(|e| e.what == format!("the Gangs held off the Patrol at grate {}", zone + 1)));
+    assert_eq!(w.economy.s.protection, 0);
+    // none bought: the next one comes
+    w.threats.zones[zone].attention = 40.0;
+    w.end_shift();
+    assert!(w.threats.due.iter().any(|d| d.zone as usize == zone));
+}
+
+#[test]
 fn the_city_log_has_the_cargo_landing_and_the_structure_built() {
     let mut w = world();
     let heart = w.colony.pits(&w.defs)[0];

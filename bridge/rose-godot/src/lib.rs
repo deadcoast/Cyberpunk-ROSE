@@ -47,6 +47,10 @@ pub struct RoseSim {
     posts: threat::Posts,
     /// Oathkeepers the shift's run killed
     run_kills: u32,
+    /// the surface's factions (Full Design v3.15, Economy)
+    economy: Option<economy::Economy>,
+    /// raiders walk the Board's routes (`set_strata_open`): clear-raiders contracts are offered
+    raiders: bool,
 }
 
 #[godot_api]
@@ -64,7 +68,17 @@ impl RoseSim {
     fn start_city(&mut self, seed: i64) {
         let city = City::game(logistics::founding(seed as u64), seed as u64);
         self.threats = Some(threat::Threats::new(&city.sim, seed as u64));
+        let grates: Vec<u16> = (0..city.sim.w).filter(|&x| city.sim.sub[x] == sub::GRATE).map(|x| x as u16).collect();
+        let first = city.sim.heart.and_then(|(hx, hy)| logistics::first_grate(&city.sim, hx, hy)).unwrap_or(0) as u16;
+        let table = items::ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
+        self.economy = Some(economy::Economy::found(economy::FactionFile::shipped(), &table, seed as u64, &grates, first, 1));
         self.city = Some(city);
+    }
+
+    /// The Board's open strata: raiders walk its routes when one of them rolls for raiders (clear-raiders contracts).
+    #[func]
+    fn set_strata_open(&mut self, strata: i64) {
+        self.raiders = game::trade::raiders_walk(strata.clamp(0, 255) as u8);
     }
 
     /// Fresh stratum with a Heart at (x, y) and no city; feed it to make it grow.
@@ -109,9 +123,14 @@ impl RoseSim {
                     if c.tick % logistics::city::REBUILD_EVERY == 0 && !c.synthetic() {
                         game::cargo::refresh_demands(&self.colony, &defs, c, stash, &st.ledger, table);
                     }
-                    let sold = game::cargo::land(c, &mut self.colony, &defs, stash, &mut st.ledger, table, &mut self.log);
+                    let landed = game::cargo::land(c, &mut self.colony, &defs, stash, &mut st.ledger, table, &mut self.log);
+                    if let Some(e) = self.economy.as_mut() {
+                        for (market, contract, item) in landed.delivered.iter().cloned() {
+                            game::trade::delivered(e, &mut st.ledger, c, table, market, contract, item, &mut self.log);
+                        }
+                    }
                     if let Some(t) = self.threats.as_mut() {
-                        game::pressure::tick(t, c, &mut self.colony, &defs, &self.posts, &mut self.log, &sold);
+                        game::pressure::tick(t, c, &mut self.colony, &defs, &self.posts, &mut self.log, &landed);
                     }
                 }
                 c.sim.changed.len() as i64
@@ -161,6 +180,10 @@ impl RoseSim {
             d.set("reached", c.markets.contains(&z.grate));
             d.set("gained", z.gained as f64);
             d.set("down", t.down_in(k, 0));
+            // the street's faction, and whether Corpo intel shows the number (Economy)
+            let e = self.economy.as_ref();
+            d.set("faction", e.and_then(|e| e.faction_at(z.grate).map(|f| e.name(f).to_string())).unwrap_or_default().as_str());
+            d.set("exact", e.is_some_and(|e| e.s.intel > 0));
             out.push(&d.to_variant());
         }
         out
@@ -184,10 +207,14 @@ impl RoseSim {
         self.city.as_ref().map_or(PackedInt32Array::new(), |c| PackedInt32Array::from((0..c.sim.hy.len()).filter(|&i| c.sim.is_bloom(i)).map(|i| i as i32).collect::<Vec<i32>>().as_slice()))
     }
 
-    /// Oathkeepers the shift's run killed: their Attention counts in the Heart's zone at the shift's end.
+    /// Oathkeepers the shift's run killed: their Attention counts in the Heart's zone at the shift's end; raiders it
+    /// killed count toward the clear-raiders contracts in hand (Economy).
     #[func]
-    fn add_run_kills(&mut self, n: i64) {
-        self.run_kills += n.max(0) as u32;
+    fn add_run_kills(&mut self, oathkeepers: i64, raiders: i64) {
+        self.run_kills += oathkeepers.max(0) as u32;
+        if let Some(e) = self.economy.as_mut() {
+            e.raider_kills(raiders.max(0) as u32);
+        }
     }
 
     /// Development only (the screenshot script): send a stage ("patrol", "sweep", "cleansing") down a zone's grate now.
@@ -338,6 +365,14 @@ impl RoseSim {
             };
             d.set("markets", &to_arr(&c.markets));
             d.set("markets_reached", &PackedByteArray::from(c.market_cells.iter().map(|m| m.is_some() as u8).collect::<Vec<u8>>().as_slice()));
+            // each market by its grate's number and the faction whose street it is (Economy)
+            let names: Vec<GString> = (0..c.markets.len())
+                .map(|k| {
+                    let who = self.economy.as_ref().and_then(|e| e.faction_at(c.markets[k]).map(|f| e.name(f).split(' ').next().unwrap_or("").to_uppercase())).unwrap_or_default();
+                    GString::from(format!("GRATE {} {who}", c.market_grate(k)).trim_end())
+                })
+                .collect();
+            d.set("market_names", &PackedStringArray::from(names.as_slice()));
             d.set("pits", &to_arr(&pits));
             d.set("pods", &to_arr(&c.crowd.as_ref().map_or(Vec::new(), |cr| cr.pods.clone())));
         }
@@ -756,10 +791,17 @@ impl RoseSim {
             let store = game::Store { stash: st.stash.as_mut().unwrap(), ledger: &mut st.ledger, bench: &mut st.bench, table: st.table.as_ref().unwrap(), recipes: st.recipes.as_ref().unwrap() };
             let folk = game::Folk { roster: &mut p.roster, traits: &traits, names: &names, died: &mut p.died_this_shift };
             let shift = game::end_shift(town, store, folk, day.max(1) as u32, &mut self.log);
-            // the threats' side, then the next shift's water (Full Design v3.14, Pressure)
+            // the threats' side, the stalls' (Full Design v3.15, Economy), then the next shift's water (v3.14, Pressure)
+            let mut shift = shift;
             if let Some(t) = self.threats.as_mut() {
                 let kills = std::mem::take(&mut self.run_kills);
                 game::pressure::end(t, city, &mut self.colony, &defs, &mut p.roster, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), &mut self.log, &mut p.died_this_shift, &shift.outcome, day.max(1) as u32, kills);
+            }
+            if let Some(e) = self.economy.as_mut() {
+                let lines = game::trade::end_shift(e, &mut st.ledger, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), city, &mut p.roster, &traits, &names, self.threats.as_mut(), &shift.closed.report.to_faction, day.max(1) as u32, self.raiders, &mut self.log);
+                shift.stash_lines.extend(lines);
+            }
+            if let Some(t) = self.threats.as_mut() {
                 let next = day.max(1) as u32 + 1;
                 let notes = t.start_shift(city, &mut self.colony, &defs, next, game::shift_of_day(next) == 2);
                 game::pressure::note(&mut self.log, city.tick, notes);
@@ -788,6 +830,13 @@ impl RoseSim {
         self.plan = self.colony.assign_jobs(&defs, &p.roster, &traits, game::shift_of_day(day.max(1) as u32));
         self.posts = threat::Posts::from_plan(&self.plan, &p.roster);
         game::refresh_movers(city, &self.colony, &defs, &p.roster, &traits, day.max(1) as u32);
+        // the surface's side of the shift's start: the day's clock, the offers, the stalls' books (Economy)
+        if let (Some(e), Some(st)) = (self.economy.as_mut(), self.stash.as_mut()) {
+            let names = p.names.clone().unwrap();
+            let mut st = st.bind_mut();
+            st.ensure();
+            game::trade::start_shift(e, &mut st.ledger, city, &self.colony, &defs, &p.roster, &names, &self.plan, self.threats.as_ref(), day.max(1) as u32, self.raiders, &mut self.log);
+        }
     }
 
     // ------------------------------------------------------------ quotas (Full Design v3.11, Cargo: Quotas)
@@ -1328,10 +1377,19 @@ impl RoseStash {
                 inventory::Verb::Sell { market } => {
                     e.set("verb", "sell");
                     e.set("target", market as i64);
-                    // the price it will fetch given what is queued ahead of it at that market
-                    let ahead = self.ledger.queue[..i].iter().filter(|p| p.verb == q.verb).count() as u32;
-                    let base_glut = self.ledger.glut.get(market as usize).copied().unwrap_or(0.0).round() as u32;
-                    e.set("quote", items::price(d, &q.item, PriceContext { glut_units: base_glut + ahead, ..PriceContext::default() }) as i64);
+                    // the price it will fetch given what of its category is queued ahead of it at that market; -1 when
+                    // no stall there buys it
+                    let cat = d.category;
+                    let ahead = self.ledger.queue[..i].iter().filter(|p| p.verb == q.verb && t.def(p.item.def).category == cat).count() as u32;
+                    let glut = self.ledger.glut_units(market, cat as usize) + ahead;
+                    e.set("quote", self.ledger.best(t, &q.item, market, glut).map_or(-1, |(p, _)| p as i64));
+                    e.set("nutrient", 0.0);
+                }
+                inventory::Verb::Deliver { market, contract } => {
+                    e.set("verb", "deliver");
+                    e.set("target", market as i64);
+                    e.set("contract", contract as i64);
+                    e.set("quote", 0i64);
                     e.set("nutrient", 0.0);
                 }
                 inventory::Verb::Feed { pit } => {
@@ -1347,13 +1405,14 @@ impl RoseStash {
         out
     }
 
-    /// What an item in the grid would fetch at a market now (glut and the queue ahead included).
+    /// What an item in the grid would fetch at a market now (glut and the queue ahead included); -1 when no stall
+    /// there buys it (a Relic; Blackline outside the Corpo remnants' tier 3; a faction closed to the city).
     #[func]
     fn quote(&mut self, handle: i64, market: i64) -> i64 {
         self.ensure();
         let t = self.table.as_ref().unwrap();
         let stash = self.stash.as_ref().unwrap();
-        stash.get_any(handle as u32).map_or(0, |it| self.ledger.quote(t, it, market.clamp(0, 255) as u8) as i64)
+        stash.get_any(handle as u32).map_or(0, |it| self.ledger.quote(t, it, market.clamp(0, 255) as u8).map_or(-1, |p| p as i64))
     }
 
     #[func]
@@ -1944,6 +2003,7 @@ impl RoseRun {
         d.set("regrown_count", o.regrown.len() as i64);
         d.set("kills", o.kills as i64);
         d.set("oath_kills", o.oath_kills as i64);
+        d.set("raider_kills", o.raider_kills as i64);
         d.set("chunks_seen", o.chunks_seen as i64);
         d.set("blind_value", o.blind_value as i64);
         d.set("route_memory", &PackedByteArray::from(o.route_memory.as_slice()));

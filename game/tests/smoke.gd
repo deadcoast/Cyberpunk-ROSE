@@ -89,6 +89,10 @@ func _verify_current() -> void:
 			# Pressure: a zone a grate, the founded grate reached, its gauge pinned in the world
 			var zones: Array = sim.ensure().attention()
 			_check(zones.size() >= 2 and zones.any(func(z): return bool(z.reached)), "colony: Attention zones %s" % str(zones.map(func(z): return z.reached)))
+			# Economy: the founded grate is the Nomads' street, and its market carries the name
+			var first_zone: Array = zones.filter(func(z): return bool(z.reached))
+			_check(first_zone.size() > 0 and String(first_zone[0].faction) == "Nomads", "colony: the first grate's street is %s" % (String(first_zone[0].faction) if first_zone.size() > 0 else "none"))
+			_check(sim.market_name(0).ends_with("NOMADS"), "colony: the first market is %s" % sim.market_name(0))
 			var wv: Node = null
 			for ch in scr.get_children():
 				if ch.has_method("full_paint"):

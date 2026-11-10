@@ -1,0 +1,261 @@
+# Cyberpunk: ROSE — the surface's factions (Full Design v3.15, Economy; research 19).
+# Numbers marked Pass 1 are its; the rest are this design's. A day is three shifts (the surface's clock).
+
+[rules]
+# the demand walk: each day a quarter of the way back to the buy-list value, plus a seeded step of up to `step`
+revert = 0.25
+step = 0.06
+# the band the walk is measured against (the proof) and the range the day's demand is clamped to (the Items formula)
+band = 0.3
+range = [0.6, 1.6]
+# reputation: steps of `favour`; Pass 1's 30 % at the ends is `rep_price` a step
+favour = 20
+rep_price = 0.1
+# +3 needs Ivan's Parley (Pass 1; Phase E)
+rep_cap = 2
+# a link +4 favour, its rival -2; a chain +1 reputation; a miss -1
+link_favour = 4
+rival_favour = 2
+# below reputation 0 a faction comes round a favour a shift (research 19: RimWorld's goodwill drifts back toward its
+# natural range, 0.2 a day from below), so -3 reopens in twenty shifts
+recover = 1
+# the stall's haggling: a Trade level is this much on what it sells for and off what it buys for (research 19)
+haggle = 0.02
+# vendors sell at base x markup (research 19: RimWorld's 140 / 60 spread is 2.3x)
+markup = 2.0
+# stock tiers: the reputation and the eddies traded (both ways) each needs; tier 1 needs no volume
+tier_rep = [-2, 0, 1, 2]
+tier_volume = [0, 150, 600, 2000]
+# contracts: offers a faction shows, days an offer stands, links in a chain, a link's growth (Pass 2: a 5-link chain
+# pays triple five singles -> 1.55^0 + ... + 1.55^4 = 14.5 first links)
+offers = 3
+offer_days = 3
+chain = [3, 5]
+growth = 1.55
+# a chain's unique item comes at this condition
+unique_condition = 90
+
+# The streets: the first grate of the founding stratum is always `first`; each faction in `every` works at least one
+# more grate of the stratum; the rest roll by the stratum's weights (Pass 1's strata: Badges along the Service
+# Tunnels, Corpo in the Vault).
+[streets]
+first = "nomads"
+every = ["gangs", "badges", "corpo"]
+
+[[streets.stratum]]
+weights = { nomads = 3, gangs = 3, badges = 2, corpo = 1 }
+[[streets.stratum]]
+weights = { nomads = 3, gangs = 3, badges = 2, corpo = 1 }
+[[streets.stratum]]
+weights = { nomads = 2, gangs = 3, badges = 2, corpo = 1 }
+[[streets.stratum]]
+weights = { nomads = 2, gangs = 2, badges = 4, corpo = 1 }
+[[streets.stratum]]
+weights = { nomads = 1, gangs = 2, badges = 2, corpo = 4 }
+[[streets.stratum]]
+weights = { nomads = 2, gangs = 2, badges = 2, corpo = 3 }
+
+# The surface's events, rolled once a day: chance a day, days, and pushes on the day's demand ({faction or "all",
+# category, tier or "" for every tier, offset}). flush: a clinic day's shift end brings a newcomer flush, twice the
+# size. stock: the faction's units a day multiplied. chapter: Phase E.
+[[event]]
+id = "gang_war"
+name = "gang war topside"
+chance = 0.08
+days = 2
+push = [{ faction = "all", category = "chrome", tier = "uncommon", offset = -0.3 }, { faction = "gangs", category = "gear", tier = "", offset = 0.2 }]
+
+[[event]]
+id = "clinic_day"
+name = "clinic day"
+chance = 0.10
+days = 1
+flush = true
+
+[[event]]
+id = "deployment"
+name = "Oathkeeper deployment"
+chance = 0.06
+days = 2
+push = [{ faction = "gangs", category = "contraband", tier = "", offset = 0.3 }, { faction = "corpo", category = "contraband", tier = "", offset = 0.3 }]
+
+[[event]]
+id = "convoy"
+name = "trader convoy"
+chance = 0.08
+days = 1
+stock = { nomads = 2.0 }
+push = [{ faction = "nomads", category = "all", tier = "", offset = 0.1 }]
+
+[[event]]
+id = "occupation"
+name = "the occupation"
+chance = 0.0
+days = 0
+chapter = 6
+stock_item = { org_paste = 0.5 }
+
+# ---------------------------------------------------------------- the factions
+# demand: a category's buy-list value (absent: 1.0); items: an item's own multiplier on top; refuses: categories or
+# tiers nobody at the stall buys; fence: the tier at which the faction buys Blackline. stock: tier, item (or service),
+# units a day, fixed (always there) or rotating (`rotate` of the faction's rotating entries a day), price where the
+# base is nothing. contracts: kind, ask, shifts, eddies; deliver asks a category (and tier) at a condition.
+
+[[faction]]
+id = "nomads"
+name = "Nomads"
+past = "Nomad"
+rival = "corpo"
+lever = "volume"
+lever_at = 5
+unique = "ger_backpack_2"
+rotate = 2
+demand = { organic = 1.2, chrome = 1.1, part = 1.1, tech = 0.8 }
+items = { org_water = 1.5, con_filtered_water = 1.5, con_cold_light = 1.4 }
+stock = [
+  { tier = 1, item = "org_paste", units = 12, fixed = true },
+  { tier = 1, item = "prt_salt", units = 6, fixed = true },
+  { tier = 1, item = "org_water", units = 6, fixed = true },
+  { tier = 1, item = "org_jerky", units = 6 },
+  { tier = 1, item = "prt_pipe", units = 6 },
+  { tier = 1, item = "prt_wire", units = 6 },
+  { tier = 1, item = "prt_cloth", units = 4 },
+  { tier = 1, item = "ger_lantern", units = 1 },
+  { tier = 1, item = "ger_waders", units = 1 },
+  { tier = 2, item = "ger_repair_kit", units = 2 },
+  { tier = 2, item = "prt_valve", units = 3 },
+  { tier = 2, item = "prt_pump", units = 2 },
+  { tier = 2, item = "tec_map_s2", units = 1 },
+  { tier = 3, item = "con_filtered_water", units = 2 },
+  { tier = 3, item = "org_antiseptic", units = 3 },
+  { tier = 3, service = "convoy", units = 1, fixed = true },
+  { tier = 4, service = "hire", units = 1, fixed = true },
+]
+contracts = [
+  { kind = "deliver", category = "chrome", n = 8, condition = 30, shifts = 3, eddies = 48 },
+  { kind = "deliver", category = "part", n = 6, condition = 40, shifts = 3, eddies = 24 },
+  { kind = "deliver", category = "organic", n = 4, condition = 20, shifts = 3, eddies = 20 },
+  { kind = "clear_raiders", n = 2, shifts = 4, eddies = 60 },
+  { kind = "host", shifts = 5, eddies = 40 },
+]
+
+[[faction]]
+id = "gangs"
+name = "Gangs"
+past = "Gang"
+rival = "badges"
+lever = "protection"
+unique = "ger_monowire"
+rotate = 2
+demand = { chrome = 1.2, gear = 1.2, contraband = 1.3, curio = 0.8 }
+items = { org_downer = 1.3, con_cold_light = 1.3 }
+stock = [
+  { tier = 1, service = "protection", units = 2, fixed = true, price = 30 },
+  { tier = 1, item = "ger_pipe", units = 2 },
+  { tier = 1, item = "ger_shiv", units = 2 },
+  { tier = 1, item = "ger_zip", units = 1 },
+  { tier = 1, item = "ger_tarp_coat", units = 1 },
+  { tier = 1, item = "chr_street_eye", units = 1 },
+  { tier = 1, item = "chr_reflex_chip", units = 1 },
+  { tier = 2, item = "ger_scrap_pistol", units = 1 },
+  { tier = 2, item = "ger_fist", units = 1 },
+  { tier = 2, item = "ger_sword", units = 1 },
+  { tier = 2, item = "org_stim", units = 3 },
+  { tier = 3, item = "ger_nail_rifle", units = 1 },
+  { tier = 3, item = "ger_plate_vest", units = 1 },
+  { tier = 3, item = "con_cold_light", units = 2 },
+  { tier = 4, item = "ger_monowire", units = 1 },
+  { tier = 4, item = "ger_flechette", units = 1 },
+  { tier = 4, service = "hire", units = 1, fixed = true },
+]
+contracts = [
+  { kind = "deliver", category = "gear", n = 2, condition = 50, shifts = 3, eddies = 60 },
+  { kind = "deliver", item = "org_downer", n = 2, condition = 0, shifts = 3, eddies = 140 },
+  { kind = "deliver", category = "chrome", tier = "uncommon", n = 3, condition = 40, shifts = 3, eddies = 70 },
+  { kind = "recover", item = "org_corpse_tag", shifts = 4, eddies = 50 },
+]
+
+[[faction]]
+id = "corpo"
+name = "Corpo remnants"
+past = "Corpo"
+rival = "nomads"
+lever = "intel"
+unique = "imp_appraiser"
+rotate = 2
+fence = 3
+fir = 1.25
+demand = { tech = 1.3, curio = 1.3, part = 0.8, organic = 0.8 }
+items = { tec_shard_street = 1.5, tec_shard_corpo = 1.5, tec_shard_oath = 1.5, org_downer = 1.5 }
+stock = [
+  { tier = 1, service = "intel", units = 1, fixed = true, price = 40 },
+  { tier = 1, item = "tec_shard_street", units = 2 },
+  { tier = 1, item = "prt_board", units = 2 },
+  { tier = 1, item = "prt_lens_good", units = 2 },
+  { tier = 2, item = "chr_corpo_eye", units = 1 },
+  { tier = 2, item = "chr_cortex_shunt", units = 1 },
+  { tier = 2, item = "tec_map_s4", units = 1 },
+  { tier = 2, item = "prt_gold_trace", units = 1 },
+  { tier = 3, item = "imp_appraiser", units = 1 },
+  { tier = 3, item = "imp_night_eye", units = 1 },
+  { tier = 4, service = "hire", units = 1, fixed = true },
+]
+contracts = [
+  { kind = "deliver", category = "tech", n = 2, condition = 30, shifts = 3, eddies = 60 },
+  { kind = "deliver", category = "chrome", tier = "rare", n = 1, condition = 50, shifts = 4, eddies = 110 },
+  { kind = "recover", item = "tec_shard_corpo", shifts = 4, eddies = 90 },
+  { kind = "host", shifts = 5, eddies = 60 },
+]
+
+[[faction]]
+id = "badges"
+name = "Badges"
+past = "Badge"
+rival = "gangs"
+lever = "quiet"
+lever_at = 30
+unique = "ger_shock_lance"
+rotate = 2
+demand = { organic = 1.1, gear = 1.1, contraband = 0.8 }
+items = { org_downer = 1.2 }
+stock = [
+  { tier = 1, item = "org_antiseptic", units = 3 },
+  { tier = 1, item = "org_splint", units = 3 },
+  { tier = 1, item = "ger_pipe", units = 1 },
+  { tier = 1, item = "ger_tarp_coat", units = 1 },
+  { tier = 2, item = "ger_nail_rifle", units = 1 },
+  { tier = 2, item = "ger_helm", units = 1 },
+  { tier = 2, item = "ger_plate_vest", units = 1 },
+  { tier = 2, item = "org_fever_tonic", units = 2 },
+  { tier = 3, item = "ger_shock_lance", units = 1 },
+  { tier = 4, service = "timings", units = 1, fixed = true, price = 50 },
+  { tier = 4, item = "key_lamp_badge", units = 1, fixed = true, price = 300 },
+  { tier = 4, service = "hire", units = 1, fixed = true },
+]
+contracts = [
+  { kind = "deliver", category = "organic", tier = "uncommon", n = 3, condition = 30, shifts = 3, eddies = 40 },
+  { kind = "deliver", category = "gear", n = 2, condition = 40, shifts = 3, eddies = 50 },
+  { kind = "clear_raiders", n = 2, shifts = 4, eddies = 60 },
+  { kind = "clear_bloom", shifts = 4, eddies = 80 },
+  { kind = "recover", item = "org_corpse_tag", shifts = 4, eddies = 60 },
+]
+
+[[faction]]
+id = "oathkeepers"
+name = "Oathkeepers"
+past = ""
+rival = ""
+lever = ""
+unique = ""
+rotate = 0
+chapter = 3
+demand = { chrome = 0.6, part = 0.6, organic = 0.6, tech = 0.6, gear = 0.6, contraband = 0.6, curio = 0.6 }
+stock = []
+contracts = []
+
+# a service's price where its entry gives none; a hire is the same at every tier-4 stall
+[services]
+hire = 150
+convoy_fee = 0.10
+intel_shifts = 3
+timings_shifts = 3

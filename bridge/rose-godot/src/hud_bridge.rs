@@ -23,7 +23,7 @@ impl RoseSim {
         let (Some(c), Some(st)) = (self.city.as_ref(), self.stash.as_ref()) else { return out };
         let p = people.bind();
         let st = st.bind();
-        for a in game::alerts::current(&self.colony, &defs, c, &p.roster, st.stash.as_ref().unwrap(), &st.ledger, self.last_outcome.as_ref(), self.jam_since, self.threats.as_ref()) {
+        for a in game::alerts::current(&self.colony, &defs, c, &p.roster, st.stash.as_ref().unwrap(), &st.ledger, self.last_outcome.as_ref(), self.jam_since, self.threats.as_ref(), self.economy.as_ref()) {
             let mut e = VarDictionary::new();
             e.set("level", level_name(a.level));
             e.set("key", a.key.as_str());

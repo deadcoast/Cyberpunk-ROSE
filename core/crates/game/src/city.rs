@@ -82,6 +82,11 @@ pub struct ShiftRecord {
     pub heart_signal: f32,
     pub alerts: Vec<String>,
     pub digest: u64,
+    /// the economy: the markets the Mat reaches from the Heart, the shift's sales, the widest any demand's walk stood
+    /// from its buy-list value
+    pub markets: usize,
+    pub sales: Vec<crate::cargo::Sale>,
+    pub drift: f32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -146,9 +151,25 @@ fn heart_xy(w: &World) -> (u16, u16) {
     w.city.sim.heart.map(|(x, y)| (x as u16, y as u16)).unwrap_or((0, 0))
 }
 
+/// What the steward does with the haul's Chrome (Full Design v3.15, Economy: the proof). Feeding — the founding's
+/// standing order — keeps the Heart at 2.0 nutrient (the quota pulls the Common and Uncommon Chrome); trading sets no
+/// quota of its own and sells the Chrome past a Relay's six with the rest of the surplus.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Haul {
+    #[default]
+    Feed,
+    Trade,
+}
+
+/// A stall takes five of a category a shift from the steward.
+pub const PER_STALL: usize = 5;
+/// Chrome the steward keeps for the steering: a Relay's six.
+pub const CHROME_RESERVE: usize = 6;
+
 /// The steward's standing orders, once a shift before the run.
 #[derive(Clone, Debug, Default)]
 pub struct Steward {
+    pub haul: Haul,
     next: usize,
     current: Option<u32>,
     rack_painted: bool,
@@ -165,25 +186,19 @@ impl Steward {
 
     pub fn act(&mut self, w: &mut World) -> Vec<String> {
         let mut out = Vec::new();
-        // the Heart's Pit kept at 2 nutrient, Uncommon at most
-        if !self.quota_set {
+        // feeding: the Heart's Pit kept at 2 nutrient, Uncommon at most
+        if !self.quota_set && self.haul == Haul::Feed {
             if let Some(h) = w.colony.heart(&w.defs).map(|s| s.id) {
                 w.colony.set_quota(&w.defs, h, Some(HEART_KEEP));
                 Self::decide(w, "the Heart keeps 2.0 nutrient, Uncommon at most".into(), &mut out);
             }
             self.quota_set = true;
         }
-        // every Curio and Tech sold at the first market the Mat reaches from the Heart
-        if let Some(k) = (0..w.city.markets.len()).find(|&k| w.city.from_heart(logistics::Kind::Market, k as u32).is_some()) {
-            let sell: Vec<u32> = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && matches!(w.table.def(it.def).category, Category::Curio | Category::Tech)).map(|(h, _, _)| h).collect();
-            let n = sell.len();
-            for h in sell {
-                w.ledger.queue(&mut w.stash, h, Verb::Sell { market: k as u8 }, w.day);
-            }
-            if n > 0 {
-                Self::decide(w, format!("{n} Curio and Tech to sell at grate {}", w.city.market_grate(k)), &mut out);
-            }
-        }
+        // the haul: contracts it can fill, the surplus to the best stalls in reach (or the Chrome to the ground),
+        // protection when a Patrol is due at a Gang grate
+        self.contracts(w, &mut out);
+        self.surplus(w, &mut out);
+        self.protection(w, &mut out);
         // the steering: whenever the cord to the first grate is lost, a Relay ghost at the anchor nearest the grate on
         // the Heart's side of the break, the next when it stands
         if self.relay.and_then(|id| w.colony.get(id)).is_none_or(|s| s.built) {
@@ -233,6 +248,159 @@ impl Steward {
         }
         w.publish();
         out
+    }
+
+    /// The kit kept for the Runner: every piece of it in the Stash, the spares for the run a Runner does not come
+    /// home from.
+    fn kit(w: &World) -> Vec<u32> {
+        let defs: Vec<items::ItemId> = std::iter::once(KIT_HAND).chain(KIT_QUICK).filter_map(|id| w.table.id_of(id)).collect();
+        w.stash.handles().into_iter().filter(|(_, _, it)| defs.contains(&it.def)).map(|(h, _, _)| h).collect()
+    }
+
+    /// The markets the Mat reaches from the Heart.
+    fn in_reach(w: &World) -> Vec<usize> {
+        (0..w.city.markets.len()).filter(|&k| w.city.from_heart(logistics::Kind::Market, k as u32).is_some()).collect()
+    }
+
+    /// A deliver link in hand takes what fits as it comes; then each faction in reach with no chain in hand has its
+    /// first three-link deliver offer the Stash can fill now taken and sent, or its first three-link host offer while
+    /// a bed is free (a longer chain asks more than one route's hauls bring in its shifts).
+    fn contracts(&mut self, w: &mut World, out: &mut Vec<String>) {
+        let reach = Self::in_reach(w);
+        let kit = Self::kit(w);
+        let market_of = |w: &World, f: u8| reach.iter().copied().find(|&k| w.economy.faction_at(w.city.markets[k]) == Some(f));
+        for c in w.economy.s.contracts.clone() {
+            if let (economy::Kind::Deliver, Some(k)) = (c.kind, market_of(w, c.faction)) {
+                self.send(w, &c, k, &kit, out);
+            }
+        }
+        let (beds, taken) = w.colony.bed_count(&w.defs);
+        let mut free_beds = ((beds - taken).max(0) as usize).saturating_sub(w.roster.waiting.len());
+        for o in w.economy.s.offers.clone() {
+            let Some(k) = market_of(w, o.faction) else { continue };
+            if o.links > 3 || w.economy.s.contracts.iter().any(|c| c.faction == o.faction) {
+                continue;
+            }
+            let c = w.economy.first_link(&o, w.day);
+            let take = match c.kind {
+                economy::Kind::Deliver => self.fitting(w, &c, &kit).len() >= c.ask.n as usize,
+                economy::Kind::Host if free_beds > 0 => {
+                    free_beds -= 1;
+                    true
+                }
+                _ => false,
+            };
+            if !take {
+                continue;
+            }
+            let tick = w.city.tick;
+            if let Ok(line) = crate::trade::accept(&mut w.economy, &mut w.roster, &w.traits, &w.names, &w.table, o.id, w.day, tick, &mut w.log) {
+                out.push(line);
+                if let Some(held) = w.economy.s.contracts.iter().find(|x| x.id == o.id).cloned() {
+                    if held.kind == economy::Kind::Deliver {
+                        self.send(w, &held, k, &kit, out);
+                    }
+                }
+            }
+        }
+    }
+
+    /// What fits a deliver link, up to what it still asks and is not already riding, sent to its market.
+    fn send(&self, w: &mut World, c: &economy::Contract, k: usize, kit: &[u32], out: &mut Vec<String>) {
+        let riding = w.ledger.in_flight.iter().filter(|s| s.contract == Some(c.id)).count() + w.ledger.queue.iter().filter(|q| matches!(q.verb, Verb::Deliver { contract, .. } if contract == c.id)).count();
+        let need = (c.ask.n as usize).saturating_sub(c.got as usize + riding);
+        let send: Vec<u32> = self.fitting(w, c, kit).into_iter().take(need).collect();
+        let n = send.len();
+        for h in send {
+            w.ledger.queue(&mut w.stash, h, Verb::Deliver { market: k as u8, contract: c.id }, w.day);
+        }
+        if n > 0 {
+            let line = format!("{n} to the {} at grate {}", w.economy.name(c.faction), w.city.market_grate(k));
+            Self::decide(w, line, out);
+        }
+    }
+
+    /// The Stash's items that meet a deliver link, cheapest first, the kit kept and the Parts the build plan still
+    /// needs.
+    fn fitting(&self, w: &World, c: &economy::Contract, kit: &[u32]) -> Vec<u32> {
+        let mut v: Vec<(u32, u32, bool)> = w.stash.handles().into_iter().filter(|(h, _, it)| !it.pinned && !kit.contains(h) && w.economy.fits(c, it, &w.table)).map(|(h, _, it)| (w.table.def(it.def).value, h, w.table.def(it.def).category == Category::Part)).collect();
+        v.sort_unstable();
+        let need: u32 = BUILD_PLAN[self.next.min(BUILD_PLAN.len())..].iter().filter_map(|d| w.defs.get(d)).map(|d| d.cost.parts).sum();
+        let mut spare = (w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == Category::Part).count() as u32).saturating_sub(need);
+        v.into_iter()
+            .filter(|&(_, _, part)| {
+                if !part {
+                    return true;
+                }
+                let ok = spare > 0;
+                spare = spare.saturating_sub(1);
+                ok
+            })
+            .map(|(_, h, _)| h)
+            .collect()
+    }
+
+    /// The surplus — Tech, Curio, Contraband, Gear the kit does not use and, trading, Chrome past a Relay's six; Parts are kept
+    /// for building, Organics for the clinic, Keys and Relics never leave — goes to whichever market in reach pays
+    /// most for each piece now, five of a category a stall a shift.
+    fn surplus(&mut self, w: &mut World, out: &mut Vec<String>) {
+        let reach = Self::in_reach(w);
+        let kit = Self::kit(w);
+        let chrome = self.haul == Haul::Trade;
+        let mut items: Vec<(u32, u32, Category)> = w
+            .stash
+            .handles()
+            .into_iter()
+            .filter(|(h, _, it)| !it.pinned && !kit.contains(h))
+            .map(|(h, _, it)| (w.table.def(it.def).value, h, w.table.def(it.def).category))
+            .filter(|(_, _, c)| matches!(c, Category::Tech | Category::Curio | Category::Contraband | Category::Gear) || (chrome && *c == Category::Chrome))
+            .collect();
+        items.sort_unstable_by_key(|&(v, h, _)| (std::cmp::Reverse(v), h));
+        // the Chrome reserve: the cheapest six stay
+        let reserve: Vec<u32> = items.iter().filter(|i| i.2 == Category::Chrome).rev().take(CHROME_RESERVE).map(|i| i.1).collect();
+        items.retain(|i| !reserve.contains(&i.1));
+        let mut sent: Vec<(usize, u32)> = Vec::new();
+        for (_, h, cat) in items {
+            let Some(it) = w.stash.get_any(h).cloned() else { continue };
+            let best = reach
+                .iter()
+                .copied()
+                .filter_map(|k| {
+                    let ahead = w.ledger.queue.iter().filter(|q| q.verb == Verb::Sell { market: k as u8 } && w.table.def(q.item.def).category == cat).count();
+                    if ahead >= PER_STALL {
+                        return None;
+                    }
+                    let glut = w.ledger.glut_units(k as u8, cat as usize) + ahead as u32;
+                    w.ledger.best(&w.table, &it, k as u8, glut).map(|(p, _)| (p, std::cmp::Reverse(k)))
+                })
+                .max();
+            if let Some((p, std::cmp::Reverse(k))) = best {
+                if w.ledger.queue(&mut w.stash, h, Verb::Sell { market: k as u8 }, w.day) {
+                    sent.push((k, p));
+                }
+            }
+        }
+        for &k in &reach {
+            let here: Vec<u32> = sent.iter().filter(|s| s.0 == k).map(|s| s.1).collect();
+            if !here.is_empty() {
+                Self::decide(w, format!("{} to sell at grate {}, about {} e", here.len(), w.city.market_grate(k), here.iter().sum::<u32>()), out);
+            }
+        }
+    }
+
+    /// Protection from the Gangs when a Patrol is due in the zone of one of their grates and none is bought.
+    fn protection(&mut self, w: &mut World, out: &mut Vec<String>) {
+        let Some(g) = w.economy.file.index("gangs") else { return };
+        let due = w.threats.due.iter().any(|d| d.stage == 0 && w.economy.faction_at(w.threats.zones[d.zone as usize].grate) == Some(g));
+        if !due || w.economy.s.protection > 0 || w.ledger.orders.iter().any(|o| o.faction == g) {
+            return;
+        }
+        let Some(k) = Self::in_reach(w).into_iter().find(|&k| w.economy.faction_at(w.city.markets[k]) == Some(g)) else { return };
+        let Some(entry) = w.economy.service_entry(g, "protection") else { return };
+        let plan = w.plan.clone();
+        if let Ok(each) = crate::trade::order(&mut w.economy, &mut w.ledger, &w.table, &w.city, &w.colony, &w.defs, &w.roster, &plan, k as u8, g, entry, 1) {
+            Self::decide(w, format!("protection from the Gangs at grate {}: {each} e", w.city.market_grate(k)), out);
+        }
     }
 
     /// The Rack's stockpile: the eight cells nearest its anchor that take a zone.
@@ -317,6 +485,10 @@ fn digest(w: &World) -> u64 {
     for e in &w.log.events {
         (e.tick, e.class.name(), &e.what).hash(&mut h);
     }
+    for st in &w.economy.s.standing {
+        (st.rep, st.favour, st.traded, st.opened).hash(&mut h);
+    }
+    (w.economy.s.contracts.len(), w.economy.s.offers.len(), w.ledger.orders.len()).hash(&mut h);
     h.finish()
 }
 
@@ -349,11 +521,16 @@ pub fn play(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -
 
 /// The same, and the World as the last shift left it (the Cleansing proof plays on from it).
 pub fn play_world(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -> (CityRun, World) {
+    play_with(seed, shifts, Haul::Feed, each)
+}
+
+/// The same with the steward's haul given (`rose economy` plays both).
+pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize, &ShiftRecord)) -> (CityRun, World) {
     let table = ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
     let lib = ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
     let (tables, creatures) = (LootTables::shipped(), CreatureFile::shipped());
     let mut w = World::found(seed, table.clone());
-    let mut steward = Steward::default();
+    let mut steward = Steward { haul, ..Steward::default() };
     let route_seed = seed * 7 + 1;
     let map = RouteMap::compile(&lib, &run::route(&lib, route_seed, 1).expect("the first route of S1"));
     let mut memory: Vec<u8> = Vec::new();
@@ -365,8 +542,9 @@ pub fn play_world(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftReco
         let start_tick = w.city.tick;
         let log_from = w.log.events.len();
         rec.decisions = steward.act(&mut w);
-        // the Runner: the eligible slimo of best Scav, alone
-        let runner = w.roster.eligible().into_iter().max_by_key(|r| (r.skill(Skill::Scav), std::cmp::Reverse(r.id))).map(|r| r.id);
+        // the Runner: the eligible slimo of best Scav, alone; a contract's guest stays home
+        let hosts: Vec<u32> = w.economy.s.contracts.iter().filter_map(|c| c.host).collect();
+        let runner = w.roster.eligible().into_iter().filter(|r| !hosts.contains(&r.id)).max_by_key(|r| (r.skill(Skill::Scav), std::cmp::Reverse(r.id))).map(|r| r.id);
         let riding: Vec<u32> = w.ledger.in_flight.iter().map(|s| s.id).collect();
         let mut moments: Vec<Moment> = Vec::new();
         let mut run_times: Vec<f32> = Vec::new();
@@ -394,6 +572,7 @@ pub fn play_world(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftReco
         if let (Some(id), Some(o)) = (runner, outcome.as_ref()) {
             runs += 1;
             w.run_kills += o.oath_kills;
+            w.economy.raider_kills(o.raider_kills);
             memory = o.route_memory.clone();
             rec.result = match o.result {
                 RunResult::Extracted { .. } => "extracted".into(),
@@ -462,6 +641,9 @@ pub fn play_world(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftReco
         rec.steering = steward.steering(&w);
         rec.heart_signal = w.city.heart_cell().map_or(0.0, |i| w.city.sim.sig[i]);
         rec.alerts = w.alerts().into_iter().map(|a| a.text).collect();
+        rec.markets = Steward::in_reach(&w).len();
+        rec.sales = std::mem::take(&mut w.sales);
+        rec.drift = (0..w.economy.file.factions.len() as u8).flat_map(|f| economy::CATEGORIES.map(|c| w.economy.drift(f, c).abs())).fold(0.0, f32::max);
         rec.digest = digest(&w);
         // the shift's block of the merged log
         moments.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap().then(a.from.cmp(b.from)));

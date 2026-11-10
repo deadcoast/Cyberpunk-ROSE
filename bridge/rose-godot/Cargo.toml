@@ -21,6 +21,7 @@ people = { path = "../../core/crates/people" }
 colony = { path = "../../core/crates/colony" }
 game = { path = "../../core/crates/game" }
 threat = { path = "../../core/crates/threat" }
+economy = { path = "../../core/crates/economy" }
 render = { path = "../../core/crates/render" }
 toml.workspace = true
 postcard.workspace = true

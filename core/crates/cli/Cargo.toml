@@ -16,4 +16,5 @@ render = { path = "../render" }
 run = { path = "../run" }
 items = { path = "../items" }
 game = { path = "../game" }
+economy = { path = "../economy" }
 clap.workspace = true

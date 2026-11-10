@@ -9,6 +9,7 @@ members = [
   "core/crates/people",
   "core/crates/colony",
   "core/crates/threat",
+  "core/crates/economy",
   "core/crates/game",
   "core/crates/save",
   "core/crates/render",

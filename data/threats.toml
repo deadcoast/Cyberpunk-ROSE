@@ -15,6 +15,8 @@ in_zone = ["still"]
 per_eddies = 10
 # per Blackline or Relic outside a Vault (Pass 1)
 exposed = 5.0
+# per Blackline piece sold at the grate (Pass 1; Full Design v3.15, Economy: only the Corpo remnants fence it)
+blackline_sold = 5.0
 # per Oathkeeper killed (the run's scout: +15)
 kill = 15.0
 # Open Grates on a reached grate's gains (Pass 2)

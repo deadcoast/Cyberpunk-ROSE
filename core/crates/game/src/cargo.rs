@@ -97,21 +97,43 @@ pub fn send(city: &mut City, colony: &Colony, defs: &StructureFile, stash: &Stas
     }
 }
 
+/// A sale as it landed.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Sale {
+    pub market: u8,
+    pub eddies: u32,
+    pub faction: u8,
+    pub item: items::ItemId,
+    pub condition: u8,
+    pub blind: bool,
+}
+
+/// What landed at the markets in a tick, for the grates' Attention and the economy.
+#[derive(Clone, Debug, Default)]
+pub struct Landed {
+    pub sold: Vec<Sale>,
+    /// a Blackline piece sold at a market
+    pub blackline: Vec<u8>,
+    /// (market, contract, item): delivered to a contract, for the economy to count
+    pub delivered: Vec<(u8, u32, ItemInstance)>,
+}
+
 /// Packets that reached their consumer: the ledger lands them (a Pit's nutrient into the Mat and the genome's
-/// drift here), the Foreman's Cut takes its share, and what fell off the Mat is spilled. Each is a line of the
-/// city's log. Returns the sales, (market, eddies), for the grates' Attention.
+/// drift here), the Foreman's Cut takes its share, and what fell off the Mat is spilled; what no stall would buy
+/// rides home. Each is a line of the city's log.
 #[allow(clippy::too_many_arguments)]
-pub fn land(city: &mut City, colony: &mut Colony, defs: &StructureFile, stash: &mut Stash, ledger: &mut Ledger, table: &ItemTable, log: &mut CityLog) -> Vec<(u8, u32)> {
-    let mut sold = Vec::new();
+pub fn land(city: &mut City, colony: &mut Colony, defs: &StructureFile, stash: &mut Stash, ledger: &mut Ledger, table: &ItemTable, log: &mut CityLog) -> Landed {
+    let mut out = Landed::default();
     let arrivals = city.take_arrivals();
     let spills = city.take_spills();
     if arrivals.is_empty() && spills.is_empty() {
-        return sold;
+        return out;
     }
     let pits = colony.pits(defs);
     let tick = city.tick;
     for a in arrivals {
-        let name = ledger.in_flight.iter().find(|s| s.id == a.cargo).map(|s| table.def(s.item.def).name.clone()).unwrap_or_default();
+        let riding = ledger.in_flight.iter().find(|s| s.id == a.cargo).map(|s| (s.item.def, s.item.condition, s.item.ident == items::Ident::Unknown));
+        let name = riding.map(|r| table.def(r.0).name.clone()).unwrap_or_default();
         let sent_to = ledger.in_flight.iter().find(|s| s.id == a.cargo).map(|s| s.to);
         // district cargo: the structure it landed at
         let sid = match a.kind {
@@ -135,9 +157,18 @@ pub fn land(city: &mut City, colony: &mut Colony, defs: &StructureFile, stash: &
                 city.sim.drift_genome(drift);
                 log.push(tick, Class::Landing, format!("{name} fed to {}", if pit == 0 { "the Heart".to_string() } else { format!("Pit {pit}") }));
             }
-            Some(Landing::Sold { market, eddies }) => {
-                sold.push((market, eddies));
+            Some(Landing::Sold { market, eddies, faction, blackline }) => {
+                let (item, condition, blind) = riding.unwrap_or((items::ItemId(0), 0, false));
+                out.sold.push(Sale { market, eddies, faction, item, condition, blind });
+                if blackline {
+                    out.blackline.push(market);
+                }
                 log.push(tick, Class::Landing, format!("{name} sold for {eddies} e at grate {}", city.market_grate(market as usize)))
+            }
+            Some(Landing::Delivered { market, contract, item }) => out.delivered.push((market, contract, item)),
+            Some(Landing::Refused { market, item }) => {
+                log.push(tick, Class::Loss, format!("no stall at grate {} buys {name}: back home", city.market_grate(market as usize)));
+                crate::trade::home_from(ledger, city, market, item);
             }
             Some(Landing::Stored { .. }) => log.push(tick, Class::Landing, format!("{name} into the Still's store")),
             Some(Landing::Home { placed }) => {
@@ -153,7 +184,7 @@ pub fn land(city: &mut City, colony: &mut Colony, defs: &StructureFile, stash: &
             log.push(tick, Class::Loss, format!("{} spilled off the Mat", table.def(it.def).name));
         }
     }
-    sold
+    out
 }
 
 /// The quotas standing on the Pits and Stills for this shift's pull.

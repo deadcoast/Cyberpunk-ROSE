@@ -27,7 +27,7 @@ pub const JAM_ALERT_TICKS: u64 = 120;
 
 /// The alerts standing now. `last` is the last shift's outcome (strikes, defection, ghosts waiting).
 #[allow(clippy::too_many_arguments)]
-pub fn current(colony: &Colony, defs: &StructureFile, city: &City, roster: &Roster, stash: &Stash, ledger: &Ledger, last: Option<&ShiftOutcome>, jam_since: Option<u64>, threats: Option<&threat::Threats>) -> Vec<Alert> {
+pub fn current(colony: &Colony, defs: &StructureFile, city: &City, roster: &Roster, stash: &Stash, ledger: &Ledger, last: Option<&ShiftOutcome>, jam_since: Option<u64>, threats: Option<&threat::Threats>, economy: Option<&economy::Economy>) -> Vec<Alert> {
     let mut v = Vec::new();
     let w = city.sim.w;
     let hub_cell = |d: &colony::District| Some(d.hub.1 as usize * w + d.hub.0 as usize);
@@ -118,6 +118,19 @@ pub fn current(colony: &Colony, defs: &StructureFile, city: &City, roster: &Rost
         }
         if t.flood.level > 0 {
             v.push(Alert { level: Level::Yellow, key: "flood".into(), text: format!("the Flood is up {} tile{}", t.flood.level, if t.flood.level == 1 { "" } else { "s" }), cell: t.flood.changed.first().map(|c| c.0 as usize) });
+        }
+    }
+    // the surface's warnings (Economy: services): a zone whose Attention and its last shift's gain would cross a line
+    // at this shift's end — the Corpo remnants' intel for a Sweep, the Badges' timings for any line
+    if let (Some(t), Some(e)) = (threats, economy) {
+        for (k, z) in t.zones.iter().enumerate() {
+            let next = z.attention + z.gained - t.rules.attention.decay;
+            for st in &t.rules.stage {
+                let by = if e.s.timings > 0 { "the Badges' timings" } else if e.s.intel > 0 && st.id == "sweep" { "Corpo intel" } else { continue };
+                if z.attention < st.at && next >= st.at {
+                    v.push(Alert { level: Level::White, key: format!("forecast {k} {}", st.id), text: format!("{by}: grate {} loud enough for a {} by the shift's end", k + 1, st.name), cell: Some(z.grate) });
+                }
+            }
         }
     }
     for s in colony.structures.iter().filter(|s| s.drowned) {

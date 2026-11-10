@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 12;
+pub const SAVE_VERSION: u16 = 13;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -100,6 +100,10 @@ pub struct SaveFile {
     /// the threats: each grate's Attention, the bodies and events down, what is due, the Flood's water (v12, Pressure)
     #[serde(default)]
     pub threats: threat::ThreatSave,
+    /// the surface's factions: the streets, standing, the day's demand and stock, offers and contracts, services (v13,
+    /// Economy); the ledger's glut by category, books and orders and an item's contract (v13)
+    #[serde(default)]
+    pub economy: economy::EconomySave,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -149,6 +153,7 @@ impl SaveFile {
             roster: people::Roster::new(),
             colony: colony::Colony::new(),
             threats: threat::ThreatSave::default(),
+            economy: economy::EconomySave::default(),
         }
     }
 
@@ -312,7 +317,18 @@ mod tests {
         save.colony.structures.push(colony::Structure { id: 3, def: 1, x: 4, y: 5, tier: 1, hp: 100, built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: Some(colony::QuotaSet { target: 2.5, ceiling: 1 }), rotated: true, drowned: false, dark: false });
         save.ledger.ship(items::ItemInstance::new(items::ItemId(0)), inventory::Dest::Pit(1));
         save.ledger.stores.push((3, vec![items::ItemInstance::new(items::ItemId(1))]));
+        // the surface's factions, standing and a contract in hand (v13)
+        let table = items::ItemTable::from_toml(items::ITEMS_TOML).unwrap();
+        let mut econ = economy::Economy::found(economy::FactionFile::shipped(), &table, 7, &[10, 33, 56, 79, 102], 102, 1);
+        econ.refresh_offers(&economy::ShiftFacts { reached: vec![102], ..Default::default() }, 1, &mut |s| format!("N{s}"));
+        let offer = econ.s.offers[0].id;
+        econ.accept(offer, 1).unwrap();
+        econ.favour(0, 7);
+        save.economy = econ.save();
+        save.ledger.glut_by = vec![[1.5; 9]];
         let back = SaveFile::decode(&save.encode()).unwrap();
+        assert_eq!(back.economy, save.economy);
+        assert_eq!(back.ledger.glut_by, save.ledger.glut_by);
         assert_eq!(back.ledger.in_flight, save.ledger.in_flight);
         assert_eq!(back.ledger.stores, save.ledger.stores);
         assert_eq!(back.colony.charter.law("rationing").unwrap().reach, 42);

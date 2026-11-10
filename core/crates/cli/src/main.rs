@@ -116,6 +116,17 @@ enum Cmd {
         #[arg(long, default_value = "docs/telemetry/cleansing.md")]
         report: PathBuf,
     },
+    /// Phase D's proof of the economy: the steward trades its surplus for the shifts, every demand's walk inside its
+    /// band every day; then the seed again with the steward feeding its Chrome to the ground, and when the nearer grate
+    /// is reached each way.
+    Economy {
+        #[arg(long, default_value_t = 11)]
+        seed: u64,
+        #[arg(long, default_value_t = 30)]
+        shifts: u32,
+        #[arg(long, default_value = "docs/telemetry/economy.md")]
+        report: PathBuf,
+    },
 }
 
 // ---------------------------------------------------------------- terminal
@@ -475,6 +486,7 @@ fn main() {
         Cmd::Cadence { runs, strata, seed, report, logs } => cmd_cadence(&t, runs, &strata, seed, &report, logs.as_deref()),
         Cmd::City { seed, shifts, report, log } => cmd_city(&t, seed, shifts, &report, &log),
         Cmd::Cleansing { seed, shifts, report } => cmd_cleansing(&t, seed, shifts, &report),
+        Cmd::Economy { seed, shifts, report } => cmd_economy(&t, seed, shifts, &report),
     }
     println!();
 }
@@ -667,6 +679,101 @@ fn cmd_cleansing(t: &Term, seed: u64, shifts: u32, report_path: &Path) {
     std::fs::write(report_path, md).expect("report");
     println!("  {} {}", t.dim("wrote"), report_path.display());
     if !spread {
+        std::process::exit(1);
+    }
+}
+
+// ---------------------------------------------------------------- economy
+fn cmd_economy(t: &Term, seed: u64, shifts: u32, report_path: &Path) {
+    use game::city::{play_with, Haul, ShiftRecord};
+    t.head("economy", &format!("seed {seed}, {shifts} shifts: the steward trades its surplus, Chrome too, at the best stall in reach  |  then the same seed feeding its Chrome to the Heart"));
+    t.hrow(&[("shift", 5), ("day", 3), ("grates", 6), ("sold", 4), ("earned", 6), ("e", 5), ("drift", 5), ("contracts and services", 48)]);
+    let started = Instant::now();
+    let row = |k: usize, r: &ShiftRecord| {
+        let earned: u32 = r.sales.iter().map(|s| s.eddies).sum();
+        t.row(&[(&format!("{}", k + 1), 5), (&format!("{}", game::trade::day_of(r.day)), 3), (&format!("{}", r.markets), 6), (&format!("{}", r.sales.len()), 4), (&format!("{earned}"), 6), (&format!("{}", r.eddies), 5), (&format!("{:.2}", r.drift), 5), (&r.decisions.iter().filter(|d| d.starts_with("took") || d.contains("protection")).cloned().collect::<Vec<_>>().join("; ").chars().take(48).collect::<String>(), 48)]);
+    };
+    let (trade, w) = play_with(seed, shifts, Haul::Trade, &mut |k, r| row(k, r));
+    let (grow, g) = play_with(seed, shifts, Haul::Feed, &mut |_, _| {});
+    let secs = started.elapsed().as_secs_f32();
+    let table = &w.table;
+    let e = &w.economy;
+    let band = e.file.rules.band;
+    // the proof: every faction's walk inside its band every day
+    let worst = trade.shifts.iter().map(|r| r.drift).fold(0.0, f32::max).max(grow.shifts.iter().map(|r| r.drift).fold(0.0, f32::max));
+    let mut failures: Vec<String> = Vec::new();
+    for (name, run_) in [("trading", &trade), ("feeding", &grow)] {
+        for (k, r) in run_.shifts.iter().enumerate() {
+            if r.drift >= band {
+                failures.push(format!("{name}, shift {}: a demand walked {:.2} from its buy-list value", k + 1, r.drift));
+            }
+        }
+    }
+    // realised prices against base (base x condition), by faction and category
+    let mut by: std::collections::BTreeMap<(String, String), (u32, f32, u32, u32)> = Default::default();
+    for s in trade.shifts.iter().flat_map(|r| r.sales.iter()) {
+        let d = table.def(s.item);
+        let base = d.value as f32 * s.condition as f32 / 100.0 * if s.blind { 0.4 } else { 1.0 };
+        let k = (e.name(s.faction).to_string(), economy::category_name(d.category).to_string());
+        let v = by.entry(k).or_insert((0, 0.0, 0, 0));
+        v.0 += 1;
+        v.1 += if base > 0.0 { s.eddies as f32 / base } else { 0.0 };
+        v.2 += s.eddies;
+        v.3 += s.blind as u32;
+    }
+    let first_two = |r: &game::city::CityRun| r.shifts.iter().position(|s| s.markets >= 2).map(|k| k + 1);
+    let (tr, gr) = (first_two(&trade), first_two(&grow));
+    let at = |o: Option<usize>| o.map_or(format!("not in {shifts} shifts"), |k| format!("shift {k}"));
+    println!();
+    println!("  the walk: widest {:.2} from a buy-list value over {} days, against the band {band:.2}", worst, game::trade::day_of(shifts));
+    for ((f, c), (n, ratio, eddies, blind)) in &by {
+        println!("  {:<16} {:<10} {:>3} sold ({blind:>2} blind)  {:>5} e  {:>4.0} % of base", f, c, n, eddies, 100.0 * ratio / *n as f32);
+    }
+    for (k, st) in e.s.standing.iter().enumerate() {
+        println!("  {:<16} reputation {:+}  favour {:>3}  traded {:>5} e  tier {}", e.name(k as u8), st.rep, st.favour, st.traded, e.tier_open(k as u8));
+    }
+    let held: Vec<String> = e.s.contracts.iter().map(|c| c.line(&e.file, table)).collect();
+    println!("  contracts in hand: {}", if held.is_empty() { "none".to_string() } else { held.join("; ") });
+    let chain_log: Vec<String> = w.log.events.iter().filter(|ev| ev.what.contains("chain") || ev.what.contains("link") || ev.what.starts_with("took ") || ev.what.contains("missed")).map(|ev| ev.what.clone()).collect();
+    println!("  the nearer grate reached: trading {}, feeding {}   shifts with no market: trading {}, feeding {}", at(tr), at(gr), trade.shifts.iter().filter(|s| s.markets == 0).count(), grow.shifts.iter().filter(|s| s.markets == 0).count());
+    println!("  eddies at the end: trading {}, feeding {}", w.ledger.eddies, g.ledger.eddies);
+    let pass = failures.is_empty();
+    for f in &failures {
+        println!("  {} {f}", t.hi("FAIL"));
+    }
+    println!("  {}   {:.0} s", if pass { t.hi("PASS every demand's walk inside its band") } else { t.hi("FAIL the band") }, secs);
+    // the report
+    let mut md = String::new();
+    md.push_str("# The economy, thirty shifts\n\n");
+    md.push_str(&format!("Written by `rose economy --seed {seed} --shifts {shifts}` on {} (Full Design v3.15, Economy — The proof; the Build plan's Phase D). The steward of `rose city` plays the seed trading — the surplus, its Chrome too, to whichever stall in reach pays most, five of a category a stall a shift, the three-link deliver and host contracts it can fill taken, protection bought when a Patrol is due at a Gang grate — then plays it again feeding, as `rose city` does: the same, but the Heart keeping 2.0 nutrient on the haul's Common and Uncommon Chrome. (A district's foreman keeps the Heart fed on the members' meals either way.) **Result: {}** (widest walk {:.2}, band {band:.2}).\n\n", chrono_free_date(), if pass { "every demand's walk stayed inside its band every day" } else { "a walk left its band" }, worst));
+    md.push_str("## The streets\n\n| grate | column | faction |\n|---|---|---|\n");
+    for st in &e.s.streets {
+        md.push_str(&format!("| {} | {} | {} |\n", st.number, st.grate, e.name(st.faction)));
+    }
+    md.push_str("\n## Shift by shift, trading\n\n| shift | day | grates | sold | earned | eddies | widest walk |\n|---|---|---|---|---|---|---|\n");
+    for (k, r) in trade.shifts.iter().enumerate() {
+        md.push_str(&format!("| {} | {} | {} | {} | {} | {} | {:.2} |\n", k + 1, game::trade::day_of(r.day), r.markets, r.sales.len(), r.sales.iter().map(|s| s.eddies).sum::<u32>(), r.eddies, r.drift));
+    }
+    md.push_str("\n## What sold, against its base\n\nRealised price over base × condition (× 0.4 for an item sold blind), by the faction that bought and the category: what demand, reputation, haggling and glut made of it (over 100 % where a cheap item's few eddies round up, a stall paying at least 1 e).\n\n| faction | category | sold | blind | eddies | of base |\n|---|---|---|---|---|---|\n");
+    for ((f, c), (n, ratio, eddies, blind)) in &by {
+        md.push_str(&format!("| {f} | {c} | {n} | {blind} | {eddies} | {:.0} % |\n", 100.0 * ratio / *n as f32));
+    }
+    md.push_str("\n## Standing at the end\n\n| faction | reputation | favour | traded | tier open |\n|---|---|---|---|---|\n");
+    for (k, st) in e.s.standing.iter().enumerate() {
+        md.push_str(&format!("| {} | {:+} | {} | {} e | {} |\n", e.name(k as u8), st.rep, st.favour, st.traded, e.tier_open(k as u8)));
+    }
+    md.push_str(&format!("\n## Contracts\n\n{}\n\nIn hand at the end: {}.\n", if chain_log.is_empty() { "None taken.".to_string() } else { chain_log.iter().map(|l| format!("- {l}")).collect::<Vec<_>>().join("\n") }, if held.is_empty() { "none".to_string() } else { held.join("; ") }));
+    let fed = |w: &game::World| w.log.events.iter().filter(|ev| ev.what.ends_with("fed to the Heart")).count();
+    let lost = |r: &game::city::CityRun| r.shifts.iter().filter(|s| s.markets == 0).count();
+    md.push_str(&format!("\n## Trading against feeding\n\n| | the nearer grate reached | shifts with no market | eddies at the end | sold | Chrome fed to the Heart |\n|---|---|---|---|---|---|\n| trading | {} | {} | {} | {} | {} |\n| feeding | {} | {} | {} | {} | {} |\n", at(tr), lost(&trade), w.ledger.eddies, trade.shifts.iter().map(|r| r.sales.len()).sum::<usize>(), fed(&w), at(gr), lost(&grow), g.ledger.eddies, grow.shifts.iter().map(|r| r.sales.len()).sum::<usize>(), fed(&g)));
+    let events: Vec<String> = w.log.events.iter().filter(|ev| ev.what.starts_with("topside")).map(|ev| ev.what.clone()).collect();
+    md.push_str(&format!("\n## Topside\n\n{}\n", if events.is_empty() { "No events.".to_string() } else { events.iter().map(|l| format!("- {l}")).collect::<Vec<_>>().join("\n") }));
+    if let Some(parent) = report_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(report_path, md).expect("report");
+    println!("  {} {}", t.dim("wrote"), report_path.display());
+    if !pass {
         std::process::exit(1);
     }
 }

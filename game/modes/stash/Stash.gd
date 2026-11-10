@@ -275,6 +275,8 @@ func _draw_card() -> void:
 		make_label(card, "SELL   no market: grow the Mat to a grate", Vector2(6, y), UiTheme.DUST)
 	elif int(d.value) == 0:
 		make_label(card, "SELL   nobody buys this", Vector2(6, y), UiTheme.DUST)
+	elif quote < 0:
+		make_label(card, "SELL   no stall at %s buys this" % Sim.market_name(market), Vector2(6, y), UiTheme.DUST)
 	else:
 		make_label(card, "SELL   %d e at %s%s" % [quote, Sim.market_name(market), "  (blind 40%)" if not bool(it.identified) else ""], Vector2(6, y), UiTheme.ACID)
 	var feed := float(it.feed)
@@ -305,7 +307,7 @@ func _draw_card() -> void:
 		if stash.queue_sell(hnd, market, Sim.day):
 			selected = -1
 			_redraw())
-	sell_b.disabled = not can_sell
+	sell_b.disabled = not can_sell or quote < 0
 	var feed_b := make_button(card, "FEED", Vector2(58, 104), func():
 		if stash.queue_feed(hnd, pit, Sim.day):
 			selected = -1
@@ -336,7 +338,7 @@ func _draw_bulk(shown: int) -> void:
 		var it := _item(h)
 		if it.is_empty():
 			continue
-		total_e += int(stash.quote(h, market))
+		total_e += maxi(0, int(stash.quote(h, market)))
 		if float(it.feed) > 0.0:
 			total_n += float(it.feed)
 			feedable += 1
@@ -345,7 +347,8 @@ func _draw_bulk(shown: int) -> void:
 	var pits_n := Sim.pits().size()
 	var sell_all := make_button(bulk, "SELL ALL  %d e" % total_e, Vector2(6, 18), func():
 		for h in handles:
-			stash.queue_sell(h, market, Sim.day)
+			if int(stash.quote(h, market)) >= 0:
+				stash.queue_sell(h, market, Sim.day)
 		selected = -1
 		_redraw())
 	sell_all.disabled = handles.size() == 0 or markets_n == 0
@@ -380,15 +383,21 @@ func _draw_queue() -> void:
 	var feed_sum := 0.0
 	for e in q:
 		if String(e.verb) == "sell":
-			sell_sum += int(e.quote)
-		else:
+			sell_sum += maxi(0, int(e.quote))
+		elif String(e.verb) == "feed":
 			feed_sum += float(e.nutrient)
 		if shown >= (3 if haul_note != "" else 4):
 			continue
 		var idx := int(e.index)
 		var what := (String(e.name) if bool(e.identified) else "unidentified %s" % String(e.tier)).left(18)
-		var line := "%s  %s  %s" % ["SELL" if String(e.verb) == "sell" else "FEED", what, ("%d e" % int(e.quote)) if String(e.verb) == "sell" else ("%.2f n" % float(e.nutrient))]
-		make_label(queue_panel, line, Vector2(6, y), UiTheme.ACID if String(e.verb) == "sell" else UiTheme.OOZE_GLOW)
+		var verb := String(e.verb)
+		var amount := "%.2f n" % float(e.nutrient)
+		if verb == "sell":
+			amount = ("%d e" % int(e.quote)) if int(e.quote) >= 0 else "no buyer"
+		elif verb == "deliver":
+			amount = "contract"
+		var line := "%s  %s  %s" % [verb.to_upper(), what, amount]
+		make_label(queue_panel, line, Vector2(6, y), UiTheme.OOZE_GLOW if verb == "feed" else UiTheme.ACID)
 		make_button(queue_panel, "BACK", Vector2(192, y - 3), func():
 			stash.unqueue(idx)
 			_redraw())

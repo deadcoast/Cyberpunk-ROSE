@@ -32,6 +32,7 @@ pub struct AttentionRules {
     pub in_zone: Vec<String>,
     pub per_eddies: u32,
     pub exposed: f32,
+    pub blackline_sold: f32,
     pub kill: f32,
     pub open_grates: f32,
     pub defector: f32,
@@ -178,9 +179,11 @@ pub struct Zone {
     pub attention: f32,
     /// the shift each stage last came down here
     pub last: Vec<Option<u32>>,
-    /// this shift: eddies sold at its grate, Oathkeepers killed in it
+    /// this shift: eddies sold at its grate, Oathkeepers killed in it, Blackline pieces sold at it (v13)
     pub sold: u32,
     pub kills: u32,
+    #[serde(default)]
+    pub blackline: u32,
     /// what the last shift end added and took, for the card
     pub gained: f32,
 }
@@ -457,7 +460,7 @@ impl Threats {
     pub fn new(sim: &MatSim, seed: u64) -> Threats {
         let rules = ThreatFile::shipped();
         let grates: Vec<usize> = (0..sim.w).filter(|&x| sim.sub[x] == sub::GRATE).collect();
-        let zones = grates.iter().map(|&g| Zone { grate: g, attention: 0.0, last: vec![None; rules.stage.len()], sold: 0, kills: 0, gained: 0.0 }).collect();
+        let zones = grates.iter().map(|&g| Zone { grate: g, attention: 0.0, last: vec![None; rules.stage.len()], sold: 0, kills: 0, blackline: 0, gained: 0.0 }).collect();
         let n = sim.w * sim.h;
         let mut t = Threats {
             rules,
@@ -783,6 +786,7 @@ impl Threats {
             }
             gain += (self.zones[k].sold / self.rules.attention.per_eddies.max(1)) as f32;
             gain += self.zones[k].kills as f32 * self.rules.attention.kill;
+            gain += self.zones[k].blackline as f32 * self.rules.attention.blackline_sold;
             if Some(k) == heart_zone {
                 gain += shown.exposed as f32 * self.rules.attention.exposed + shown.run_kills as f32 * self.rules.attention.kill;
             }
@@ -795,6 +799,7 @@ impl Threats {
             z.attention = (z.attention + gain - self.rules.attention.decay).clamp(0.0, self.rules.attention.max);
             z.sold = 0;
             z.kills = 0;
+            z.blackline = 0;
         }
         // the next shift's events: the highest stage due in each zone, outside its quiet spells
         self.due.clear();
@@ -914,8 +919,9 @@ impl Threats {
 
     fn burn_target(&self, colony: &Colony, defs: &StructureFile) -> Option<u32> {
         let pits = colony.pits(defs);
-        // the Pits first (pits[0] is the Heart), then the Heart
-        pits.iter().skip(1).copied().next().or_else(|| pits.first().copied())
+        // the Stills first (Pass 1: the Downer chain is "the Oathkeepers' first target"; Full Design v3.15, Economy),
+        // then the Pits (pits[0] is the Heart), then the Heart
+        colony.stills(defs).first().copied().or_else(|| pits.iter().skip(1).copied().next()).or_else(|| pits.first().copied())
     }
 }
 

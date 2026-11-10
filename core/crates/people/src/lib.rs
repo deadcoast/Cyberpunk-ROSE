@@ -993,6 +993,12 @@ impl Roster {
             return 0;
         }
         let n = FLUSH_SIZE.0 + rng.below(FLUSH_SIZE.1 - FLUSH_SIZE.0 + 1);
+        self.batch(traits, names, rng, day, n);
+        self.next_flush = day + FLUSH_EVERY.0 + rng.below(FLUSH_EVERY.1 - FLUSH_EVERY.0 + 1);
+        n as usize
+    }
+
+    fn batch(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, n: u32) {
         for _ in 0..n {
             let id = self.create(traits, names, rng, day, false);
             if let Some(k) = self.records.iter().position(|r| r.id == id) {
@@ -1000,7 +1006,32 @@ impl Roster {
                 self.waiting.push((r, 0));
             }
         }
-        self.next_flush = day + FLUSH_EVERY.0 + rng.below(FLUSH_EVERY.1 - FLUSH_EVERY.0 + 1);
+    }
+
+    /// A newcomer of a faction's Past (Full Design v3.15, Economy: a hire or a host) joins the waiting list at a grate,
+    /// its Past skills raised by `raise` (a hire's two), under `name` where one is given. Returns its id.
+    #[allow(clippy::too_many_arguments)]
+    pub fn newcomer(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, past: Past, raise: u8, name: Option<&str>) -> u32 {
+        let id = self.create_with(traits, names, rng, day, false, Some(past));
+        if let Some(k) = self.records.iter().position(|r| r.id == id) {
+            let mut r = self.records.remove(k);
+            if r.depth != Depth::D5 {
+                for (sk, _) in past.skills() {
+                    r.skills[sk.index()] = (r.skills[sk.index()] + raise).min(10);
+                }
+            }
+            if let Some(n) = name {
+                r.name = n.to_string();
+            }
+            self.waiting.push((r, 0));
+        }
+        id
+    }
+
+    /// A clinic day topside (Economy): a flush now, twice the size, whenever the next one is due. Returns how many came.
+    pub fn clinic_flush(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32) -> usize {
+        let n = 2 * (FLUSH_SIZE.0 + rng.below(FLUSH_SIZE.1 - FLUSH_SIZE.0 + 1));
+        self.batch(traits, names, rng, day, n);
         n as usize
     }
 
@@ -1031,9 +1062,15 @@ impl Roster {
 
     /// Roll a newcomer (Full Design: Creation). `deep_weights` shifts the depth table toward the deep (chapter 5).
     pub fn create(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, deep: bool) -> u32 {
+        self.create_with(traits, names, rng, day, deep, None)
+    }
+
+    /// As `create`, the Past given (a faction's hire or host, Economy) where `past` is Some.
+    pub fn create_with(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, deep: bool, past: Option<Past>) -> u32 {
         let depth_w: [u32; 5] = if deep { [10, 25, 30, 25, 10] } else { [30, 40, 20, 8, 2] };
         let depth = Depth::all()[weighted(rng, &depth_w)];
-        let past = Past::all()[weighted(rng, &[25, 20, 15, 10, 30])];
+        let rolled = Past::all()[weighted(rng, &[25, 20, 15, 10, 30])];
+        let past = past.unwrap_or(rolled);
         // stats
         let mut s5 = [4i32; 5];
         for (i, l) in depth.leans().iter().enumerate() {

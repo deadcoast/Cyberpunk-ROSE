@@ -15,6 +15,8 @@ func ensure() -> RoseSim:
 	if sim == null:
 		sim = RoseSim.new()
 		sim.start_city(seed_value)
+		# the Board's open strata: whether raiders walk its routes (the clear-raiders contracts)
+		sim.set_strata_open(strata_open)
 		# the city on the founding Mat: the Heart, a Route Board, a Bench
 		sim.found_city()
 		sim.bind_stash(ensure_stash())
@@ -120,8 +122,11 @@ func markets() -> PackedInt32Array:
 func pits() -> PackedInt32Array:
 	return ensure().sites().get("pits", PackedInt32Array())
 
+## A market by its grate's number and the faction whose street it is ("GRATE 5 NOMADS").
 func market_name(i: int) -> String:
-	return "GRATE %d" % (i + 1)
+	var names: PackedStringArray = ensure().sites().get("market_names", PackedStringArray())
+	return names[i] if i >= 0 and i < names.size() else "GRATE ?"
+
 
 func pit_name(i: int) -> String:
 	return "HEART" if i == 0 else "PIT %d" % i
@@ -233,8 +238,9 @@ func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Diction
 	if not mem.is_empty():
 		route_memory[route_key(stratum, seed_value)] = mem
 	note_run(stratum, seed_value)
-	# Oathkeepers the run killed: their Attention lands in the Heart's zone at the shift's end
-	ensure().add_run_kills(int(o.get("oath_kills", 0)))
+	# Oathkeepers the run killed: their Attention lands in the Heart's zone at the shift's end; raiders count toward
+	# the clear-raiders contracts
+	ensure().add_run_kills(int(o.get("oath_kills", 0)), int(o.get("raider_kills", 0)))
 	launch = {}
 	end_shift()
 	day += 1

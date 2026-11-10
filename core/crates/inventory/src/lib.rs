@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 pub mod ledger;
 pub mod rooms;
-pub use ledger::{Delivery, Dest, Landing, Ledger, Queued, Quota, Shipment, ShiftReport, Verb, Want};
+pub use ledger::{Delivery, Dest, Landing, Ledger, Order, Queued, Quota, Shipment, ShiftReport, Verb, Want};
 pub use rooms::{Room, Shelved, FLOOR, GRID_PRIORITY, SHELF};
 
 pub type Handle = u32;

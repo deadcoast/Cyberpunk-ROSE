@@ -166,6 +166,8 @@ pub struct Outcome {
     pub kills: u32,
     /// Oathkeepers the run killed (scouts): their Attention lands in the Heart's zone (Full Design, Pressure)
     pub oath_kills: u32,
+    /// raiders the Runner killed (the clear-raiders contracts, Economy)
+    pub raider_kills: u32,
     pub chunks_seen: u32,
     pub route_memory: Vec<u8>,
     pub blind_value: u32,
@@ -207,6 +209,8 @@ pub struct RunSim {
     pub outcome: Option<Outcome>,
     pub kills: u32,
     pub oath_kills: u32,
+    /// raiders the Runner killed (the clear-raiders contracts, Economy)
+    pub raider_kills: u32,
     /// raider gangs still to come down
     pub raids: Vec<Raid>,
     /// a Flood shift's water on this route: the plan, the route's water before it, the tiles risen so far, and the
@@ -332,6 +336,7 @@ impl RunSim {
             outcome: None,
             kills: 0,
             oath_kills: 0,
+            raider_kills: 0,
             raids,
             flood,
             base_water,
@@ -1168,6 +1173,9 @@ impl RunSim {
             if kind == Kind::Scout {
                 self.oath_kills += 1;
             }
+            if kind == Kind::Raider {
+                self.raider_kills += 1;
+            }
         }
         // a killed burster still bursts, smaller
         if kind == Kind::Burster {
@@ -1456,6 +1464,7 @@ impl RunSim {
             regrown,
             kills: self.kills,
             oath_kills: self.oath_kills,
+            raider_kills: self.raider_kills,
             chunks_seen: seen.len() as u32,
             route_memory: self.senses.fog.memory_bits(),
             blind_value,

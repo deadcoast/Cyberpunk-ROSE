@@ -1,11 +1,14 @@
 //! The ledger: the Stash's sell and feed queues, the eddies, per-market glut, and the cargo the Stash has out on the
-//! Mat (Full Design v3.11, Stash: The four verbs; Colony mode: Cargo). At shift end the queue and the quotas' pulls
-//! leave the Heart as shipments; each lands when its packet does. A sale pays base × condition × demand × glut × blind
-//! at that market's glut at that moment (−5 % per unit already sold there this shift, floor 25 %, recovering 20 % a
-//! shift); a feed delivers the item's nutrient (halved below condition 20) and a genome drift of bias × the tier's
-//! drift to its Pit; a Part waits in its Still's store; a product rides home to the grid.
+//! Mat (Full Design v3.11, Stash: The four verbs; Colony mode: Cargo; v3.15, Economy). At shift end the queue and the
+//! quotas' pulls leave the Heart as shipments; each lands when its packet does. A sale pays what the market's stall
+//! pays — its faction's book (`items::Book`: demand, reputation, haggling) at that market's glut for the item's
+//! category at that moment (−5 % per unit of the category already sold there this shift, floor 25 %, the price
+//! recovering 20 points a shift), the best of its books when it has more than one (Open Grates, the convoy); a delivery to a contract counts
+//! instead of being paid; a feed delivers the item's nutrient (halved below condition 20) and a genome drift of bias ×
+//! the tier's drift to its Pit; a Part waits in its Still's store; a product, or what was bought at a stall, rides home
+//! to the grid.
 
-use items::{feed_value, price, ItemInstance, ItemTable, PriceContext, Tier};
+use items::{feed_value, price, sell_at, Book, ItemInstance, ItemTable, PriceContext, Tier};
 use serde::{Deserialize, Serialize};
 
 use crate::Stash;
@@ -16,6 +19,8 @@ pub enum Verb {
     Sell { market: u8 },
     /// to the Pit with this index among the colony's Pits (0 is the Heart)
     Feed { pit: u8 },
+    /// to a contract, at a market of its faction (v13, Economy)
+    Deliver { market: u8, contract: u32 },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -50,6 +55,22 @@ pub struct Shipment {
     pub id: u32,
     pub item: ItemInstance,
     pub to: Dest,
+    /// a delivery to a contract (v13)
+    #[serde(default)]
+    pub contract: Option<u32>,
+}
+
+/// An order at a stall (v13, Economy: Buying): what the stall's faction sells, by its stock entry, paid at the shift's
+/// end and sent down the cords to the Heart.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Order {
+    pub market: u8,
+    pub faction: u8,
+    /// the stock entry in the faction's list
+    pub entry: u16,
+    pub units: u16,
+    /// the price a unit when it was ordered
+    pub each: u32,
 }
 
 /// What landed since the last shift end, and what has just left.
@@ -57,6 +78,12 @@ pub struct Shipment {
 pub struct ShiftReport {
     pub sold: u32,
     pub earned: u32,
+    /// what each faction bought: (faction, units, eddies) (v13)
+    #[serde(default)]
+    pub to_faction: Vec<(u8, u32, u32)>,
+    /// paid at the stalls this shift end (v13)
+    #[serde(default)]
+    pub bought: u32,
     pub fed: u32,
     pub deliveries: Vec<Delivery>,
     /// Parts into Stills, products home to the grid, cargo lost off the Mat
@@ -81,7 +108,11 @@ pub struct Delivery {
 /// What a shipment did when it landed.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Landing {
-    Sold { market: u8, eddies: u32 },
+    Sold { market: u8, eddies: u32, faction: u8, blackline: bool },
+    /// counted toward a contract (Economy): the economy reads the item
+    Delivered { market: u8, contract: u32, item: ItemInstance },
+    /// no stall at the market would buy it: it rides home
+    Refused { market: u8, item: ItemInstance },
     Fed { pit: u8, nutrient: f32, drift: [f32; 10] },
     Stored { still: u32 },
     /// into the grid, or onto the Heart's floor while the grid is full
@@ -117,8 +148,18 @@ pub const GLUT_RECOVERY: f32 = 0.20;
 pub struct Ledger {
     pub eddies: u32,
     pub queue: Vec<Queued>,
-    /// units sold per market this shift (fractional after recovery)
+    /// v12's glut, one number a market (read as nothing since v13)
+    #[serde(default)]
     pub glut: Vec<f32>,
+    /// units sold per market and per category this shift (fractional after recovery) (v13)
+    #[serde(default)]
+    pub glut_by: Vec<[f32; 9]>,
+    /// each market's stalls' books, set by the economy each day and as standing moves; empty: the 1.0 book (v13)
+    #[serde(default)]
+    pub books: Vec<Vec<Book>>,
+    /// orders at the stalls, paid and sent at the shift's end (v13)
+    #[serde(default)]
+    pub orders: Vec<Order>,
     pub lifetime_earned: u32,
     /// what the Stash has on the Mat (v9)
     #[serde(default)]
@@ -138,16 +179,27 @@ impl Ledger {
         Ledger::default()
     }
 
-    fn glut_units(&self, market: u8) -> u32 {
-        self.glut.get(market as usize).copied().unwrap_or(0.0).round() as u32
+    /// Units of a category sold at a market this shift, after recovery.
+    pub fn glut_units(&self, market: u8, category: usize) -> u32 {
+        self.glut_by.get(market as usize).map_or(0.0, |g| g[category]).round() as u32
     }
 
-    /// The price an item would fetch at a market now, with that market's glut and what is queued and riding there
-    /// ahead of it.
-    pub fn quote(&self, table: &ItemTable, item: &ItemInstance, market: u8) -> u32 {
-        let ahead = self.queue.iter().filter(|q| q.verb == Verb::Sell { market }).count() + self.in_flight.iter().filter(|s| s.to == Dest::Market(market)).count();
-        let ctx = PriceContext { glut_units: self.glut_units(market) + ahead as u32, ..PriceContext::default() };
-        price(table.def(item.def), item, ctx)
+    /// The best a market's stalls pay for an item with `glut` units of its category ahead of it: (eddies, faction).
+    /// None when no stall there will buy it.
+    pub fn best(&self, table: &ItemTable, item: &ItemInstance, market: u8, glut: u32) -> Option<(u32, u8)> {
+        let def = table.def(item.def);
+        let fallback = [Book::default()];
+        let books = self.books.get(market as usize).filter(|b| !b.is_empty()).map_or(&fallback[..], |b| &b[..]);
+        books.iter().filter_map(|b| sell_at(def, item, b, glut).map(|p| (p, b.faction))).max_by_key(|&(p, f)| (p, std::cmp::Reverse(f)))
+    }
+
+    /// The price an item would fetch at a market now, with that market's glut for its category and what of that
+    /// category is queued and riding there ahead of it. None when no stall there buys it.
+    pub fn quote(&self, table: &ItemTable, item: &ItemInstance, market: u8) -> Option<u32> {
+        let cat = table.def(item.def).category as usize;
+        let same = |it: &ItemInstance| table.def(it.def).category as usize == cat;
+        let ahead = self.queue.iter().filter(|q| q.verb == Verb::Sell { market } && same(&q.item)).count() + self.in_flight.iter().filter(|s| s.to == Dest::Market(market) && s.contract.is_none() && same(&s.item)).count();
+        self.best(table, item, market, self.glut_units(market, cat) + ahead as u32).map(|(p, _)| p)
     }
 
     /// Move an item out of whichever room of the Stash holds it into the queue. False when the handle is missing.
@@ -177,7 +229,7 @@ impl Ledger {
     pub fn ship(&mut self, item: ItemInstance, to: Dest) -> u32 {
         let id = self.next_ship;
         self.next_ship = self.next_ship.wrapping_add(1);
-        self.in_flight.push(Shipment { id, item, to });
+        self.in_flight.push(Shipment { id, item, to, contract: None });
         self.landed.left += 1;
         id
     }
@@ -187,11 +239,16 @@ impl Ledger {
     pub fn dispatch_queue(&mut self) -> Vec<(u32, Dest, Option<u32>)> {
         let mut out = Vec::new();
         for q in std::mem::take(&mut self.queue) {
-            let to = match q.verb {
-                Verb::Sell { market } => Dest::Market(market),
-                Verb::Feed { pit } => Dest::Pit(pit),
+            let (to, contract) = match q.verb {
+                Verb::Sell { market } => (Dest::Market(market), None),
+                Verb::Feed { pit } => (Dest::Pit(pit), None),
+                Verb::Deliver { market, contract } => (Dest::Market(market), Some(contract)),
             };
-            out.push((self.ship(q.item, to), to, q.from));
+            let id = self.ship(q.item, to);
+            if let Some(s) = self.in_flight.last_mut() {
+                s.contract = contract;
+            }
+            out.push((id, to, q.from));
         }
         out
     }
@@ -286,18 +343,31 @@ impl Ledger {
         let s = self.in_flight.remove(k);
         Some(match at {
             Dest::Market(market) => {
-                let m = market as usize;
-                if self.glut.len() <= m {
-                    self.glut.resize(m + 1, 0.0);
+                if let Some(contract) = s.contract {
+                    return Some(Landing::Delivered { market, contract, item: s.item });
                 }
-                let ctx = PriceContext { glut_units: self.glut[m].round() as u32, ..PriceContext::default() };
-                let paid = price(table.def(s.item.def), &s.item, ctx);
-                self.glut[m] += 1.0;
+                let m = market as usize;
+                if self.glut_by.len() <= m {
+                    self.glut_by.resize(m + 1, [0.0; 9]);
+                }
+                let def = table.def(s.item.def);
+                let cat = def.category as usize;
+                let Some((paid, faction)) = self.best(table, &s.item, market, self.glut_by[m][cat].round() as u32) else {
+                    return Some(Landing::Refused { market, item: s.item });
+                };
+                self.glut_by[m][cat] += 1.0;
                 self.eddies += paid;
                 self.lifetime_earned += paid;
                 self.landed.sold += 1;
                 self.landed.earned += paid;
-                Landing::Sold { market, eddies: paid }
+                match self.landed.to_faction.iter_mut().find(|t| t.0 == faction) {
+                    Some(t) => {
+                        t.1 += 1;
+                        t.2 += paid;
+                    }
+                    None => self.landed.to_faction.push((faction, 1, paid)),
+                }
+                Landing::Sold { market, eddies: paid, faction, blackline: def.tier == Tier::Blackline }
             }
             Dest::Pit(pit) => {
                 let (nutrient, bias, drift) = feed_value(table.def(s.item.def), &s.item);
@@ -367,13 +437,20 @@ impl Ledger {
     }
 
     /// Shift end, after the queue and the pulls have left: the report of what landed since the last shift end and
-    /// what just left; the Heart's floor tries the grid again; this shift's glut recovers by 20 %.
+    /// what just left; the Heart's floor tries the grid again; each market's glut recovers 20 points of price.
     pub fn close_shift(&mut self, stash: &mut Stash, table: &ItemTable) -> ShiftReport {
+        self.close_shift_by(stash, table, &[])
+    }
+
+    /// As `close_shift`, each market's glut recovering faster by its Seep Market's bonus (`faster[m]`, points as a share).
+    pub fn close_shift_by(&mut self, stash: &mut Stash, table: &ItemTable, faster: &[f32]) -> ShiftReport {
         stash.sweep_floor(table);
-        for g in &mut self.glut {
-            *g = (*g * (1.0 - GLUT_RECOVERY)).max(0.0);
-            if *g < 0.05 {
-                *g = 0.0;
+        self.glut.clear();
+        for (m, g) in self.glut_by.iter_mut().enumerate() {
+            // the price recovers 20 points a shift (Pass 1), four units' worth, and the Seep Market's bonus more
+            let back = (GLUT_RECOVERY + faster.get(m).copied().unwrap_or(0.0)) / GLUT_PER_UNIT;
+            for u in g.iter_mut() {
+                *u = (*u - back).max(0.0);
             }
         }
         std::mem::take(&mut self.landed)
@@ -399,7 +476,7 @@ mod tests {
         let mut stash = Stash::new();
         let mut ledger = Ledger::new();
         let handles: Vec<_> = (0..6).map(|_| put(&table, &mut stash, "chr_street_eye", 100)).collect();
-        let first = ledger.quote(&table, &stash.grid.get(handles[0]).unwrap().item, 0);
+        let first = ledger.quote(&table, &stash.grid.get(handles[0]).unwrap().item, 0).unwrap();
         for h in &handles {
             assert!(ledger.queue(&mut stash, *h, Verb::Sell { market: 0 }, 1));
         }
@@ -408,7 +485,10 @@ mod tests {
         // nothing is paid on the Mat; the quote of a seventh counts the six riding ahead
         assert_eq!(ledger.eddies, 0);
         let h7 = put(&table, &mut stash, "chr_street_eye", 100);
-        assert!(ledger.quote(&table, &stash.grid.get(h7).unwrap().item, 0) < first);
+        assert!(ledger.quote(&table, &stash.grid.get(h7).unwrap().item, 0).unwrap() < first);
+        // the glut is the category's: a Part at the same market is quoted as if nothing rode there
+        let part = put(&table, &mut stash, "prt_pump", 100);
+        assert_eq!(ledger.quote(&table, &stash.grid.get(part).unwrap().item, 0), Some(10));
         for (id, to, _) in ships {
             assert!(matches!(ledger.land(&mut stash, &table, id, to), Some(Landing::Sold { market: 0, .. })));
         }
@@ -417,7 +497,8 @@ mod tests {
         // 1 + .95 + .9 + .85 + .8 + .75 = 5.25 units of the first price, with rounding
         assert!(r.earned < first * 6 && r.earned >= (first as f32 * 5.0) as u32, "earned {} for first {}", r.earned, first);
         assert_eq!(ledger.eddies, r.earned);
-        assert!((ledger.glut[0] - 4.8).abs() < 1e-4, "glut {}", ledger.glut[0]);
+        let g = ledger.glut_by[0][items::Category::Chrome as usize];
+        assert!((g - 2.0).abs() < 1e-4, "glut {g}");
     }
 
     #[test]

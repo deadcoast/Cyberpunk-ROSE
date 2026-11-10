@@ -25,6 +25,8 @@ step "city" "rose city (twenty shifts headless, threats live -> docs/telemetry/c
 ./target/release/rose --out out city --shifts 20 | tail -3
 step "cleansing" "rose cleansing (Phase D's proof: a Cleansing with and without Gates -> docs/telemetry/cleansing.md)"
 ./target/release/rose --out out cleansing | tail -2
+step "economy" "rose economy (Phase D's proof: thirty shifts trading, every demand inside its band; then feeding -> docs/telemetry/economy.md)"
+./target/release/rose --out out economy | tail -3
 
 mkdir -p game/bin
 case "$(uname -s)" in

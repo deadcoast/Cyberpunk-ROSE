@@ -525,8 +525,9 @@ func _draw_threat_bodies() -> void:
 
 ## Attention at each grate the Mat reaches (Full Design v3.14, Pressure): G and the grate's number over a gauge in
 ## three steps — a pip lit for each line the zone is past, Acid for the Patrol's, Hot Pink for the Sweep's, Vestment
-## White for the Cleansing's; the number itself is Corpo intel's (PAC-061). The grate's number blinks while an event is
-## down it. Pinned under the grate, the same size on screen at every zoom.
+## White for the Cleansing's — and under it the faction whose street the grate is (v3.15, Economy); while Corpo intel
+## runs, the number itself beside the G. The grate's number blinks while an event is down it. Pinned under the grate,
+## the same size on screen at every zoom.
 func _draw_gauges() -> void:
 	if not bind_sim:
 		return
@@ -540,10 +541,15 @@ func _draw_gauges() -> void:
 		var step := int(z.step)
 		var at := Vector2(int(z.grate) * TILE + TILE / 2, TILE + 4 * k)
 		gauges.draw_set_transform(at, 0.0, Vector2(k, k))
-		gauges.draw_rect(Rect2(-14, -1, 29, 15), Color(UiTheme.SUMP, 0.9))
+		var who := String(z.get("faction", "")).split(" ")[0].to_upper()
+		var wide := maxi(29, who.length() * 4 + 5)
+		gauges.draw_rect(Rect2(-wide / 2, -1, wide, 22), Color(UiTheme.SUMP, 0.9))
 		var blink: bool = bool(z.down) and int(Time.get_ticks_msec() / 250) % 2 == 0
 		var label := "G%d" % int(z.number)
+		if bool(z.get("exact", false)):
+			label += " %d" % int(round(float(z.attention)))
 		gauges.draw_string(font, Vector2(-label.length() * 2, 5), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.VESTMENT if blink else UiTheme.CHALK)
 		for p in 3:
 			gauges.draw_rect(Rect2(-12 + p * 9, 8, 7, 4), lit[p] if step > p else UiTheme.VOID)
+		gauges.draw_string(font, Vector2(-who.length() * 2, 19), who, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.DUST)
 		gauges.draw_set_transform(Vector2.ZERO)

@@ -267,14 +267,17 @@ pub struct ItemInstance {
     pub crafted: Option<Crafted>,
     /// the Bench's changes to the def's gear numbers
     pub mods: GearMods,
+    /// the contract a named item or corpse tag belongs to (Economy: recover)
+    #[serde(default)]
+    pub bound: Option<u32>,
 }
 
 impl ItemInstance {
     pub fn new(def: ItemId) -> Self {
-        ItemInstance { def, condition: 100, ident: Ident::Full, found_in_run: false, provenance: None, pinned: false, spored: false, crafted: None, mods: GearMods::default() }
+        ItemInstance { def, condition: 100, ident: Ident::Full, found_in_run: false, provenance: None, pinned: false, spored: false, crafted: None, mods: GearMods::default(), bound: None }
     }
     pub fn found(def: ItemId, condition: u8, prov: Provenance) -> Self {
-        ItemInstance { def, condition, ident: Ident::Unknown, found_in_run: true, provenance: Some(prov), pinned: false, spored: false, crafted: None, mods: GearMods::default() }
+        ItemInstance { def, condition, ident: Ident::Unknown, found_in_run: true, provenance: Some(prov), pinned: false, spored: false, crafted: None, mods: GearMods::default(), bound: None }
     }
 
     /// The gear numbers of this instance (None for an item that is not gear).
@@ -317,6 +320,54 @@ pub fn price(def: &ItemDef, inst: &ItemInstance, ctx: PriceContext) -> u32 {
     let fir = if inst.found_in_run && ctx.corpo { 1.25 } else { 1.0 };
     let blind = if inst.ident == Ident::Unknown { 0.40 } else { 1.0 };
     (def.value as f32 * cond * ctx.demand * glut * fir * blind).round() as u32
+}
+
+/// What one stall pays (Full Design v3.15, Economy: Price), made by the economy crate from the faction whose street
+/// the grate is: the day's demand by category and tier (the walk and the surface's events), the faction's own item
+/// multipliers, its reputation (1 + 0.1 x rep) and the stall's haggling (1 + 0.02 x Trade), whether it fences
+/// Blackline, its found-in-run premium.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Book {
+    /// the faction, by index in the factions file (u8::MAX: none, the 1.0 book)
+    pub faction: u8,
+    /// [Category as usize][Tier as usize]
+    pub demand: [[f32; 5]; 9],
+    pub items: Vec<(ItemId, f32)>,
+    pub rep: f32,
+    pub haggle: f32,
+    pub fence: bool,
+    pub fir: f32,
+    /// false: the faction's stalls are closed to the city (reputation −3)
+    pub open: bool,
+}
+
+impl Default for Book {
+    fn default() -> Self {
+        Book { faction: u8::MAX, demand: [[1.0; 5]; 9], items: Vec::new(), rep: 1.0, haggle: 1.0, fence: false, fir: 1.0, open: true }
+    }
+}
+
+impl Book {
+    /// The stall's multiplier for an item before condition, glut and blind (None: it will not buy it).
+    pub fn wants(&self, def: &ItemDef, id: ItemId) -> Option<f32> {
+        if !self.open || def.value == 0 || (def.tier == Tier::Blackline && !self.fence) {
+            return None;
+        }
+        let own = self.items.iter().find(|(i, _)| *i == id).map_or(1.0, |(_, m)| *m);
+        Some(self.demand[def.category as usize][def.tier as usize] * own * self.rep * self.haggle)
+    }
+}
+
+/// What a stall pays for an item with `glut_units` of its category already sold there this shift: base x
+/// condition/100 x the book's multiplier x glut (-5 % a unit, floor 25 %) x found-in-run premium x blind (40 %), at
+/// least 1 e. None when the stall will not buy it.
+pub fn sell_at(def: &ItemDef, inst: &ItemInstance, book: &Book, glut_units: u32) -> Option<u32> {
+    let m = book.wants(def, inst.def)?;
+    let cond = inst.condition as f32 / 100.0;
+    let glut = (1.0 - 0.05 * glut_units as f32).max(0.25);
+    let fir = if inst.found_in_run { book.fir } else { 1.0 };
+    let blind = if inst.ident == Ident::Unknown { 0.40 } else { 1.0 };
+    Some(((def.value as f32 * cond * m * glut * fir * blind).round() as u32).max(1))
 }
 
 /// What a Pit gets: nutrient (halved below condition 20) and the bias vector scaled by the tier's drift.

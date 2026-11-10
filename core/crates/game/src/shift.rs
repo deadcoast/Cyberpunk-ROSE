@@ -225,7 +225,8 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
     if settled > 0 {
         stash_lines.push(format!("{settled} on the cords to the stockpiles"));
     }
-    let closed = store::close(stash, ledger, bench, table, recipes, outcome.bench_slots as usize);
+    let faster = crate::trade::faster(city, colony, defs);
+    let closed = store::close(stash, ledger, bench, table, recipes, outcome.bench_slots as usize, &faster);
     // the Heart's tier is the city's; the grid follows it
     stash.set_tier(colony.heart_tier(defs));
     let mut people_lines = people_side(&mut folk, &outcome, closed.report.sold, closed.placed, &hauls);
