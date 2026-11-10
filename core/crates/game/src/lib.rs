@@ -6,7 +6,9 @@ pub mod alerts;
 pub mod cargo;
 pub mod city;
 pub mod log;
+pub mod pressure;
 pub mod shift;
+pub mod siege;
 pub mod store;
 pub mod world;
 

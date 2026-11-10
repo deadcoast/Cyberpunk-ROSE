@@ -229,6 +229,20 @@ people.toml
 - prompt: Oathkeeper in vestment-white ballistic robes with reliquary-gold trim and bulky Y2K military hardware, 1 px black selective outline, the only pure white in the game; a sanitation trooper with a flamer and bleach tank, walk 6 frames
 - negative: purple, pink, grey robes
 
+### oath.sprayer
+
+- kind sprite · one frame 48x64 · 6 frames · states single
+- anchor `anchor.slimo` · ramp white · status placeholder
+- prompt: Oathkeeper in vestment-white ballistic robes with reliquary-gold trim and bulky Y2K military hardware, 1 px black selective outline, the only pure white in the game; a Sweep's bleach sprayer with a back tank and a wand dripping pale bleach, walk 6 frames
+- negative: purple, pink, grey robes
+
+### raider.gang
+
+- kind sprite · one frame 48x64 · 6 frames · states single
+- anchor `anchor.slimo` · ramp mud · status placeholder
+- prompt: a topside gang raider come down a drain: patched rust-brown street leathers, scavenged plate, a sputtering hand torch and a scrap pistol, a sack over one shoulder, 1 px black selective outline, walk 6 frames
+- negative: white robes, purple ooze, clean chrome, anime proportions
+
 ### rat.crawler
 
 - kind sprite · one frame 32x32 · 4 frames · states single

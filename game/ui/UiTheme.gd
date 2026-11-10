@@ -10,6 +10,9 @@ const VOID := Color8(7, 7, 12)
 const OOZE_GLOW := Color8(240, 166, 255)
 const HOT_PINK := Color8(255, 46, 151)
 const VESTMENT := Color8(242, 239, 228)
+const DRAIN_LIGHT := Color8(53, 103, 156)
+const MUZZLE := Color8(255, 106, 26)
+const OXIDE := Color8(154, 112, 73)
 
 static func nine(slot_id: String, state: String = "") -> StyleBoxTexture:
 	var sb := StyleBoxTexture.new()

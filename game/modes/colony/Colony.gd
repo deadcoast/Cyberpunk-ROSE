@@ -598,6 +598,10 @@ func _card_structure(info: Dictionary) -> void:
 	var sig_line := ""
 	if float(s.sigma_need) > 0.0:
 		sig_line = "signal %.2f of %.2f" % [float(s.sigma), float(s.sigma_need)]
+	if bool(s.get("dark", false)):
+		sig_line = "DARK: NO POWER, NO WORK   " + sig_line
+	elif bool(s.get("drowned", false)):
+		sig_line = "DROWNED: NO WORK THIS SHIFT   " + sig_line
 	var slots := ""
 	if String(s.hosts) != "":
 		var names := []

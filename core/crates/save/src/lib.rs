@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 11;
+pub const SAVE_VERSION: u16 = 12;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -97,6 +97,9 @@ pub struct SaveFile {
     /// cut (v9); cuts, salt, orders, zone priorities, turned footprints (v10). The ledger carries what is on the Mat, the Stills'
     /// stores and what waits at the Heart (v9); the Stash its stockpile rooms (v10)
     pub colony: colony::Colony,
+    /// the threats: each grate's Attention, the bodies and events down, what is due, the Flood's water (v12, Pressure)
+    #[serde(default)]
+    pub threats: threat::ThreatSave,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -145,6 +148,7 @@ impl SaveFile {
             bench: bench::BenchQueue::new(),
             roster: people::Roster::new(),
             colony: colony::Colony::new(),
+            threats: threat::ThreatSave::default(),
         }
     }
 
@@ -305,7 +309,7 @@ mod tests {
         save.colony.charter.sign(colony::LawFile::shipped().get("rationing").unwrap(), 4, 42, (0, 1)).unwrap();
         save.colony.barred_hubs.push((10, 12, 30));
         // cargo on the Mat and a quota (v9)
-        save.colony.structures.push(colony::Structure { id: 3, def: 1, x: 4, y: 5, tier: 1, hp: 100, built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: Some(colony::QuotaSet { target: 2.5, ceiling: 1 }), rotated: true });
+        save.colony.structures.push(colony::Structure { id: 3, def: 1, x: 4, y: 5, tier: 1, hp: 100, built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: Some(colony::QuotaSet { target: 2.5, ceiling: 1 }), rotated: true, drowned: false, dark: false });
         save.ledger.ship(items::ItemInstance::new(items::ItemId(0)), inventory::Dest::Pit(1));
         save.ledger.stores.push((3, vec![items::ItemInstance::new(items::ItemId(1))]));
         let back = SaveFile::decode(&save.encode()).unwrap();

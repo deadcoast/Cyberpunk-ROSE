@@ -149,14 +149,14 @@ art = "struct.market"
 id = "gate"
 name = "Sphincter Gate"
 category = "order"
-footprint = [1, 1]
+footprint = [2, 1]
 sigma = 0.3
 cost = { parts = 4, chrome = 2, eddies = 0 }
 build = 8
 hosts = "guard"
 slots = [1, 1, 1]
-hp = 100
-text = "A ring of muscle in a scrap frame across a cord. Shut to creatures; a Guard stands it."
+hp = 400
+text = "A ring of muscle in a scrap frame across a tunnel two wide, anchored on a cord. Shut to Oathkeepers, creatures and the Flood's water; only flame opens it. A Guard stands it."
 art = "struct.gate"
 
 [[structure]]

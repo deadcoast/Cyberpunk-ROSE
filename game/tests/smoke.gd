@@ -86,6 +86,9 @@ func _verify_current() -> void:
 			_check(int(s.get("cells", 0)) > 80, "colony: Mat did not grow (%d cells)" % int(s.get("cells", 0)))
 			var reached: PackedByteArray = sim.ensure().sites().get("markets_reached", PackedByteArray())
 			_check(reached.size() >= 1 and reached[0] == 1, "colony: the founding Mat does not reach the first grate")
+			# Pressure: a zone a grate, the founded grate reached, its gauge pinned in the world
+			var zones: Array = sim.ensure().attention()
+			_check(zones.size() >= 2 and zones.any(func(z): return bool(z.reached)), "colony: Attention zones %s" % str(zones.map(func(z): return z.reached)))
 			var wv: Node = null
 			for ch in scr.get_children():
 				if ch.has_method("full_paint"):
@@ -372,6 +375,7 @@ func _verify_current() -> void:
 			_check(scr.seed_value == sim.route_seed(1) and String(r.runner().hand) == "ger_pipe", "run: the launch did not carry the route and the rig (seed %d, hand %s)" % [scr.seed_value, String(r.runner().hand)])
 			_check(int(r.runner().rig_count) == 1, "run: the packed pry bar is not in the backpack (%d items)" % int(r.runner().rig_count))
 			_check(int(r.shift().shift_ticks) >= 480 * 20 and scr.clock_label.text.begins_with("SHIFT"), "run: shift clock not live (%s)" % scr.clock_label.text)
+			_check(r.shift().has("water") and r.card(PackedByteArray()).has("flood_rise"), "run: the Flood's clock is not on the shift or the card")
 			_check(scr.strip_cells.size() == r.chunk_count(), "run: route strip has %d cells for %d chunks" % [scr.strip_cells.size(), r.chunk_count()])
 			_check(scr.hand_icon.texture != null and scr.quick_icons[0].texture != null, "run: hand or quick slot icon missing")
 			var n: int = r.chunk_count()

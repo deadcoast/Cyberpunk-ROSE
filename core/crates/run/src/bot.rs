@@ -2,7 +2,8 @@
 //! it opens what it sees, takes what fits, fights what is adjacent while over 40 % HP and backs off under it, digs
 //! a deposit it stands beside, and extracts when the rig is nearly full, the shift is under 90 s, or the body is
 //! under 30 %. It knows only what the Runner has seen (the fog), paths over known passable tiles, and leaves the
-//! lantern on: it is a yardstick for the route, not a player.
+//! lantern on: it is a yardstick for the route, not a player. Under a Flood's water half the drowning time, it climbs
+//! for air before anything else (the HUD's UNDER tag is the one thing no player misses).
 
 use std::collections::VecDeque;
 
@@ -125,6 +126,15 @@ impl Bot {
         }
         let (w, h) = (s.map.w as i32, s.map.h as i32);
         let idx = |x: i32, y: i32| (y * w + x) as usize;
+        // under water half the time it takes to go Down: up, or sideways when the way up is shut
+        if s.under * 2 >= crate::creature::ticks(s.defs.flood.drown_s) {
+            if rt.1 > 0 && passable[idx(rt.0, rt.1 - 1)] {
+                input.dy = -1;
+            } else {
+                input.dx = if rt.0 + 1 < w && passable[idx(rt.0 + 1, rt.1)] { 1 } else { -1 };
+            }
+            return input;
+        }
 
         // ---- threats within two tiles
         let mut nearest: Option<(i32, i32, i32)> = None; // (dist, cx, cy)
@@ -289,7 +299,7 @@ pub fn bot_rig(table: &ItemTable) -> Rig {
 /// Play one seeded run with the bot and return its outcome (with the cadence log and report).
 pub fn play(map: RouteMap, table: ItemTable, tables: LootTables, defs: CreatureFile, nonce: u64, route_runs: u16, day: u32, memory: Option<&[u8]>) -> Outcome {
     let rig = bot_rig(&table);
-    let setup = RunSetup { mat_lume_gene: 0.5, memory, run_nonce: nonce, route_runs, day, rig, runner: people::RunnerSetup::plain(5), followers: Vec::new(), corpses: Vec::new() };
+    let setup = RunSetup { mat_lume_gene: 0.5, memory, run_nonce: nonce, route_runs, day, rig, runner: people::RunnerSetup::plain(5), followers: Vec::new(), corpses: Vec::new(), flood: None, next_flood: None };
     play_setup(map, table, tables, defs, setup)
 }
 
@@ -323,7 +333,7 @@ mod tests {
         let m = RouteMap::compile(&lib, &route(&lib, 11, 1).unwrap());
         let table = ItemTable::from_toml(ITEMS).unwrap();
         let rig = bot_rig(&table);
-        let setup = RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, runner: people::RunnerSetup::plain(5), followers: Vec::new(), corpses: Vec::new() };
+        let setup = RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, runner: people::RunnerSetup::plain(5), followers: Vec::new(), corpses: Vec::new(), flood: None, next_flood: None };
         let mut sim = RunSim::new(m, table, LootTables::shipped(), CreatureFile::shipped(), setup);
         let mut bot = Bot::new();
         while sim.result.is_none() && sim.tick < 6000 {

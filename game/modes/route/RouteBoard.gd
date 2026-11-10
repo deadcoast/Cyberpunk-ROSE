@@ -93,6 +93,7 @@ func _assemble_routes() -> void:
 			push_error("RouteBoard: S%d route %d did not assemble" % [stratum, seed_v])
 			continue
 		var mem: PackedByteArray = Sim.memory_of(stratum, seed_v)
+		run.set_shift(Sim.day, Sim.flood_roll(), Sim.next_flood_roll())
 		routes.append({"stratum": stratum, "seed": seed_v, "name": Sim.region_name(stratum), "run": run, "card": run.card(mem), "memory": mem})
 
 func _fill_card(f: Panel, r: Dictionary, i: int) -> void:
@@ -118,7 +119,16 @@ func _fill_card(f: Panel, r: Dictionary, i: int) -> void:
 		make_label(f, "UNEXPLORED", Vector2(6, 40), UiTheme.DUST)
 	else:
 		make_label(f, "KNOWN %d%%   LOCKERS %d   CRATES %d" % [int(round(known * 100.0)), int(cd.known_lockers), int(cd.known_crates)], Vector2(6, 40), UiTheme.CHALK)
-	make_label(f, "WATER %d%%   GRATES %d" % [int(round(float(cd.water) * 100.0)), int(cd.grates)], Vector2(6, 52), UiTheme.DUST)
+	var water_line := "WATER %d%%   GRATES %d" % [int(round(float(cd.water) * 100.0)), int(cd.grates)]
+	make_label(f, water_line, Vector2(6, 52), UiTheme.DUST)
+	# a Flood shift: how far the water rises and when (Full Design, the Threats table)
+	var rise := int(cd.get("flood_rise", -1))
+	if rise > 0:
+		var fs := int(cd.get("flood_s", 0))
+		var when := "IN OVERTIME" if fs >= shift_s else "AT %d:%02d" % [fs / 60, fs % 60]
+		make_label(f, "FLOOD +%d %s" % [rise, when], Vector2(6 + (water_line.length() + 3) * 4, 52), UiTheme.CYAN)
+	elif rise == 0:
+		make_label(f, "FLOOD HOLDS", Vector2(6 + (water_line.length() + 3) * 4, 52), UiTheme.DUST)
 	var bodies: Array = Sim.corpses_on(int(r.stratum), int(r.seed))
 	if bodies.size() > 0:
 		var names := []

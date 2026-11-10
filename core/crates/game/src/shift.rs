@@ -186,6 +186,16 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
         colony.end_shift(defs, &mut city.sim, roster, traits, sod, eddies, &mut pay)
     };
     let tick = city.tick;
+    for &(sid, dark) in &outcome.power {
+        if let Some(s) = colony.get(sid) {
+            let d = &defs.structure[s.def];
+            if dark {
+                log.push(tick, Class::Loss, format!("{} at {},{} is dark: its cord carries no power", d.name, s.x, s.y));
+            } else {
+                log.push(tick, Class::Landing, format!("{} at {},{} has power again", d.name, s.x, s.y));
+            }
+        }
+    }
     // the Stash's side: the Appraisal Table, oil and paste, spoiling
     let mut stash_lines = Vec::new();
     if outcome.identifies > 0 {
@@ -276,12 +286,14 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
     Shift { outcome, closed, stash_lines, people_lines, settled, hauled }
 }
 
-/// The roster on the map for shift `day`: the colony's plan for that shift.
-pub fn refresh_movers(city: &mut City, colony: &Colony, defs: &StructureFile, roster: &Roster, traits: &TraitFile, day: u32) {
+/// The roster on the map for shift `day`: the colony's plan for that shift. Returns the plan (who stands Guard where
+/// is the threats' to read).
+pub fn refresh_movers(city: &mut City, colony: &Colony, defs: &StructureFile, roster: &Roster, traits: &TraitFile, day: u32) -> Vec<(u32, people::Job, u32)> {
     if city.synthetic() {
-        return;
+        return Vec::new();
     }
     let plan = colony.assign_jobs(defs, roster, traits, shift_of_day(day));
     let movers = cargo::movers(colony, defs, city, roster, &plan);
     city.set_movers(&movers);
+    plan
 }

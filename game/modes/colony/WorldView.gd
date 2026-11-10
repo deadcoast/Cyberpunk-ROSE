@@ -4,7 +4,9 @@ extends Node2D
 ## cargo riding it (Full Design v3.11, Cargo). Shared by the Colony (bound to the live Sim) and the Run (painted from
 ## a RoseRun route map). The Stack view draws traffic per tile as light and a jam Chalk white (render::stack_view).
 ## The Colony's layers (v3.12): salt on the prop layer, the overlay (one number a tile, RoseSim.overlay), zones
-## outlined by kind, the items a stockpile holds on its cells, and the cuts marked for Build.
+## outlined by kind, the items a stockpile holds on its cells, and the cuts marked for Build. Pressure (v3.14): the
+## Flood's water repainted as it rises and falls, bleach as a pale stain, a Bloom's tissue in Pond Scum, the white
+## light as hard pools round the lamps, and the bodies on the map over everything.
 
 const TILE := 32
 const SUB := {0: "tile.concrete", 1: "", 2: "tile.pipe", 3: "tile.brick", 4: "tile.deposit", 5: "tile.water", 6: "tile.grate", 7: "tile.concrete", 8: "tile.collapse"}
@@ -22,6 +24,10 @@ var overlay_sprite: Sprite2D   # an overlay at one texel a tile over the Street 
 var overlay_kind := ""
 var view_level := 0    # 0 Street, 1 District, 2 Stack (set by the Colony)
 var buildings: Node2D  # the colony's structures and ghosts, drawn from RoseSim.structures()
+var threat_fx: Node2D  # bleach, Bloom tissue and the white light, under the structures
+var threat_bodies: Node2D  # Oathkeepers, crawlers and tamed crawlers, over the crowd
+var flooded := {}      # tile -> true: what the Flood has under water now (repainted when it changes)
+var gauges: Node2D     # Attention at each reached grate, in every view (Full Design: the Stack view keeps them)
 var districts: Node2D  # hub rings and names, District view
 var show_districts := false
 var sources := {}      # slot key -> [source_id, frames]
@@ -48,6 +54,9 @@ func _ready() -> void:
 	overlay_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	overlay_sprite.visible = false
 	add_child(overlay_sprite)
+	threat_fx = Node2D.new()
+	threat_fx.draw.connect(_draw_threat_fx)
+	add_child(threat_fx)
 	buildings = Node2D.new()
 	buildings.draw.connect(_draw_buildings)
 	add_child(buildings)
@@ -57,6 +66,9 @@ func _ready() -> void:
 	crowd = Node2D.new()
 	crowd.draw.connect(_draw_crowd)
 	add_child(crowd)
+	threat_bodies = Node2D.new()
+	threat_bodies.draw.connect(_draw_threat_bodies)
+	add_child(threat_bodies)
 	traffic_sprite = Sprite2D.new()
 	traffic_sprite.centered = false
 	traffic_sprite.scale = Vector2(TILE, TILE)
@@ -66,6 +78,10 @@ func _ready() -> void:
 	districts = Node2D.new()
 	districts.draw.connect(_draw_districts)
 	add_child(districts)
+	gauges = Node2D.new()
+	gauges.z_index = 10
+	gauges.draw.connect(_draw_gauges)
+	add_child(gauges)
 	if bind_sim:
 		var sim: RoseSim = Sim.ensure()
 		w = sim.width()
@@ -136,6 +152,9 @@ func full_paint() -> void:
 	props.clear()
 	for i in sim.salt_cells():
 		put_prop(i % w, i / w, "tile.salt", "", i % 2)
+	flooded = {}
+	for i in sim.flooded_cells():
+		flooded[int(i)] = true
 
 func _paint_mat(x: int, y: int, hv: int, sg: float) -> void:
 	if hv == 0:
@@ -155,8 +174,12 @@ func _on_tick() -> void:
 		var sig: PackedFloat32Array = sim.signal()
 		for i in changed:
 			_paint_mat(i % w, i / w, int(hy[i]), sig[i])
+	_repaint_flood(sim)
 	crowd.queue_redraw()
 	cargo.queue_redraw()
+	threat_fx.queue_redraw()
+	threat_bodies.queue_redraw()
+	gauges.queue_redraw()
 	if view_level == 2:
 		paint_traffic()
 	elif overlay_kind != "":
@@ -197,7 +220,7 @@ func set_view_level(i: int) -> void:
 	view_level = i
 	var stack := i == 2
 	traffic_sprite.visible = stack
-	for layer in [substrate, matlayer, props, buildings, cargo, crowd]:
+	for layer in [substrate, matlayer, props, threat_fx, buildings, cargo, crowd, threat_bodies]:
 		layer.visible = not stack
 	if stack:
 		paint_traffic()
@@ -350,6 +373,7 @@ func _draw_districts() -> void:
 func redraw_city() -> void:
 	buildings.queue_redraw()
 	districts.queue_redraw()
+	gauges.queue_redraw()
 
 ## The roster on the map: each slimo by its depth, walking or standing at work; up to four drawn to a tile.
 func _draw_crowd() -> void:
@@ -393,3 +417,133 @@ func _draw_crowd() -> void:
 		var dst := Rect2(px * TILE + s * 8 - 12, py * TILE + TILE - tex.get_height(), fw, tex.get_height())
 		var src := Rect2((frame % frames) * fw, 0, fw, tex.get_height())
 		crowd.draw_texture_rect_region(tex, dst, src, Color.WHITE)
+
+# ---------------------------------------------------------------- Pressure (Full Design v3.14)
+
+const BODY_ART := {"scout": "oath.scout", "carrier": "oath.lamp", "sprayer": "oath.sprayer", "flamer": "oath.flamer", "crawler": "rat.crawler", "tamed": "rat.crawler"}
+const POND_SCUM := Color8(122, 138, 58)
+
+## The Flood's water: tiles that went under or came back are repainted from the city's substrate.
+func _repaint_flood(sim: RoseSim) -> void:
+	var now := {}
+	for i in sim.flooded_cells():
+		now[int(i)] = true
+	if now.size() == flooded.size() and now.keys() == flooded.keys():
+		return
+	var sub: PackedByteArray = sim.substrate()
+	for i in now:
+		if not flooded.has(i):
+			repaint_tile(i % w, i / w, int(sub[i]))
+	for i in flooded:
+		if not now.has(i):
+			repaint_tile(i % w, i / w, int(sub[i]))
+	flooded = now
+
+## The Flood's risen water, bleach on the Mat as a pale stain, a Bloom's tissue in Pond Scum, and the white light:
+## each lamp's disc of tiles (the rule the threats crate burns by) in hard Vestment White.
+func _draw_threat_fx() -> void:
+	if not bind_sim or view_level == 2:
+		return
+	var sim: RoseSim = Sim.ensure()
+	# the Flood's water in Flood Light with Cyan ripples, its surface (air above) a Cyan line, so the risen water reads apart from the
+	# standing water it falls back to
+	if not flooded.is_empty():
+		var sub: PackedByteArray = sim.substrate()
+		for i in flooded:
+			var r := Rect2((i % w) * TILE, (i / w) * TILE, TILE, TILE)
+			threat_fx.draw_rect(r, Color(UiTheme.DRAIN_LIGHT, 0.55))
+			threat_fx.draw_rect(Rect2(r.position + Vector2(4, 12), Vector2(10, 1)), Color(UiTheme.CYAN, 0.6))
+			threat_fx.draw_rect(Rect2(r.position + Vector2(18, 22), Vector2(10, 1)), Color(UiTheme.CYAN, 0.6))
+			if i - w >= 0 and int(sub[i - w]) != 5:
+				threat_fx.draw_rect(Rect2(r.position, Vector2(TILE, 2)), UiTheme.CYAN)
+	for i in sim.bloom_cells():
+		threat_fx.draw_rect(Rect2((i % w) * TILE, (i / w) * TILE, TILE, TILE), Color(POND_SCUM, 0.45))
+	var lit := {}
+	for b in sim.threat_bodies():
+		var r := int(b.lamp)
+		if r <= 0:
+			continue
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if dx * dx + dy * dy <= r * r:
+					lit[(int(b.y) + dy) * w + int(b.x) + dx] = true
+	# the pools: a hard edge where a lit tile meets an unlit one
+	for i in lit:
+		if i < 0 or i >= w * h:
+			continue
+		var r := Rect2((i % w) * TILE, (i / w) * TILE, TILE, TILE)
+		threat_fx.draw_rect(r, Color(UiTheme.VESTMENT, 0.3))
+		if not lit.has(i - w):
+			threat_fx.draw_rect(Rect2(r.position, Vector2(TILE, 1)), UiTheme.VESTMENT)
+		if not lit.has(i + w):
+			threat_fx.draw_rect(Rect2(r.position + Vector2(0, TILE - 1), Vector2(TILE, 1)), UiTheme.VESTMENT)
+		if not lit.has(i - 1):
+			threat_fx.draw_rect(Rect2(r.position, Vector2(1, TILE)), UiTheme.VESTMENT)
+		if not lit.has(i + 1):
+			threat_fx.draw_rect(Rect2(r.position + Vector2(TILE - 1, 0), Vector2(1, TILE)), UiTheme.VESTMENT)
+	# bleach over the light: a pale wash and drips, so a stain reads as bleach and not as light
+	for i in sim.stain_cells():
+		var r := Rect2((i % w) * TILE, (i / w) * TILE, TILE, TILE)
+		threat_fx.draw_rect(r, Color(UiTheme.VESTMENT, 0.12))
+		for k in 4:
+			threat_fx.draw_rect(Rect2(r.position + Vector2(3 + k * 7, 4 + (k % 2) * 12), Vector2(3, 6)), Color(UiTheme.VESTMENT, 0.75))
+
+## The bodies on the map, standing on their tile; HP under one that is hurt. A Bloom crawler is tinted Pond Scum, a
+## tamed one Cyan.
+func _draw_threat_bodies() -> void:
+	if not bind_sim or view_level == 2:
+		return
+	var sim: RoseSim = Sim.ensure()
+	var frame := int(Time.get_ticks_msec() / 160) % 6
+	var on_tile := {}
+	for b in sim.threat_bodies():
+		var role := String(b.role)
+		# a squad shares tiles: up to four drawn to a tile, 10 px apart across it
+		var key := int(b.y) * w + int(b.x)
+		var s: int = on_tile.get(key, 0)
+		on_tile[key] = s + 1
+		if s >= 4:
+			continue
+		var tex := Assets.texture(String(BODY_ART.get(role, "oath.scout")))
+		if tex == null:
+			continue
+		var fw: int = 48 if tex.get_width() % 48 == 0 and tex.get_height() == 64 else 32
+		var frames := maxi(1, tex.get_width() / fw)
+		var x := int(b.x) * TILE + TILE / 2 - fw / 2 + s * 10 - 15
+		var y := int(b.y) * TILE + TILE - tex.get_height()
+		var tint := Color.WHITE
+		if role == "crawler":
+			tint = Color(0.75, 1.0, 0.6)
+		elif role == "tamed":
+			tint = Color(0.6, 1.0, 1.0)
+		threat_bodies.draw_texture_rect_region(tex, Rect2(x, y, fw, tex.get_height()), Rect2((frame % frames) * fw, 0, fw, tex.get_height()), tint)
+		var hp := float(b.hp)
+		var mx := maxf(1.0, float(b.max_hp))
+		if hp < mx:
+			threat_bodies.draw_rect(Rect2(int(b.x) * TILE + 2, int(b.y) * TILE + TILE + 1, TILE - 4, 3), UiTheme.SUMP)
+			threat_bodies.draw_rect(Rect2(int(b.x) * TILE + 2, int(b.y) * TILE + TILE + 1, (TILE - 4) * clampf(hp / mx, 0.0, 1.0), 3), UiTheme.HOT_PINK if bool(b.oathkeeper) else UiTheme.ACID)
+
+## Attention at each grate the Mat reaches (Full Design v3.14, Pressure): G and the grate's number over a gauge in
+## three steps — a pip lit for each line the zone is past, Acid for the Patrol's, Hot Pink for the Sweep's, Vestment
+## White for the Cleansing's; the number itself is Corpo intel's (PAC-061). The grate's number blinks while an event is
+## down it. Pinned under the grate, the same size on screen at every zoom.
+func _draw_gauges() -> void:
+	if not bind_sim:
+		return
+	var cam := get_viewport().get_camera_2d()
+	var k := 1.0 / (cam.zoom.x if cam != null else 1.0)
+	var font := UiTheme.pixel_font()
+	var lit := [UiTheme.ACID, UiTheme.HOT_PINK, UiTheme.VESTMENT]
+	for z in Sim.ensure().attention():
+		if not bool(z.reached):
+			continue
+		var step := int(z.step)
+		var at := Vector2(int(z.grate) * TILE + TILE / 2, TILE + 4 * k)
+		gauges.draw_set_transform(at, 0.0, Vector2(k, k))
+		gauges.draw_rect(Rect2(-14, -1, 29, 15), Color(UiTheme.SUMP, 0.9))
+		var blink: bool = bool(z.down) and int(Time.get_ticks_msec() / 250) % 2 == 0
+		var label := "G%d" % int(z.number)
+		gauges.draw_string(font, Vector2(-label.length() * 2, 5), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.VESTMENT if blink else UiTheme.CHALK)
+		for p in 3:
+			gauges.draw_rect(Rect2(-12 + p * 9, 8, 7, 4), lit[p] if step > p else UiTheme.VOID)
+		gauges.draw_set_transform(Vector2.ZERO)

@@ -3,7 +3,7 @@
 //! (Full Design v3.1, Technical architecture: Determinism). Godot gathers input and draws state and events.
 
 use crate::chunk::substrate_passable;
-use crate::creature::{self, Attack, Creature, CreatureFile, Kind, Phase, Stimuli, Target, FP, HALF, TICK_HZ};
+use crate::creature::{self, Attack, Creature, CreatureFile, Kind, Phase, Raid, Stimuli, Target, FP, HALF, TICK_HZ};
 use crate::follower::{self, Follower, FollowerContext, FollowerLife, Order};
 use crate::light::Source;
 use crate::loot::{LootSource, LootState, LootTables, OpenMethod, SourceKind, SourceState};
@@ -108,6 +108,12 @@ pub enum Event {
     Dropped { source: usize, id: String },
     /// a minute of overtime passed: what the sewer sent (packs, patrols)
     Overtime { minute: u32, packs: u32, patrols: u32 },
+    /// a raider gang came down its drain
+    Raiders { gang: u8, n: u8, x: i32, y: i32 },
+    /// a raider emptied a source
+    Raided { id: u32, source: usize, taken: usize },
+    /// a Flood shift's water rose to `level` tiles; the tiles that turned to Water
+    WaterRose { level: u8, tiles: Vec<(u16, u16)> },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -158,6 +164,8 @@ pub struct Outcome {
     /// Spored gear regrown at the Heart (flag cleared), on death
     pub regrown: Vec<ItemInstance>,
     pub kills: u32,
+    /// Oathkeepers the run killed (scouts): their Attention lands in the Heart's zone (Full Design, Pressure)
+    pub oath_kills: u32,
     pub chunks_seen: u32,
     pub route_memory: Vec<u8>,
     pub blind_value: u32,
@@ -198,6 +206,16 @@ pub struct RunSim {
     pub result: Option<RunResult>,
     pub outcome: Option<Outcome>,
     pub kills: u32,
+    pub oath_kills: u32,
+    /// raider gangs still to come down
+    pub raids: Vec<Raid>,
+    /// a Flood shift's water on this route: the plan, the route's water before it, the tiles risen so far, and the
+    /// ticks the Runner has been under water
+    pub flood: Option<crate::water::RunFlood>,
+    base_water: Vec<bool>,
+    pub flood_level: u8,
+    pub under: i32,
+    mat_lume_gene: f32,
     /// indices of loot sources that are the Runner's own dropped piles
     dropped: Vec<usize>,
     prev_order: u8,
@@ -239,6 +257,11 @@ pub struct RunSetup<'a> {
     pub followers: Vec<FollowerSetup>,
     /// corpses of earlier Runners on this route, with the day they died; the raider roll runs here
     pub corpses: Vec<Corpse>,
+    /// a Flood shift: the day's roll (0-3 tiles); None on any other shift
+    pub flood: Option<u8>,
+    /// the next shift's roll when it is a Flood shift: overtime runs into it, so its water rises from the overtime's
+    /// first tick (Full Design, The shift clock)
+    pub next_flood: Option<u8>,
 }
 
 impl RunSim {
@@ -282,6 +305,11 @@ impl RunSim {
         let n = map.w * map.h;
         let shift_ticks = defs.shift.shift_ticks(map.chunks.len());
         let next_creature_id = creatures.iter().map(|c| c.id).max().unwrap_or(0) + 1;
+        // raiders and the Flood roll on their own streams, so the route's sewerats and patrols are what they were
+        let mut raid_rng = Pcg32::new(map.seed ^ setup.run_nonce.rotate_left(29) ^ 0x8A1D_0000);
+        let raids = creature::plan_raids(&map, &defs, shift_ticks, &mut raid_rng);
+        let flood = crate::water::RunFlood::for_shift(map.seed, setup.day, setup.flood, setup.next_flood, shift_ticks, &defs.flood);
+        let base_water = crate::water::base_water(&map);
         RunSim {
             map,
             table,
@@ -303,6 +331,13 @@ impl RunSim {
             result: None,
             outcome: None,
             kills: 0,
+            oath_kills: 0,
+            raids,
+            flood,
+            base_water,
+            flood_level: 0,
+            under: 0,
+            mat_lume_gene: setup.mat_lume_gene,
             dropped: Vec::new(),
             prev_order: 0,
             prev_drop: false,
@@ -485,6 +520,195 @@ impl RunSim {
         self.events.push(Event::Overtime { minute, packs, patrols });
     }
 
+    /// Raider gangs whose moment has come down their drain.
+    fn raiders_arrive(&mut self) {
+        let tick = self.tick;
+        let due: Vec<Raid> = self.raids.iter().copied().filter(|r| r.at <= tick).collect();
+        if due.is_empty() {
+            return;
+        }
+        self.raids.retain(|r| r.at > tick);
+        for r in due {
+            let def = &self.defs.creature["raider"];
+            for k in 0..r.n {
+                let mut c = Creature::new(self.next_creature_id, Kind::Raider, def, r.tile, r.chunk);
+                c.gang = r.gang;
+                c.facing = if k % 2 == 0 { 1 } else { -1 };
+                self.next_creature_id += 1;
+                self.creatures.push(c);
+            }
+            self.events.push(Event::Raiders { gang: r.gang, n: r.n, x: r.tile.0, y: r.tile.1 });
+        }
+    }
+
+    /// A source a raider wants: anything holding loot that is not a sewerat's remains, off the Mat's own tiles.
+    fn raidable(&self, i: usize) -> bool {
+        let s = &self.loot.sources[i];
+        s.kind != SourceKind::RatCorpse
+            && !self.on_mat_tile(s.x as i32, s.y as i32)
+            && (s.state == SourceState::Closed || (s.state == SourceState::Open && !s.items.is_empty()))
+    }
+
+    /// Calm raiders loot (Full Design, the Threats table): each goes to the nearest source it wants that no other
+    /// raider has claimed, stands at it `loot_s`, and takes everything; a closed one it prises open, loudly.
+    fn raiders_loot(&mut self) {
+        let def = self.defs.creature["raider"].clone();
+        let loot_ticks = creature::ticks(def.loot_s).max(1);
+        for i in 0..self.creatures.len() {
+            let c = &self.creatures[i];
+            if c.kind != Kind::Raider || c.dead || c.phase != Phase::Calm || c.looted >= def.loots {
+                continue;
+            }
+            if c.loot_target.is_some_and(|t| !self.raidable(t)) {
+                let c = &mut self.creatures[i];
+                c.loot_target = None;
+                c.loot_goal = None;
+                c.loot_left = 0;
+            }
+            if self.creatures[i].loot_target.is_none() {
+                let me = self.creatures[i].tile();
+                let claimed: Vec<usize> = self.creatures.iter().filter(|o| o.kind == Kind::Raider && !o.dead).filter_map(|o| o.loot_target).collect();
+                let d = creature::distance_field(&self.map, me);
+                let w = self.map.w;
+                let best = (0..self.loot.sources.len())
+                    .filter(|&k| !claimed.contains(&k) && self.raidable(k))
+                    .filter_map(|k| {
+                        let s = &self.loot.sources[k];
+                        let g = (s.x as i32, s.y as i32);
+                        let dist = d[g.1 as usize * w + g.0 as usize];
+                        (dist != creature::NO_PATH).then_some((dist, k, g))
+                    })
+                    .min();
+                let c = &mut self.creatures[i];
+                if let Some((_, k, g)) = best {
+                    c.loot_target = Some(k);
+                    c.loot_goal = Some(g);
+                } else {
+                    // nothing left it can reach: it has had its fill
+                    c.looted = def.loots;
+                }
+                continue;
+            }
+            let c = &mut self.creatures[i];
+            if Some(c.tile()) != c.loot_goal {
+                continue;
+            }
+            if c.loot_left == 0 {
+                c.loot_left = loot_ticks;
+                continue;
+            }
+            c.loot_left -= 1;
+            if c.loot_left > 0 {
+                continue;
+            }
+            let (id, k) = (c.id, c.loot_target.unwrap_or(0));
+            if self.loot.sources[k].state == SourceState::Closed {
+                if let Ok(r) = self.loot.open(&self.tables, &self.table, k, OpenMethod::PryBar) {
+                    let (sx, sy) = (self.loot.sources[k].x as usize, self.loot.sources[k].y as usize);
+                    let tick = self.senses.tick;
+                    self.senses.noise.emit(&self.map, sx, sy, r.noise, tick, 2);
+                }
+            }
+            let took = std::mem::take(&mut self.loot.sources[k].items);
+            self.loot.sources[k].state = SourceState::Empty;
+            let taken = took.len();
+            let c = &mut self.creatures[i];
+            c.carried.extend(took);
+            c.looted += 1;
+            c.loot_target = None;
+            c.loot_goal = None;
+            self.events.push(Event::Raided { id, source: k, taken });
+        }
+    }
+
+    /// Raiders shoot the other gang on sight (Full Design, the Threats table): a raider whose gun is ready and who
+    /// faces a raider of the other gang within its range fires; the one hit turns to it.
+    fn raiders_fight(&mut self) {
+        let def = self.defs.creature["raider"].clone();
+        let mut shots: Vec<(usize, usize)> = Vec::new();
+        for (i, c) in self.creatures.iter().enumerate() {
+            if c.kind != Kind::Raider || c.dead || c.shot_cd > 0 {
+                continue;
+            }
+            let me = c.tile();
+            let mut best: Option<(usize, i32)> = None;
+            for (j, o) in self.creatures.iter().enumerate() {
+                if o.kind != Kind::Raider || o.dead || o.gang == c.gang {
+                    continue;
+                }
+                let t = o.tile();
+                let d2 = (t.0 - me.0).pow(2) + (t.1 - me.1).pow(2);
+                if d2 <= def.range * def.range && best.is_none_or(|(_, b)| d2 < b) && creature::can_see(&self.map, me, t, def.range, Some(c.facing)) {
+                    best = Some((j, d2));
+                }
+            }
+            if let Some((j, _)) = best {
+                shots.push((i, j));
+            }
+        }
+        for (i, j) in shots {
+            if self.creatures[j].dead {
+                continue;
+            }
+            let from = self.creatures[i].tile();
+            let to = self.creatures[j].tile();
+            self.creatures[i].shot_cd = creature::ticks(def.shot_interval);
+            if to.0 != from.0 {
+                self.creatures[i].facing = (to.0 - from.0).signum();
+                self.creatures[j].facing = (from.0 - to.0).signum();
+            }
+            let tick = self.senses.tick;
+            self.senses.noise.emit(&self.map, from.0 as usize, from.1 as usize, def.shot_noise, tick, 2);
+            self.senses.flashes.push(Source { x: from.0 as u16, y: from.1 as u16, emit: crate::light::FLASH_EMIT });
+            self.events.push(Event::Shot { x0: from.0, y0: from.1, x1: to.0, y1: to.1, by_runner: false, hit: true });
+            let id = self.creatures[j].id;
+            self.creatures[j].hp -= def.ranged_damage;
+            self.events.push(Event::CreatureHit { id, damage: def.ranged_damage, behind: false });
+            if self.creatures[j].hp <= 0 {
+                self.creature_died(j, false);
+            }
+        }
+        self.creatures.retain(|c| !c.dead);
+    }
+
+    /// The Flood shift's water: each tile of the rise as its moment comes. The static light is lit again over the new
+    /// water and the walkers path again over it.
+    fn flood_step(&mut self) {
+        let Some(f) = self.flood else { return };
+        let level = f.level_at(self.tick);
+        if level <= self.flood_level {
+            return;
+        }
+        self.flood_level = level;
+        let turned = crate::water::raise(&mut self.map, &self.base_water, level);
+        if !turned.is_empty() {
+            self.senses.light = crate::light::LightField::new(&self.map, self.mat_lume_gene);
+            for c in &mut self.creatures {
+                c.repath();
+            }
+        }
+        let w = self.map.w;
+        let tiles = turned.iter().map(|&i| ((i % w) as u16, (i / w) as u16)).collect();
+        self.events.push(Event::WaterRose { level, tiles });
+    }
+
+    /// Under the Flood's water — the Runner's tile and the one above it Water, one of them risen — for `drown_s` is
+    /// Down. A route's own deep water is a swim, as it was before any Flood (the culverts' authored crossings).
+    fn drown(&mut self, rules: &crate::creature::RunnerRules) {
+        let (x, y) = self.runner.tile();
+        let here = self.idx(x, y);
+        let risen = |i: usize| self.map.substrate[i] == sub::WATER && !self.base_water[i];
+        if !self.runner.is_up() || self.runner.pose != Pose::Swim || !(risen(here) || (y > 0 && risen(here - self.map.w))) {
+            self.under = 0;
+            return;
+        }
+        self.under += 1;
+        if self.under >= creature::ticks(self.defs.flood.drown_s) {
+            self.under = 0;
+            self.runner.life = Life::Down { left: creature::ticks(rules.down_s) };
+        }
+    }
+
     fn runner_sound(&mut self, sound: Sound) {
         self.senses.runner_sound(&self.map, sound, if self.runner.quirks.noise_plus_1 { 1 } else { 0 });
     }
@@ -537,9 +761,9 @@ impl RunSim {
         self.senses.see_bonus = if self.runner.quirks.see_plus_1 { 1 } else { 0 };
         self.senses.motion = motion;
         for c in &self.creatures {
-            if c.kind == Kind::Scout && !c.dead {
+            if c.kind.person() && !c.dead {
                 let (tx, ty) = c.tile();
-                self.senses.flashes.push(Source { x: tx as u16, y: ty as u16, emit: self.defs.creature["scout"].lamp });
+                self.senses.flashes.push(Source { x: tx as u16, y: ty as u16, emit: self.defs.creature[c.kind.key()].lamp });
             }
         }
         self.senses.tick(&self.map);
@@ -554,9 +778,14 @@ impl RunSim {
             }
         }
         // ---- creatures and followers
+        self.raiders_arrive();
         self.creatures_act(&rules);
+        self.raiders_fight();
+        self.raiders_loot();
         self.followers_act(&rules);
         self.overtime();
+        self.flood_step();
+        self.drown(&rules);
         // ---- life
         if let Life::Down { left } = self.runner.life {
             if left == creature::ticks(rules.down_s) - 1 {
@@ -918,24 +1147,51 @@ impl RunSim {
         let id = c.id;
         self.events.push(Event::CreatureHit { id, damage: dmg, behind });
         if c.hp <= 0 {
-            c.dead = true;
-            let kind = c.kind;
-            let (x, y) = c.tile();
-            let chunk = c.chunk;
-            self.kills += 1;
-            // a killed burster still bursts, smaller
-            if kind == Kind::Burster {
-                let d = self.defs.creature["burster"].death_burst;
-                self.burst(x, y, d, 1, id);
-            }
-            let skind = if kind == Kind::Scout { SourceKind::ScoutBody } else { SourceKind::RatCorpse };
-            let src = self.loot.add_open_source(&self.tables, &self.table, skind, x as usize, y as usize, chunk, 0);
-            self.events.push(Event::CreatureDied { id, kind, x, y, source: Some(src) });
+            self.creature_died(i, true);
         } else {
             // being hit is a stimulus: it knows where you are
             c.awareness = 1.0;
             c.last_known = Some(self.runner.tile());
         }
+    }
+
+    /// A creature falls and leaves its remains: a scout its drop, a sewerat its salvage, a raider a pile of what it
+    /// took and its gun. `ours`: the Runner or a follower killed it.
+    fn creature_died(&mut self, i: usize, ours: bool) {
+        let c = &mut self.creatures[i];
+        c.dead = true;
+        let (id, kind, chunk) = (c.id, c.kind, c.chunk);
+        let (x, y) = c.tile();
+        let carried = std::mem::take(&mut c.carried);
+        if ours {
+            self.kills += 1;
+            if kind == Kind::Scout {
+                self.oath_kills += 1;
+            }
+        }
+        // a killed burster still bursts, smaller
+        if kind == Kind::Burster {
+            let d = self.defs.creature["burster"].death_burst;
+            self.burst(x, y, d, 1, id);
+        }
+        let src = if kind == Kind::Raider {
+            let def = &self.defs.creature["raider"];
+            let mut items = carried;
+            if let Some(gun) = self.table.id_of(&def.drop) {
+                let mut r = Pcg32::new(self.map.seed ^ ((id as u64) << 24) ^ 0x6A11);
+                let mut it = ItemInstance::new(gun);
+                it.condition = r.range(def.drop_condition[0] as i32, def.drop_condition[1] as i32) as u8;
+                items.push(it);
+            }
+            let k = self.loot.sources.len();
+            let state = if items.is_empty() { SourceState::Empty } else { SourceState::Open };
+            self.loot.sources.push(LootSource { x: x as u16, y: y as u16, kind: SourceKind::RaiderPile, tier: self.map.stratum, chunk, locked: false, state, items });
+            k
+        } else {
+            let skind = if kind == Kind::Scout { SourceKind::ScoutBody } else { SourceKind::RatCorpse };
+            self.loot.add_open_source(&self.tables, &self.table, skind, x as usize, y as usize, chunk, 0)
+        };
+        self.events.push(Event::CreatureDied { id, kind, x, y, source: Some(src) });
     }
 
     fn burst(&mut self, x: i32, y: i32, damage: i32, radius: i32, by: u32) {
@@ -1199,6 +1455,7 @@ impl RunSim {
             mat_haul,
             regrown,
             kills: self.kills,
+            oath_kills: self.oath_kills,
             chunks_seen: seen.len() as u32,
             route_memory: self.senses.fog.memory_bits(),
             blind_value,
@@ -1381,7 +1638,7 @@ mod tests {
         rig.quick = vec![Some(lantern), Some(pry), Some(anti), Some(salt)];
         let (_, pipe) = inventory::instance(&table, "ger_pipe").unwrap();
         rig.gear.hands[0] = Some(pipe);
-        RunSim::new(m, table, LootTables::shipped(), CreatureFile::shipped(), RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, runner: people::RunnerSetup::plain(5), followers, corpses })
+        RunSim::new(m, table, LootTables::shipped(), CreatureFile::shipped(), RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, runner: people::RunnerSetup::plain(5), followers, corpses, flood: None, next_flood: None })
     }
 
     #[test]
@@ -1405,7 +1662,7 @@ mod tests {
             carry_bonus_kg: 0.0,
             flags: ["melee_plus_1", "see_plus_1", "sprint_plus_0_5", "stamina_regen_x1_2", "deposit_plus_1", "fever_immune"].iter().map(|s| s.to_string()).collect(),
         };
-        let strong = RunSim::new(m.clone(), table.clone(), LootTables::shipped(), CreatureFile::shipped(), RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, runner: setup, followers: Vec::new(), corpses: Vec::new() });
+        let strong = RunSim::new(m.clone(), table.clone(), LootTables::shipped(), CreatureFile::shipped(), RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 7, route_runs: 1, day: 1, rig, runner: setup, followers: Vec::new(), corpses: Vec::new(), flood: None, next_flood: None });
         let plain = sim(3, 1);
         let rules = &plain.defs.runner;
         // Body 10: sections x1.2; Nerve 10: 120 stamina
@@ -1789,7 +2046,7 @@ mod tests {
             table.clone(),
             LootTables::shipped(),
             CreatureFile::shipped(),
-            RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 9, route_runs: 3, day: 41, rig: Rig::new(8, 5, 4, 18.0), runner: people::RunnerSetup::plain(5), followers: Vec::new(), corpses: vec![corpse(1)] },
+            RunSetup { mat_lume_gene: 0.5, memory: None, run_nonce: 9, route_runs: 3, day: 41, rig: Rig::new(8, 5, 4, 18.0), runner: people::RunnerSetup::plain(5), followers: Vec::new(), corpses: vec![corpse(1)], flood: None, next_flood: None },
         );
         let own = s3.loot.sources.iter().find(|src| src.kind == SourceKind::OwnCorpse).unwrap();
         assert!(own.items.is_empty() && own.state == SourceState::Empty, "a forty-day-old body was not stripped");
@@ -1816,5 +2073,98 @@ mod tests {
         assert!(s.creatures.len() > before, "overtime spawned nothing ({} -> {})", before, s.creatures.len());
         assert_eq!(s.overtime_ticks(), s.tick - s.shift_ticks);
         assert!(s.chunk_seen().iter().filter(|&&b| b).count() >= 1);
+    }
+
+    #[test]
+    fn raiders_loot_what_they_reach_shoot_the_other_gang_and_drop_a_pile() {
+        let mut s = sim(11, 3);
+        s.creatures.clear();
+        s.raids.clear();
+        // a container with three tiles of floor beside its own
+        let (k, g) = (0..s.loot.sources.len())
+            .filter_map(|k| {
+                let src = &s.loot.sources[k];
+                let g = creature::floor_under(&s.map, (src.x as i32, src.y as i32));
+                let row = (1..=3).all(|dx| creature::walkable(&s.map, g.0 + dx, g.1));
+                (row && s.raidable(k) && src.state == SourceState::Closed).then_some((k, g))
+            })
+            .next()
+            .expect("a container with floor beside it");
+        let ch = s.map.chunk_of[g.1 as usize * s.map.w + g.0 as usize];
+        s.raids.push(Raid { at: s.tick + 1, tile: g, chunk: ch, n: 1, gang: 1 });
+        let mut raided = None;
+        for _ in 0..200 {
+            s.step(RunInput::default());
+            for e in s.drain_events() {
+                if let Event::Raided { source, taken, .. } = e {
+                    raided = Some((source, taken));
+                }
+            }
+            if raided.is_some() {
+                break;
+            }
+        }
+        let (source, _) = raided.expect("the raider looted nothing in 10 s");
+        assert_eq!(s.loot.sources[source].state, SourceState::Empty);
+        let _ = k;
+        let carried = s.creatures.iter().find(|c| c.kind == Kind::Raider).map(|c| c.carried.len()).unwrap();
+        // the other gang comes down three tiles west of it, facing east (a gang's first faces east); the first turns
+        // to the shot; one of them falls and leaves what it carried and a Scrap Pistol
+        let at = s.creatures.iter().find(|c| c.kind == Kind::Raider).map(|c| c.tile()).unwrap();
+        let west = (1..=3).rev().map(|dx| (at.0 - dx, at.1)).find(|&(x, y)| s.passable_tile(x, y)).expect("room to its west");
+        s.raids.push(Raid { at: s.tick + 1, tile: west, chunk: ch, n: 1, gang: 2 });
+        let mut pile = None;
+        for _ in 0..400 {
+            s.step(RunInput::default());
+            for e in s.drain_events() {
+                if let Event::CreatureDied { kind: Kind::Raider, source: Some(src), .. } = e {
+                    pile = Some(src);
+                }
+            }
+            if pile.is_some() {
+                break;
+            }
+        }
+        let pile = pile.expect("the gangs did not fight");
+        let p = &s.loot.sources[pile];
+        assert_eq!(p.kind, SourceKind::RaiderPile);
+        assert!(p.items.iter().any(|it| s.table.def(it.def).id == "ger_scrap_pistol"), "no gun in the pile");
+        assert!(p.items.len() == 1 || p.items.len() == carried + 1, "pile of {} for {} carried", p.items.len(), carried);
+        assert_eq!(s.kills, 0, "the gangs' kills are not the Runner's");
+    }
+
+    #[test]
+    fn a_flood_shift_raises_the_water_and_the_runner_under_it_goes_down() {
+        let mut s = sim(11, 1);
+        s.creatures.clear();
+        s.raids.clear();
+        let before = s.map.substrate.iter().filter(|&&t| t == sub::WATER).count();
+        s.flood = Some(crate::water::RunFlood { rise: 3, start: s.tick + 1, ticks: 60 });
+        let mut levels = Vec::new();
+        for _ in 0..70 {
+            s.step(RunInput::default());
+            for e in s.drain_events() {
+                if let Event::WaterRose { level, tiles } = e {
+                    assert!(!tiles.is_empty());
+                    levels.push(level);
+                }
+            }
+        }
+        assert_eq!(levels, vec![1, 2, 3]);
+        let after = s.map.substrate.iter().filter(|&&t| t == sub::WATER).count();
+        assert!(after > before, "water {before} -> {after}");
+        // a tile under water with the Flood's water over it
+        let w = s.map.w;
+        let deep = (w..s.map.substrate.len() - w).find(|&i| s.map.substrate[i] == sub::WATER && s.map.substrate[i - w] == sub::WATER && !s.base_water[i - w]).expect("deep risen water");
+        s.runner.x = (deep % w) as i32 * FP + FP / 2;
+        s.runner.y = (deep / w) as i32 * FP + FP / 2;
+        s.under = 0;
+        let drown = creature::ticks(s.defs.flood.drown_s);
+        for _ in 0..drown - 1 {
+            s.step(RunInput::default());
+        }
+        assert!(s.runner.is_up(), "down before {} s under", s.defs.flood.drown_s);
+        s.step(RunInput::default());
+        assert!(matches!(s.runner.life, Life::Down { .. }), "not down after {} s under", s.defs.flood.drown_s);
     }
 }

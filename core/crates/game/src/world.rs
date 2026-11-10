@@ -59,6 +59,12 @@ pub struct World {
     pub day: u32,
     pub jam_since: Option<u64>,
     pub last: Option<colony::ShiftOutcome>,
+    /// the surface's answer (Full Design v3.14, Pressure)
+    pub threats: threat::Threats,
+    /// who stands Guard and tends the Pens this shift (the shift's plan)
+    pub posts: threat::Posts,
+    /// Oathkeepers a run killed this shift: their Attention counts in the Heart's zone
+    pub run_kills: u32,
 }
 
 impl World {
@@ -75,6 +81,7 @@ impl World {
         roster.found(&traits, &names, seed, 1);
         let mut stash = Stash::new();
         starting_haul(&mut stash, &table);
+        let threats = threat::Threats::new(&city.sim, seed);
         let mut w = World {
             city,
             colony,
@@ -93,10 +100,19 @@ impl World {
             day: 1,
             jam_since: None,
             last: None,
+            threats,
+            posts: threat::Posts::default(),
+            run_kills: 0,
         };
+        let notes = w.threats.start_shift(&mut w.city, &mut w.colony, &w.defs, 1, shift::shift_of_day(1) == 2);
+        w.note(notes);
         w.publish();
         w.movers();
         w
+    }
+
+    pub fn note(&mut self, notes: Vec<threat::Note>) {
+        crate::pressure::note(&mut self.log, self.city.tick, notes);
     }
 
     /// Publish the consumers (after building, a quota set, a stockpile painted).
@@ -106,7 +122,8 @@ impl World {
     }
 
     pub fn movers(&mut self) {
-        shift::refresh_movers(&mut self.city, &self.colony, &self.defs, &self.roster, &self.traits, self.day);
+        let plan = shift::refresh_movers(&mut self.city, &self.colony, &self.defs, &self.roster, &self.traits, self.day);
+        self.posts = threat::Posts::from_plan(&plan, &self.roster);
     }
 
     /// One city tick: slimos walk, cargo rides and lands, the Mat steps on its clock.
@@ -116,7 +133,8 @@ impl World {
         if self.city.tick.is_multiple_of(logistics::city::REBUILD_EVERY) {
             cargo::refresh_demands(&self.colony, &self.defs, &mut self.city, &self.stash, &self.ledger, &self.table);
         }
-        cargo::land(&mut self.city, &mut self.colony, &self.defs, &mut self.stash, &mut self.ledger, &self.table, &mut self.log);
+        let sold = cargo::land(&mut self.city, &mut self.colony, &self.defs, &mut self.stash, &mut self.ledger, &self.table, &mut self.log);
+        crate::pressure::tick(&mut self.threats, &mut self.city, &mut self.colony, &self.defs, &self.posts, &mut self.log, &sold);
     }
 
     /// The run comes home: the roster takes it, the rig goes into the Stash.
@@ -132,12 +150,21 @@ impl World {
         let folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
         let s = shift::end_shift(town, store, folk, self.day, &mut self.log);
         self.last = Some(s.outcome.clone());
+        self.pressure_end(&s.outcome);
         self.day += 1;
+        let notes = self.threats.start_shift(&mut self.city, &mut self.colony, &self.defs, self.day, shift::shift_of_day(self.day) == 2);
+        self.note(notes);
         self.movers();
         s
     }
 
+    /// The threats' side of the shift's end (Full Design v3.14, Pressure): see `pressure::end`.
+    fn pressure_end(&mut self, o: &colony::ShiftOutcome) {
+        let kills = std::mem::take(&mut self.run_kills);
+        crate::pressure::end(&mut self.threats, &mut self.city, &mut self.colony, &self.defs, &mut self.roster, &mut self.stash, &self.table, &mut self.log, &mut self.died, o, self.day, kills);
+    }
+
     pub fn alerts(&self) -> Vec<alerts::Alert> {
-        alerts::current(&self.colony, &self.defs, &self.city, &self.roster, &self.stash, &self.ledger, self.last.as_ref(), self.jam_since)
+        alerts::current(&self.colony, &self.defs, &self.city, &self.roster, &self.stash, &self.ledger, self.last.as_ref(), self.jam_since, Some(&self.threats))
     }
 }

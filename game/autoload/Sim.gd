@@ -233,9 +233,18 @@ func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Diction
 	if not mem.is_empty():
 		route_memory[route_key(stratum, seed_value)] = mem
 	note_run(stratum, seed_value)
+	# Oathkeepers the run killed: their Attention lands in the Heart's zone at the shift's end
+	ensure().add_run_kills(int(o.get("oath_kills", 0)))
 	launch = {}
 	end_shift()
 	day += 1
+
+## This shift's Flood roll for a run on it (0-3), -1 when it is not a Flood shift; the next shift's for overtime.
+func flood_roll() -> int:
+	return ensure().flood_roll()
+
+func next_flood_roll() -> int:
+	return ensure().next_flood_roll()
 
 func route_key(stratum: int, seed_value: int) -> String:
 	return "s%d:%d" % [stratum, seed_value]

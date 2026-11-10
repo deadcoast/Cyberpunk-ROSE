@@ -42,6 +42,11 @@ pub struct RoseSim {
     jam_since: Option<u64>,
     /// the plan for the shift being worked: (slimo, job, structure), the movers' and the Job grid's
     plan: Vec<(u32, ::people::Job, u32)>,
+    /// the surface's answer (Full Design v3.14, Pressure) and who stands Guard this shift
+    threats: Option<threat::Threats>,
+    posts: threat::Posts,
+    /// Oathkeepers the shift's run killed
+    run_kills: u32,
 }
 
 #[godot_api]
@@ -57,7 +62,9 @@ impl RoseSim {
     /// clock, no phantoms; the movers are the roster and the cargo is the Stash's.
     #[func]
     fn start_city(&mut self, seed: i64) {
-        self.city = Some(City::game(logistics::founding(seed as u64), seed as u64));
+        let city = City::game(logistics::founding(seed as u64), seed as u64);
+        self.threats = Some(threat::Threats::new(&city.sim, seed as u64));
+        self.city = Some(city);
     }
 
     /// Fresh stratum with a Heart at (x, y) and no city; feed it to make it grow.
@@ -102,7 +109,10 @@ impl RoseSim {
                     if c.tick % logistics::city::REBUILD_EVERY == 0 && !c.synthetic() {
                         game::cargo::refresh_demands(&self.colony, &defs, c, stash, &st.ledger, table);
                     }
-                    game::cargo::land(c, &mut self.colony, &defs, stash, &mut st.ledger, table, &mut self.log);
+                    let sold = game::cargo::land(c, &mut self.colony, &defs, stash, &mut st.ledger, table, &mut self.log);
+                    if let Some(t) = self.threats.as_mut() {
+                        game::pressure::tick(t, c, &mut self.colony, &defs, &self.posts, &mut self.log, &sold);
+                    }
                 }
                 c.sim.changed.len() as i64
             }
@@ -110,6 +120,102 @@ impl RoseSim {
         };
         self.last_step_us = t0.elapsed().as_micros() as i64;
         changed
+    }
+
+    // ------------------------------------------------------------ pressure (Full Design v3.14)
+
+    /// The bodies on the map: role, x, y, hp, max_hp, lamp (tiles of white light), oathkeeper.
+    #[func]
+    fn threat_bodies(&self) -> VarArray {
+        let mut out = VarArray::new();
+        let Some(t) = &self.threats else { return out };
+        for b in t.bodies.iter().filter(|b| !b.dead && !b.gone) {
+            let def = &t.rules.body[b.role.key()];
+            let mut d = VarDictionary::new();
+            d.set("id", b.id as i64);
+            d.set("role", if b.role == threat::Role::Tamed { "tamed" } else { b.role.key() });
+            d.set("name", def.name.as_str());
+            d.set("x", b.x as i64);
+            d.set("y", b.y as i64);
+            d.set("hp", b.hp as f64);
+            d.set("max_hp", b.max_hp as f64);
+            d.set("lamp", if b.role == threat::Role::Tamed { 0 } else { def.lamp as i64 });
+            d.set("oathkeeper", b.role.oathkeeper());
+            out.push(&d.to_variant());
+        }
+        out
+    }
+
+    /// Each grate's zone: grate (column), number, attention, step (0 quiet, 1 Patrol, 2 Sweep, 3 Cleansing), reached,
+    /// gained (last shift end), an event down.
+    #[func]
+    fn attention(&self) -> VarArray {
+        let mut out = VarArray::new();
+        let (Some(t), Some(c)) = (&self.threats, &self.city) else { return out };
+        for (k, z) in t.zones.iter().enumerate() {
+            let mut d = VarDictionary::new();
+            d.set("grate", z.grate as i64);
+            d.set("number", (k + 1) as i64);
+            d.set("attention", z.attention as f64);
+            d.set("step", t.step_of(k) as i64);
+            d.set("reached", c.markets.contains(&z.grate));
+            d.set("gained", z.gained as f64);
+            d.set("down", t.down_in(k, 0));
+            out.push(&d.to_variant());
+        }
+        out
+    }
+
+    /// Tiles the Flood has under water now.
+    #[func]
+    fn flooded_cells(&self) -> PackedInt32Array {
+        self.threats.as_ref().map_or(PackedInt32Array::new(), |t| PackedInt32Array::from(t.flooded().map(|i| i as i32).collect::<Vec<i32>>().as_slice()))
+    }
+
+    /// Tiles with bleach on them.
+    #[func]
+    fn stain_cells(&self) -> PackedInt32Array {
+        self.threats.as_ref().map_or(PackedInt32Array::new(), |t| PackedInt32Array::from((0..t.stain.len()).filter(|&i| t.stain[i] > 0).map(|i| i as i32).collect::<Vec<i32>>().as_slice()))
+    }
+
+    /// A Bloom's tissue.
+    #[func]
+    fn bloom_cells(&self) -> PackedInt32Array {
+        self.city.as_ref().map_or(PackedInt32Array::new(), |c| PackedInt32Array::from((0..c.sim.hy.len()).filter(|&i| c.sim.is_bloom(i)).map(|i| i as i32).collect::<Vec<i32>>().as_slice()))
+    }
+
+    /// Oathkeepers the shift's run killed: their Attention counts in the Heart's zone at the shift's end.
+    #[func]
+    fn add_run_kills(&mut self, n: i64) {
+        self.run_kills += n.max(0) as u32;
+    }
+
+    /// Development only (the screenshot script): send a stage ("patrol", "sweep", "cleansing") down a zone's grate now.
+    #[func]
+    fn debug_send(&mut self, stage: GString, zone: i64) -> bool {
+        let defs = self.defs().clone();
+        let (Some(t), Some(c)) = (self.threats.as_mut(), self.city.as_ref()) else { return false };
+        let Some(k) = t.rules.stage.iter().position(|st| st.id == stage.to_string()) else { return false };
+        if zone < 0 || zone as usize >= t.zones.len() {
+            return false;
+        }
+        let notes = t.send(c, &self.colony, &defs, k, zone as usize);
+        game::pressure::note(&mut self.log, c.tick, notes);
+        true
+    }
+
+    /// This shift's Flood roll for a run on it (0-3 tiles before the Lungs), -1 when it is not a Flood shift.
+    #[func]
+    fn flood_roll(&self) -> i64 {
+        self.threats.as_ref().and_then(|t| t.flood_roll()).map_or(-1, |r| r as i64)
+    }
+
+    /// The next shift's Flood roll when it is a Flood shift (a run's overtime runs into it), else -1.
+    #[func]
+    fn next_flood_roll(&self) -> i64 {
+        let Some(t) = self.threats.as_ref() else { return -1 };
+        let next = t.shift + 1;
+        if game::shift_of_day(next) == 2 { t.roll_for(next) as i64 } else { -1 }
     }
 
     #[func]
@@ -343,7 +449,13 @@ impl RoseSim {
         let defs = self.defs().clone();
         match &self.city {
             Some(c) => match self.colony.found(&defs, &c.sim) {
-                Ok(()) => true,
+                Ok(()) => {
+                    if let (Some(t), Some(c)) = (self.threats.as_mut(), self.city.as_mut()) {
+                        let notes = t.start_shift(c, &mut self.colony, &defs, 1, false);
+                        game::pressure::note(&mut self.log, c.tick, notes);
+                    }
+                    true
+                }
                 Err(e) => {
                     godot_error!("found_city: {e}");
                     false
@@ -643,7 +755,16 @@ impl RoseSim {
             let town = game::Town { city, colony: &mut self.colony, defs: &defs };
             let store = game::Store { stash: st.stash.as_mut().unwrap(), ledger: &mut st.ledger, bench: &mut st.bench, table: st.table.as_ref().unwrap(), recipes: st.recipes.as_ref().unwrap() };
             let folk = game::Folk { roster: &mut p.roster, traits: &traits, names: &names, died: &mut p.died_this_shift };
-            game::end_shift(town, store, folk, day.max(1) as u32, &mut self.log)
+            let shift = game::end_shift(town, store, folk, day.max(1) as u32, &mut self.log);
+            // the threats' side, then the next shift's water (Full Design v3.14, Pressure)
+            if let Some(t) = self.threats.as_mut() {
+                let kills = std::mem::take(&mut self.run_kills);
+                game::pressure::end(t, city, &mut self.colony, &defs, &mut p.roster, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), &mut self.log, &mut p.died_this_shift, &shift.outcome, day.max(1) as u32, kills);
+                let next = day.max(1) as u32 + 1;
+                let notes = t.start_shift(city, &mut self.colony, &defs, next, game::shift_of_day(next) == 2);
+                game::pressure::note(&mut self.log, city.tick, notes);
+            }
+            shift
         };
         let mut report = stash.bind().closed_dict(&shift.closed);
         report.set("stash_lines", &PackedStringArray::from(shift.stash_lines.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
@@ -665,6 +786,7 @@ impl RoseSim {
         p.ensure();
         let traits = p.traits.clone().unwrap();
         self.plan = self.colony.assign_jobs(&defs, &p.roster, &traits, game::shift_of_day(day.max(1) as u32));
+        self.posts = threat::Posts::from_plan(&self.plan, &p.roster);
         game::refresh_movers(city, &self.colony, &defs, &p.roster, &traits, day.max(1) as u32);
     }
 
@@ -1527,6 +1649,11 @@ pub struct RoseRun {
     sim: Option<run::RunSim>,
     mat_lume_gene: f32,
     memory: Option<Vec<u8>>,
+    /// the shift the run is on: the colony's day, a Flood shift's roll and the next shift's (the card and the run
+    /// read them)
+    day: u32,
+    flood: Option<u8>,
+    next_flood: Option<u8>,
 }
 
 #[godot_api]
@@ -1562,6 +1689,15 @@ impl RoseRun {
     #[func]
     fn set_mat_lume(&mut self, gene: f64) {
         self.mat_lume_gene = gene.clamp(0.0, 1.0) as f32;
+    }
+
+    /// The shift the route is run on: the colony's day, its Flood roll and the next shift's (`RoseSim.flood_roll`,
+    /// `next_flood_roll`; -1 when that shift is not a Flood shift); before `card` and `begin_run`.
+    #[func]
+    fn set_shift(&mut self, day: i64, flood_roll: i64, next_flood_roll: i64) {
+        self.day = day.max(0) as u32;
+        self.flood = (flood_roll >= 0).then(|| flood_roll.min(255) as u8);
+        self.next_flood = (next_flood_roll >= 0).then(|| next_flood_roll.min(255) as u8);
     }
 
     /// Start this run's fog from a previous run's memory of the route (bits from `memory_bits`); before `begin_run`.
@@ -1672,19 +1808,22 @@ impl RoseRun {
             runner,
             followers: fs,
             corpses: cs,
+            flood: self.flood,
+            next_flood: self.next_flood,
         };
         self.sim = Some(run::RunSim::new(m, table, loot_tables(), creature_defs(), setup));
     }
 
     /// The route card for the assembled route (before or during a run): {chunks, shift_s, danger, danger_band,
-    /// burrows, patrol_chunks, known (0-1), known_lockers, known_crates, water (0-1), grates}. `memory` is the
-    /// route's memory bits from the save (empty before any run).
+    /// burrows, patrol_chunks, known (0-1), known_lockers, known_crates, water (0-1), grates, flood_rise (-1 when
+    /// not a Flood shift), flood_s (when the rise starts, in seconds of the shift)}. `memory` is the route's memory
+    /// bits from the save (empty before any run); the shift is `set_shift`'s.
     #[func]
     fn card(&self, memory: PackedByteArray) -> VarDictionary {
         let mut d = VarDictionary::new();
         let Some(m) = self.map_ref() else { return d };
         let bits = memory.to_vec();
-        let c = run::card(m, &creature_defs(), if bits.is_empty() { None } else { Some(bits.as_slice()) });
+        let c = run::card(m, &creature_defs(), if bits.is_empty() { None } else { Some(bits.as_slice()) }, self.day, self.flood, self.next_flood);
         d.set("chunks", c.chunks as i64);
         d.set("shift_s", c.shift_seconds() as i64);
         d.set("danger", c.danger as f64);
@@ -1697,10 +1836,13 @@ impl RoseRun {
         d.set("known_crates", c.known_crates as i64);
         d.set("water", c.water as f64);
         d.set("grates", c.grates as i64);
+        d.set("flood_rise", c.flood.map_or(-1, |f| f.rise as i64));
+        d.set("flood_s", c.flood.map_or(0, |f| f.start_s() as i64));
         d
     }
 
-    /// The shift clock: {shift_ticks, tick, left_ticks, overtime_ticks}.
+    /// The shift clock: {shift_ticks, tick, left_ticks, overtime_ticks, flood_rise (-1 when not a Flood shift),
+    /// flood_s (when the rise starts, seconds into the shift), water (tiles risen so far)}.
     #[func]
     fn shift(&self) -> VarDictionary {
         let mut d = VarDictionary::new();
@@ -1709,6 +1851,9 @@ impl RoseRun {
         d.set("tick", s.tick as i64);
         d.set("left_ticks", s.shift_ticks.saturating_sub(s.tick) as i64);
         d.set("overtime_ticks", s.overtime_ticks() as i64);
+        d.set("flood_rise", s.flood.map_or(-1, |f| f.rise as i64));
+        d.set("flood_s", s.flood.map_or(0, |f| f.start_s() as i64));
+        d.set("water", s.flood_level as i64);
         d
     }
 
@@ -1798,6 +1943,7 @@ impl RoseRun {
         d.set("regrown", &PackedByteArray::from(postcard::to_allocvec(&o.regrown).unwrap_or_default().as_slice()));
         d.set("regrown_count", o.regrown.len() as i64);
         d.set("kills", o.kills as i64);
+        d.set("oath_kills", o.oath_kills as i64);
         d.set("chunks_seen", o.chunks_seen as i64);
         d.set("blind_value", o.blind_value as i64);
         d.set("route_memory", &PackedByteArray::from(o.route_memory.as_slice()));
@@ -1849,6 +1995,26 @@ impl RoseRun {
         s.runner.x = x as i32 * run::creature::FP + run::creature::FP / 2;
         s.runner.y = y as i32 * run::creature::FP + run::creature::FP / 2;
         true
+    }
+
+    /// Development only (the screenshot script): a raider gang of `n` down at a tile now, and a Flood of `rise` tiles
+    /// starting now over its usual time (0 leaves the water). Not inputs; never replayed.
+    #[func]
+    fn debug_raid(&mut self, x: i64, y: i64, n: i64, gang: i64) -> bool {
+        let Some(s) = self.sim.as_mut() else { return false };
+        if x < 0 || y < 0 || x as usize >= s.map.w || y as usize >= s.map.h || !s.map.passable(x as usize, y as usize) {
+            return false;
+        }
+        let chunk = s.map.chunk_of[y as usize * s.map.w + x as usize];
+        s.raids.push(run::Raid { at: s.tick + 1, tile: (x as i32, y as i32), chunk, n: n.clamp(1, 3) as u8, gang: gang.clamp(1, 2) as u8 });
+        true
+    }
+
+    #[func]
+    fn debug_flood(&mut self, rise: i64) {
+        let Some(s) = self.sim.as_mut() else { return };
+        let ticks = run::creature::ticks(s.defs.flood.rise_s).max(1) as u64;
+        s.flood = Some(run::RunFlood { rise: rise.clamp(0, 3) as u8, start: s.tick + 1, ticks });
     }
 
     /// "running", "extracted" or "died".
@@ -2048,6 +2214,9 @@ impl RoseRun {
         d.set("notice_range", s.senses.notice_range() as i64);
         d.set("noise_here", s.senses.noise.at(tx as usize, ty as usize) as i64);
         d.set("lantern", r.lantern_on);
+        // under water: ticks so far and the ticks that are Down (a Flood shift's water)
+        d.set("under", s.under as i64);
+        d.set("drown", run::creature::ticks(s.defs.flood.drown_s) as i64);
         d.set("dimming", r.dimming);
         d.set("sneaking", r.sneaking);
         d.set("sprinting", r.sprinting);
@@ -2094,6 +2263,8 @@ impl RoseRun {
             d.set("max_hp", c.max_hp as i64);
             d.set("phase", c.phase.name());
             d.set("awareness", c.awareness as f64);
+            d.set("gang", c.gang as i64);
+            d.set("looting", c.loot_left > 0);
             d.set("windup", c.windup_left > 0 || c.fuse_left > 0);
             d.set("visible", s.senses.is_visible(tx as usize, ty as usize));
             d.set("heard", !s.senses.is_visible(tx as usize, ty as usize) && c.phase != run::Phase::Calm);
@@ -2240,6 +2411,25 @@ impl RoseRun {
                     d.set("minute", minute as i64);
                     d.set("packs", packs as i64);
                     d.set("patrols", patrols as i64);
+                }
+                run::Event::Raiders { gang, n, x, y } => {
+                    d.set("kind", "raiders");
+                    d.set("gang", gang as i64);
+                    d.set("n", n as i64);
+                    d.set("x", x as i64);
+                    d.set("y", y as i64);
+                }
+                run::Event::Raided { id, source, taken } => {
+                    d.set("kind", "raided");
+                    d.set("id", id as i64);
+                    d.set("source", source as i64);
+                    d.set("taken", taken as i64);
+                }
+                run::Event::WaterRose { level, tiles } => {
+                    d.set("kind", "water_rose");
+                    d.set("level", level as i64);
+                    let w = s.map.w;
+                    d.set("tiles", &PackedInt32Array::from(tiles.iter().map(|&(x, y)| (y as usize * w + x as usize) as i32).collect::<Vec<i32>>().as_slice()));
                 }
             }
             out.push(&d.to_variant());

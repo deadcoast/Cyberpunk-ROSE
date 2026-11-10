@@ -68,7 +68,15 @@ pub struct MatSim {
     starve: Vec<i16>,
     lonely: Vec<i16>,
     pub sig: Vec<f32>,
+    /// damage a hyphal tile has taken against its armour, 1 + 9 x Chrome Affinity (Pass 1; Full Design, Pressure)
+    pub wear: Vec<f32>,
+    /// lit or bleached this step: it does not mend
+    hurt: Vec<bool>,
+    /// 0..1, gained each step without signal (Pass 1's Feral Drive); at 1 the tile is feral
+    pub ferality: Vec<f32>,
     pub heart: Option<(usize, usize)>,
+    /// the Heart burned to nothing: it is no longer a signal source
+    pub heart_lost: bool,
     pub relays: Vec<(usize, usize)>,
     pub pits: HashMap<(usize, usize), f32>,
     pub tick: u64,
@@ -108,7 +116,11 @@ impl MatSim {
             starve: vec![0; n],
             lonely: vec![0; n],
             sig: vec![0.0; n],
+            wear: vec![0.0; n],
+            hurt: vec![false; n],
+            ferality: vec![0.0; n],
             heart: None,
+            heart_lost: false,
             relays: Vec::new(),
             pits: HashMap::new(),
             tick: 0,
@@ -163,6 +175,63 @@ impl MatSim {
         if self.hy[i] != s {
             self.hy[i] = s;
             self.changed.push(i as u32);
+            if !is_hyphal(s) {
+                self.wear[i] = 0.0;
+                self.ferality[i] = 0.0;
+            }
+        }
+    }
+
+    /// Whether a tile is feral tissue (Full Design, Pressure: Blooms).
+    #[inline]
+    pub fn is_feral(&self, i: usize) -> bool {
+        is_hyphal(self.hy[i]) && self.ferality[i] >= 1.0
+    }
+
+    /// Feral tissue of this strain is a Bloom: Feral Drive above 0.5 (Pass 1).
+    pub fn blooms(&self) -> bool {
+        self.genome.0[crate::genome::FERAL] > 0.5
+    }
+
+    /// A Bloom's tissue: feral, of a strain that blooms. It is another strain to the city's: the city's signal stops
+    /// at it and the two fight where they touch. Feral tissue of a strain that does not bloom is the city's again the
+    /// moment its signal reaches it.
+    #[inline]
+    pub fn is_bloom(&self, i: usize) -> bool {
+        self.is_feral(i) && self.blooms()
+    }
+
+    /// A hyphal tile's armour (Pass 1: cord armour HP = 1 + 9 x Chrome Affinity).
+    pub fn armour(&self) -> f32 {
+        1.0 + 9.0 * self.genome.0[crate::genome::CHROME]
+    }
+
+    /// White light, bleach underfoot or flame on a tile: `dmg` against its armour; at none left it dies to necrosis.
+    /// The Heart and the Relays never die this way. True when the tile died.
+    pub fn burn(&mut self, i: usize, dmg: f32) -> bool {
+        if !is_hyphal(self.hy[i]) || dmg <= 0.0 {
+            return false;
+        }
+        self.hurt[i] = true;
+        let (x, y) = (i % self.w, i / self.w);
+        if Some((x, y)) == self.heart || self.relays.contains(&(x, y)) {
+            return false;
+        }
+        self.wear[i] += dmg;
+        if self.wear[i] >= self.armour() {
+            self.set_hy(i, hy::NECRO);
+            self.age[i] = 0;
+            self.starve[i] = 0;
+            return true;
+        }
+        false
+    }
+
+    /// Bleach on a tile: its nutrient to nothing.
+    pub fn bleach(&mut self, i: usize) {
+        if sub::COND[self.sub[i] as usize] > 0.0 {
+            self.n[i] = 0.0;
+            self.hurt[i] = true;
         }
     }
 
@@ -272,9 +341,10 @@ impl MatSim {
                 _ => 1.0,
             };
         }
+        let bloom = self.blooms();
         let mut dq: VecDeque<usize> = VecDeque::new();
         let mut sources: Vec<(usize, usize)> = Vec::with_capacity(1 + self.relays.len());
-        if let Some(hh) = self.heart {
+        if let Some(hh) = self.heart.filter(|_| !self.heart_lost) {
             sources.push(hh);
         }
         sources.extend(self.relays.iter().copied());
@@ -289,7 +359,8 @@ impl MatSim {
             let d0 = dist[i];
             for d in 0..4 {
                 if let Some(j) = self.nb(i, d) {
-                    if is_hyphal(self.hy[j]) {
+                    // the city's signal runs along its own strain, never into a Bloom
+                    if is_hyphal(self.hy[j]) && !(bloom && self.ferality[j] >= 1.0) {
                         let nd = d0 + self.cost[j];
                         if nd < r && (dist[j] < 0.0 || nd < dist[j]) {
                             dist[j] = nd;
@@ -375,6 +446,8 @@ impl MatSim {
         for v in delta.iter_mut() {
             *v = 0.0;
         }
+        // a Bloom's tissue eats at twice the uptake (Pass 1: its Appetite doubles)
+        let bloom = self.blooms();
         for j in 0..len {
             if is_hyphal(self.hy[j]) || sub::COND[self.sub[j] as usize] <= 0.0 {
                 continue;
@@ -386,8 +459,9 @@ impl MatSim {
             for d in 0..4 {
                 if let Some(i) = self.nb(j, d) {
                     if is_hyphal(self.hy[i]) {
-                        delta[j] -= amt;
-                        delta[i] += amt;
+                        let a = if bloom && self.ferality[i] >= 1.0 { amt * 2.0 } else { amt };
+                        delta[j] -= a;
+                        delta[i] += a;
                     }
                 }
             }
@@ -443,10 +517,32 @@ impl MatSim {
 
         // 4. upkeep, decay, deposits, recycled necrosis, rock, clamp
         let maint = self.p.maint;
+        let theta_starve = self.p.theta_starve;
+        let bloom = self.blooms();
         for i in 0..len {
             let mut v = self.n[i];
             if is_hyphal(self.hy[i]) {
                 v -= maint;
+                // a Bloom and the city touching fight at the border: both lose 0.05 a step (Pass 1's strains)
+                if bloom {
+                    let feral = self.ferality[i] >= 1.0;
+                    let mut border = false;
+                    for d in 0..4 {
+                        if let Some(j) = self.nb(i, d) {
+                            if is_hyphal(self.hy[j]) && (self.ferality[j] >= 1.0) != feral {
+                                border = true;
+                            }
+                        }
+                    }
+                    if border {
+                        v -= 0.05;
+                    }
+                }
+                // a fed tile out of the light mends its armour a point a step
+                if !self.hurt[i] && v > theta_starve {
+                    self.wear[i] = (self.wear[i] - 1.0).max(0.0);
+                }
+                self.hurt[i] = false;
             }
             v -= self.decay * v;
             if self.sub[i] == sub::DEPOSIT {
@@ -508,6 +604,8 @@ impl MatSim {
         self.set_hy(pick, hy::TIP);
         self.age[pick] = 0;
         self.stall[pick] = 0;
+        // a tip is its parent's strain: it carries the parent's ferality
+        self.ferality[pick] = self.ferality[c];
         occupied[pick] = true;
         self.n[c] -= self.grow_cost + self.tip_starter;
         self.n[pick] = (self.n[pick] + self.tip_starter).min(1.0);
@@ -547,6 +645,20 @@ impl MatSim {
                 self.set_hy(i, hy::NECRO);
                 self.age[i] = 0;
                 self.starve[i] = 0;
+            }
+        }
+
+        // isolation -> ferality: tissue without signal gains Pass 1's Feral Drive rate a step and loses it all when
+        // signal returns; at 1 it is feral (Full Design, Pressure: Blooms)
+        let feral_rate = self.p.feral_rate;
+        for i in 0..len {
+            if !is_hyphal(self.hy[i]) {
+                continue;
+            }
+            if self.sig[i] > 0.0 {
+                self.ferality[i] = 0.0;
+            } else {
+                self.ferality[i] = (self.ferality[i] + feral_rate).min(1.0);
             }
         }
 

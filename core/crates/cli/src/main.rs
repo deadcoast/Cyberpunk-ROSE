@@ -105,6 +105,17 @@ enum Cmd {
         #[arg(long, default_value = "out/city.log")]
         log: PathBuf,
     },
+    /// Phase D's proof: a Cleansing down the first grate of a city its steward has played, twice from the same state,
+    /// as it stands and with two Gates and a manned Turret on the way; the survival spread.
+    Cleansing {
+        #[arg(long, default_value_t = 11)]
+        seed: u64,
+        /// shifts the steward plays before the Cleansing
+        #[arg(long, default_value_t = 10)]
+        shifts: u32,
+        #[arg(long, default_value = "docs/telemetry/cleansing.md")]
+        report: PathBuf,
+    },
 }
 
 // ---------------------------------------------------------------- terminal
@@ -463,6 +474,7 @@ fn main() {
         Cmd::Route { seed, stratum, chunks, sweep, loot } => cmd_route(&t, &cli.out, seed, stratum, chunks, sweep, loot),
         Cmd::Cadence { runs, strata, seed, report, logs } => cmd_cadence(&t, runs, &strata, seed, &report, logs.as_deref()),
         Cmd::City { seed, shifts, report, log } => cmd_city(&t, seed, shifts, &report, &log),
+        Cmd::Cleansing { seed, shifts, report } => cmd_cleansing(&t, seed, shifts, &report),
     }
     println!();
 }
@@ -613,6 +625,48 @@ fn cmd_city(t: &Term, seed: u64, shifts: u32, report_path: &Path, log_path: &Pat
     std::fs::write(log_path, &run_.log).expect("log");
     println!("  {} {}  {}", t.dim("wrote"), report_path.display(), log_path.display());
     if !failures.is_empty() {
+        std::process::exit(1);
+    }
+}
+
+// ---------------------------------------------------------------- cleansing
+fn cmd_cleansing(t: &Term, seed: u64, shifts: u32, report_path: &Path) {
+    t.head("cleansing", &format!("seed {seed}: the steward plays {shifts} shifts, then a Cleansing comes down the first grate  |  as it stands, then with two Gates and a manned Turret on the way"));
+    t.hrow(&[("city", 10), ("Heart", 9), ("Mat cells", 13), ("structures", 11), ("slimos", 8), ("dead", 5), ("bleeding", 8), ("fell", 7), ("burned", 7), ("ruined", 7), ("seconds", 8)]);
+    let started = Instant::now();
+    let mut runs = Vec::new();
+    for defended in [false, true] {
+        let r = game::siege::cleansing(seed, shifts, defended);
+        let heart = if r.heart_lost { "burned".to_string() } else { format!("{} HP", r.after.heart_hp) };
+        t.row(&[(if defended { "defended" } else { "as it is" }, 10), (&heart, 9), (&format!("{} > {}", r.before.cells, r.after.cells), 13), (&format!("{} > {}", r.before.structures, r.after.structures), 11), (&format!("{} > {}", r.before.slimos, r.after.slimos), 8), (&r.dead.to_string(), 5), (&r.bleeding.to_string(), 8), (&format!("{}/{}", r.fallen, r.sent), 7), (&r.burned.to_string(), 7), (&r.ruined.to_string(), 7), (&format!("{:.0}", r.seconds), 8)]);
+        runs.push(r);
+    }
+    let (a, b) = (&runs[0], &runs[1]);
+    // the designed spread (Full Design, Pressure: The proof): as it stands the Heart falls; defended it stands with most of its Mat
+    let spread = a.heart_lost && !b.heart_lost && b.after.cells * 2 >= b.before.cells;
+    println!();
+    for line in &b.defence {
+        println!("  {} {line}", t.dim("defence"));
+    }
+    println!("  the Gates close the way: {}", if b.closed { "yes" } else { "no, the squads can walk round" });
+    println!("  {}   {:.0} s", if spread { t.hi("PASS the designed spread") } else { t.hi("FAIL the designed spread") }, started.elapsed().as_secs_f32());
+    let mut md = String::new();
+    md.push_str("# A Cleansing, with and without Gates\n\n");
+    md.push_str(&format!("Written by `rose cleansing --seed {seed} --shifts {shifts}` on {} (Full Design v3.14, Colony mode: Pressure — The proof; the Build plan's Phase D). The steward of `rose city` plays {shifts} shifts; then a Cleansing comes down the first grate — the sluice's bleach flood, four lamp carriers advancing a tile a Mat step, four flamers for the Pits and the Heart once the carriers are halfway — twice from the same state: as the city stands, and with two Sphincter Gates and a Scrap Turret on the squads' way from the grate, a Guard ordered to each. The designed spread: as it stands the Heart falls; defended, the Heart stands and most of the Mat with it. **Result: {}.**\n\n", chrono_free_date(), if spread { "the spread holds" } else { "the spread does not hold" }));
+    md.push_str("| city | the Heart | Mat cells | structures | slimos | dead | bleeding | Oathkeepers fell | Mat tiles burned | structures ruined | seconds | Blackline |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    for r in &runs {
+        md.push_str(&format!("| {} | {} | {} → {} | {} → {} | {} → {} | {} | {} | {} of {} | {} | {} | {:.0} | {} |\n", if r.defended { "defended" } else { "as it stands" }, if r.heart_lost { "burned".to_string() } else { format!("{} HP", r.after.heart_hp) }, r.before.cells, r.after.cells, r.before.structures, r.after.structures, r.before.slimos, r.after.slimos, r.dead, r.bleeding, r.fallen, r.sent, r.burned, r.ruined, r.seconds, r.blackline));
+    }
+    md.push_str(&format!("\n**The defence**: {}. The Gates {} the way from the grate to the Heart.\n\n", b.defence.join("; "), if b.closed { "close" } else { "do not close" }));
+    for r in &runs {
+        md.push_str(&format!("**The Cleansing, {}**\n\n```\n{}```\n\n", if r.defended { "defended" } else { "as it stands" }, r.log));
+    }
+    if let Some(parent) = report_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(report_path, md).expect("report");
+    println!("  {} {}", t.dim("wrote"), report_path.display());
+    if !spread {
         std::process::exit(1);
     }
 }

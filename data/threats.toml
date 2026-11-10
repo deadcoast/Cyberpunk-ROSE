@@ -1,0 +1,168 @@
+# Cyberpunk: ROSE — the surface's answer (Full Design v3.14, Colony mode: Pressure; Pass 1's Threats; research 18).
+# Seconds are the city's clock (2 ticks a second); "steps" are Mat steps (one every 12 ticks). HP and damage in HP.
+# Numbers marked Pass 1 are its; the rest are this design's.
+
+[attention]
+max = 100.0
+# lost every shift (Pass 1)
+decay = 2.0
+# Nodes, and structures marked near_grate, count at a grate within this many tiles (Pass 1: 10)
+near = 10
+near_grate = ["lume_farm"]
+# structures that count anywhere in the zone (Pass 1: a Still running)
+in_zone = ["still"]
+# a point per this many eddies sold at the grate (Pass 1: 1 per 10)
+per_eddies = 10
+# per Blackline or Relic outside a Vault (Pass 1)
+exposed = 5.0
+# per Oathkeeper killed (the run's scout: +15)
+kill = 15.0
+# Open Grates on a reached grate's gains (Pass 2)
+open_grates = 1.5
+# a defector who goes to the Oathkeepers talks
+defector = 5.0
+
+# The stages, lowest first. at: the line (Pass 1); from: the first stratum the stage comes down in (Pass 2: a Patrol in
+# the Sump's first session, Sweeps with the Service Tunnels, Cleansings with the Undercroft or the chapter-3 accord);
+# quiet: shifts the zone sees nothing this low again (research 18);
+# squad: [role, count]; salvage: Blackline when the event's bodies fall, [min, max] (Pass 1); arrive_in: the event
+# comes down at a seeded tick in the first this-many ticks of the shift (a quarter of a player's 1500).
+[[stage]]
+id = "patrol"
+name = "Patrol"
+at = 30.0
+from = 1
+quiet = 3
+squad = [["scout", 2]]
+map_s = 60.0
+salvage = [1, 2]
+salvage_per = "body"
+relics = [0, 0]
+arrive_in = 375
+
+[[stage]]
+id = "sweep"
+name = "Sweep"
+at = 60.0
+from = 4
+quiet = 6
+squad = [["carrier", 2], ["sprayer", 4]]
+map_s = 30.0
+salvage = [3, 5]
+salvage_per = "event"
+relics = [0, 0]
+arrive_in = 375
+# leaves when this share of it is down
+break_at = 0.5
+
+[[stage]]
+id = "cleansing"
+name = "Cleansing"
+at = 90.0
+from = 6
+quiet = 15
+squad = [["carrier", 4], ["flamer", 4]]
+map_s = 0.0
+salvage = [8, 15]
+salvage_per = "event"
+relics = [0, 2]
+arrive_in = 375
+# the bleach flood: Mat steps of bleached, raised water before the lamps come (Pass 1: 20), a quarter off a Lung each
+flood_steps = 20
+lung_cut = 0.25
+# the flamers set out when the lamp carriers are this far along their way
+flamers_at = 0.5
+# the longest it stays, in ticks (two of a player's shifts)
+lasts = 3000
+
+# The bodies. hp; walk: ticks a tile (2 = a tile a second; a lamp carrier in a Cleansing walks a tile a Mat step);
+# lamp: tiles of white light; lamp_burn: what it does to a tile of Mat a step (Pass 1's white light 1; a mapping scout's
+# lamp 0.3, so its cords smoke through 60 s of mapping and live at Chrome Affinity 0.5 — Pass 2: "cords in it smoke";
+# lamps do not add: a tile in two pools takes the worse); shot / shot_s / range: a scout's gun, fired back at what hit
+# it (the run's scout: 9 each 1.2 s); strike / strike_s: the pole a lamp carrier or sprayer swings at a body beside it
+# (the run scout's, 7 a second; their hands are full, no gun); bleach: tiles its bleach runs along tissue and water; flame: HP a second into what is beside it; bite / bite_s:
+# a creature's melee; chew: HP a second into a structure.
+[body.scout]
+name = "Oathkeeper scout"
+hp = 30
+walk = 2
+lamp = 3
+lamp_burn = 0.3
+shot = 9
+shot_s = 1.2
+range = 6
+oathkeeper = true
+
+[body.sprayer]
+name = "bleach sprayer"
+hp = 40
+walk = 2
+lamp = 0
+strike = 7
+strike_s = 1.0
+bleach = 3
+oathkeeper = true
+
+[body.carrier]
+name = "lamp carrier"
+hp = 60
+walk = 2
+lamp = 4
+strike = 7
+strike_s = 1.0
+oathkeeper = true
+
+[body.flamer]
+name = "flamer"
+hp = 50
+walk = 2
+lamp = 0
+flame = 10.0
+burn = 2.0
+oathkeeper = true
+
+[body.crawler]
+name = "Bloom crawler"
+hp = 18
+walk = 1
+bite = 6
+bite_s = 1.2
+chew = 2.0
+oathkeeper = false
+
+[defence]
+# a Scrap Turret with a Guard: its def's damage and range, a shot every this many seconds
+turret_s = 1.0
+# a Guard on a Gate, or a D2 under Conscription: 3 + Fight a strike every this many seconds, at a tile
+guard_strike = 3
+guard_s = 2.0
+# (a Gate is muscle: only flame breaks it, a flamer's flame a second; the rest wait at it)
+# the Mat's Toxicity: 2 x Toxicity to an Oathkeeper standing on tissue each Mat step (Pass 1)
+toxicity = 2.0
+# a slimo in white light: Mood lost that shift (Pass 1); Bleeding past this share of its HP
+panic_mood = 20
+bleed_at = 0.25
+# a Pen with a Tend slimo tames a crawler this near; a tamed one bites Oathkeepers this near its Pen (Pass 1: 3)
+tame_within = 4
+tamed_within = 8
+tamed_bite = 3
+tamed_bite_s = 1.2
+
+[bloom]
+# feral tissue of a strain with Feral Drive above this is a Bloom (Pass 1)
+feral_drive = 0.5
+# crawlers a Bloom's Node spawns a shift, and the most it keeps standing
+per_node = 1
+most_per_node = 2
+# Quarantine Protocol severs Mat without signal at this many shift ends running (Pass 2: a shift)
+quarantine_after = 2
+# a Bloom borders a district when its tissue is this near the district's hub
+borders = 8
+
+[flood]
+# the Flood shift's rise, rolled evenly from the day's seed (Pass 1: 0-3)
+roll = [0, 3]
+# a drowned Hab-Pod or Forge loses this share of its HP, this under Curfew (Pass 2: flood damage down)
+damage = 0.25
+curfew_damage = 0.125
+drowns = ["pod", "forge"]

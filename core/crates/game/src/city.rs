@@ -181,7 +181,7 @@ impl Steward {
                 w.ledger.queue(&mut w.stash, h, Verb::Sell { market: k as u8 }, w.day);
             }
             if n > 0 {
-                Self::decide(w, format!("{n} Curio and Tech to sell at grate {}", k + 1), &mut out);
+                Self::decide(w, format!("{n} Curio and Tech to sell at grate {}", w.city.market_grate(k)), &mut out);
             }
         }
         // the steering: whenever the cord to the first grate is lost, a Relay ghost at the anchor nearest the grate on
@@ -344,6 +344,11 @@ fn gaps(times: &mut [f32]) -> Vec<f32> {
 /// Play the city for `shifts` shifts from `seed` (the game's founding: the Mat steered to the first grate); `each`
 /// hears every shift as it ends.
 pub fn play(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -> CityRun {
+    play_world(seed, shifts, each).0
+}
+
+/// The same, and the World as the last shift left it (the Cleansing proof plays on from it).
+pub fn play_world(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -> (CityRun, World) {
     let table = ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
     let lib = ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
     let (tables, creatures) = (LootTables::shipped(), CreatureFile::shipped());
@@ -375,7 +380,7 @@ pub fn play(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -
             let lume = w.city.sim.genome.0[mat::genome::LUME];
             let nonce = w.city.tick * 131 + day as u64;
             let mem = if memory.is_empty() { None } else { Some(memory.as_slice()) };
-            let rs = RunSetup { mat_lume_gene: lume, memory: mem, run_nonce: nonce, route_runs: runs, day, rig, runner: setup, followers: Vec::new(), corpses: Vec::new() };
+            let rs = RunSetup { mat_lume_gene: lume, memory: mem, run_nonce: nonce, route_runs: runs, day, rig, runner: setup, followers: Vec::new(), corpses: Vec::new(), flood: w.threats.flood_roll(), next_flood: (crate::shift::shift_of_day(day + 1) == 2).then(|| w.threats.roll_for(day + 1)) };
             run::bot::play_setup(map.clone(), table.clone(), tables.clone(), creatures.clone(), rs)
         });
         let run_ticks = outcome.as_ref().map_or(IDLE_SHIFT_TICKS * RUN_TICKS_PER_CITY_TICK, |o| o.ticks);
@@ -388,6 +393,7 @@ pub fn play(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -
         // home
         if let (Some(id), Some(o)) = (runner, outcome.as_ref()) {
             runs += 1;
+            w.run_kills += o.oath_kills;
             memory = o.route_memory.clone();
             rec.result = match o.result {
                 RunResult::Extracted { .. } => "extracted".into(),
@@ -487,7 +493,7 @@ pub fn play(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftRecord)) -
     if shifts as usize >= BUILD_PLAN.len() * 2 && out.plan_built < BUILD_PLAN.len() {
         out.failures.push(format!("the build plan stands at {} of {}", out.plan_built, BUILD_PLAN.len()));
     }
-    out
+    (out, w)
 }
 
 /// Two plays of one seed, compared shift by shift: the city replays bit-exact or says where it parted.

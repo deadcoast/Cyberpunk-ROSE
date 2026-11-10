@@ -172,6 +172,42 @@ func _process(_delta: float) -> bool:
 		var img: Image = root.get_viewport().get_texture().get_image()
 		img.save_png(out_dir + "/colony_stack.png")
 		sim.build_tool = ""
+		# Pressure (Full Design v3.14): a Sweep sent down the first reached grate and walked a minute of city time —
+		# the lamp carriers' white light, the sprayers' bleach, the bodies on the map and the gauges over it
+		var scr: Node = screens.current
+		var rs: RoseSim = sim.ensure()
+		scr.set_view(0)
+		var zone := 0
+		for z in rs.attention():
+			if bool(z.reached):
+				zone = int(z.number) - 1
+				break
+		rs.debug_send("sweep", zone)
+		scr.selected = {}
+		scr.card.visible = false
+		# 50 s: down the shaft and sweeping its source
+		for t in 100:
+			rs.step()
+		var bodies: Array = rs.threat_bodies()
+		if not bodies.is_empty():
+			scr.cam.position = Vector2(int(bodies[0].x) * 32 + 16, int(bodies[0].y) * 32 - 32)
+	if frames_on_screen == 19 and screen_i >= 0 and screen_ids[screen_i] == "colony":
+		var img: Image = root.get_viewport().get_texture().get_image()
+		img.save_png(out_dir + "/colony_sweep.png")
+		# the next Flood shift with water in it: the shift ends until one rises, the camera on the first wet tile
+		var rs: RoseSim = sim.ensure()
+		for k in 6:
+			sim.end_shift()
+			sim.day += 1
+			if not rs.flooded_cells().is_empty():
+				break
+		var wet: PackedInt32Array = rs.flooded_cells()
+		if not wet.is_empty():
+			var i: int = wet[wet.size() / 2]
+			screens.current.cam.position = Vector2((i % rs.width()) * 32 + 16, (i / rs.width()) * 32 + 16)
+	if frames_on_screen == 22 and screen_i >= 0 and screen_ids[screen_i] == "colony":
+		var img: Image = root.get_viewport().get_texture().get_image()
+		img.save_png(out_dir + "/colony_flood.png")
 	if frames_on_screen == 13 and screen_i >= 0 and screen_ids[screen_i] == "run":
 		# a second Run shot: standing at the first crate or locker with its manifest unrolled
 		var scr: Node = screens.current
@@ -187,13 +223,38 @@ func _process(_delta: float) -> bool:
 	if frames_on_screen == 16 and screen_i >= 0 and screen_ids[screen_i] == "run":
 		var img: Image = root.get_viewport().get_texture().get_image()
 		img.save_png(out_dir + "/run_loot.png")
-	if frames_on_screen >= 18:
+		# raiders and a Flood (Full Design v3.14): a gang down a few tiles off and the water rising three, a minute
+		# and a half of run time
+		var scr: Node = screens.current
+		scr.route.debug_flood(3)
+		scr.loot_panel.visible = false
+		for t in 1300:
+			if scr.over != "":
+				break
+			scr.step_with(0, 0, 0)
+		# then a gang down within the Runner's sight, two seconds on
+		var r: Dictionary = scr.route.runner()
+		var down := false
+		for rad in range(3, 8):
+			for dx in [rad, -rad]:
+				for dy in range(-2, 7):
+					if not down and scr.route.debug_raid(int(r.tx) + dx, int(r.ty) + dy, 2, 1):
+						down = true
+		print("[shots] raiders down: ", down)
+		for t in 40:
+			if scr.over != "":
+				break
+			scr.step_with(0, 0, 0)
+	if frames_on_screen == 19 and screen_i >= 0 and screen_ids[screen_i] == "run":
+		var img: Image = root.get_viewport().get_texture().get_image()
+		img.save_png(out_dir + "/run_pressure.png")
+	if frames_on_screen >= (24 if screen_i >= 0 and screen_ids[screen_i] in ["colony", "run"] else 18):
 		screen_i += 1
 		frames_on_screen = 0
 		if screen_i < screen_ids.size():
 			screens.show_screen(screen_ids[screen_i])
 		else:
-			print("[shots] wrote %d screens to %s" % [screen_ids.size() + 3, out_dir])
+			print("[shots] wrote %d screens to %s" % [screen_ids.size() + 6, out_dir])
 			quit(0)
 			return true
 	return false

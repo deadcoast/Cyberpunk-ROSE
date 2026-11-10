@@ -165,6 +165,8 @@ pub enum SourceKind {
     OwnCorpse,
     /// a pile the Runner dropped this run
     Dropped,
+    /// a dead raider's pile: what it took and its gun
+    RaiderPile,
 }
 
 impl SourceKind {
@@ -177,7 +179,7 @@ impl SourceKind {
             SourceKind::Cache => "cache",
             SourceKind::ScoutBody => "scout_drop",
             SourceKind::RatCorpse => "rat_salvage",
-            SourceKind::OwnCorpse | SourceKind::Dropped => "none",
+            SourceKind::OwnCorpse | SourceKind::Dropped | SourceKind::RaiderPile => "none",
         }
     }
     pub fn name(self) -> &'static str {
@@ -191,6 +193,7 @@ impl SourceKind {
             SourceKind::RatCorpse => "rat corpse",
             SourceKind::OwnCorpse => "our dead",
             SourceKind::Dropped => "dropped",
+            SourceKind::RaiderPile => "raider pile",
         }
     }
 }
@@ -324,7 +327,7 @@ impl LootState {
             (s.kind, s.tier, s.chunk, s.locked)
         };
         let r = &tables.rules;
-        if kind == SourceKind::OwnCorpse || kind == SourceKind::Dropped {
+        if matches!(kind, SourceKind::OwnCorpse | SourceKind::Dropped | SourceKind::RaiderPile) {
             // the contents are what was left there, not a roll
             let s = &mut self.sources[idx];
             let revealed = s.items.len();
@@ -337,7 +340,7 @@ impl LootState {
             (SourceKind::Locker, _) => (r.noise_locker_pry, 0, false),
             (SourceKind::Crate, OpenMethod::PryBar) | (SourceKind::Cache, OpenMethod::PryBar) => (r.noise_crate_pry, 1, false),
             (SourceKind::Crate, _) | (SourceKind::Cache, _) => (r.noise_crate_force, 0, false),
-            (SourceKind::Corpse, _) | (SourceKind::ScoutBody, _) | (SourceKind::RatCorpse, _) | (SourceKind::OwnCorpse, _) | (SourceKind::Dropped, _) => (r.noise_corpse, 0, false),
+            (SourceKind::Corpse, _) | (SourceKind::ScoutBody, _) | (SourceKind::RatCorpse, _) | (SourceKind::OwnCorpse, _) | (SourceKind::Dropped, _) | (SourceKind::RaiderPile, _) => (r.noise_corpse, 0, false),
             (SourceKind::Pile, _) => (r.noise_pile, 0, false),
         };
         let generous = self.generous() && matches!(kind, SourceKind::Locker | SourceKind::Crate | SourceKind::Cache);

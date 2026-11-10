@@ -332,9 +332,26 @@ pub struct Structure {
     /// turned before it was placed: the footprint's width and height swap (v3.12)
     #[serde(default)]
     pub rotated: bool,
+    /// under the Flood shift's water: no beds, no work this shift (Full Design v3.14, Pressure: Floods)
+    #[serde(default)]
+    pub drowned: bool,
+    /// its anchor carried less signal than it needs at the last shift's end: no work this shift (signal is power)
+    #[serde(default)]
+    pub dark: bool,
 }
 
 impl Structure {
+    /// The tiles it stands on.
+    pub fn tiles(&self, d: &StructureDef) -> Vec<(u16, u16)> {
+        let (w, h) = self.dims(d);
+        let mut v = Vec::with_capacity((w * h) as usize);
+        for dy in 0..h {
+            for dx in 0..w {
+                v.push((self.x + dx, self.y + dy));
+            }
+        }
+        v
+    }
     /// The footprint as it stands (turned or not).
     pub fn dims(&self, d: &StructureDef) -> (u16, u16) {
         if self.rotated { (d.footprint[1] as u16, d.footprint[0] as u16) } else { (d.footprint[0] as u16, d.footprint[1] as u16) }
@@ -531,6 +548,8 @@ impl std::fmt::Display for PlaceError {
 pub struct ShiftOutcome {
     /// (slimo, job, structure) this shift
     pub assignments: Vec<(u32, Job, u32)>,
+    /// structures with work that went dark (true) or got their power back (false) at this shift's end
+    pub power: Vec<(u32, bool)>,
     pub built: Vec<u32>,
     pub upgraded: Vec<u32>,
     /// ghosts the Stash could not pay for: (structure, what it lacks)
@@ -756,7 +775,7 @@ impl Colony {
         let di = defs.index(def_id).ok_or(PlaceError::Unknown)?;
         let id = self.next_id;
         self.next_id += 1;
-        self.structures.push(Structure { id, def: di, x, y, tier: 1, hp: defs.structure[di].hp_at(1), built: false, progress: 0, paid: false, upgrading_to: None, district: None, quota: None, rotated });
+        self.structures.push(Structure { id, def: di, x, y, tier: 1, hp: defs.structure[di].hp_at(1), built: false, progress: 0, paid: false, upgrading_to: None, district: None, quota: None, rotated, drowned: false, dark: false });
         Ok(id)
     }
 
@@ -771,8 +790,17 @@ impl Colony {
         Ok(id)
     }
 
-    /// Cancel a ghost (built structures are not removed here; floods and raiders do that, Phase D). Returns the
-    /// cost to refund when it was paid.
+    /// A built structure ruined (Full Design v3.14, Pressure: flamers, crawlers, the Flood): off the map; its
+    /// sleepers lose their beds and its orders go. Returns it.
+    pub fn ruin(&mut self, _defs: &StructureFile, id: u32) -> Option<Structure> {
+        let i = self.structures.iter().position(|s| s.id == id)?;
+        let s = self.structures.remove(i);
+        self.homes.retain(|_, h| *h != id);
+        self.orders.retain(|_, sid| *sid != id);
+        Some(s)
+    }
+
+    /// Cancel a ghost (built structures leave by `ruin`). Returns the cost to refund when it was paid.
     pub fn cancel(&mut self, defs: &StructureFile, id: u32) -> Option<Cost> {
         let i = self.structures.iter().position(|s| s.id == id && !s.built)?;
         let s = self.structures.remove(i);
@@ -900,7 +928,7 @@ impl Colony {
         let di = defs.index("heart").ok_or("no heart def")?;
         let id = self.next_id;
         self.next_id += 1;
-        self.structures.push(Structure { id, def: di, x: ax, y: ay, tier: 1, hp: defs.structure[di].hp_at(1), built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: None, rotated: false });
+        self.structures.push(Structure { id, def: di, x: ax, y: ay, tier: 1, hp: defs.structure[di].hp_at(1), built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: None, rotated: false, drowned: false, dark: false });
         // the Route Board and the Bench on the nearest tissue that takes them
         for (what, tier) in [("route_board", 1u8), ("bench", 1u8)] {
             let mut placed = false;
@@ -1496,7 +1524,7 @@ impl Colony {
     /// order it was asked for (v3.12, Building): two slots a ghost or an upgrade, one a marked cut.
     pub fn slots(&self, defs: &StructureFile) -> Vec<(Job, u32)> {
         let mut v = Vec::new();
-        for s in self.structures.iter().filter(|s| s.built && s.upgrading_to.is_none()) {
+        for s in self.structures.iter().filter(|s| s.built && s.upgrading_to.is_none() && !s.drowned && !s.dark) {
             if let Some(job) = defs.structure[s.def].job() {
                 for _ in 0..defs.structure[s.def].slots_at(s.tier) {
                     v.push((job, s.id));
@@ -1606,6 +1634,20 @@ impl Colony {
             let d = self.districts.iter().find(|d| d.id == *did).unwrap();
             out.lines.push(format!("{} is a district: {} structures at {},{}", d.name, d.structures.len(), d.hub.0, d.hub.1));
         }
+        // signal is power (Full Design, Power, water, light): a structure whose anchor carries less than its need at
+        // the shift's end does no work this shift and takes none the next — the white light, the bleach and die-back
+        // cut power by killing the cord under it
+        let heart = defs.index("heart");
+        for s in self.structures.iter_mut().filter(|s| s.built && Some(s.def) != heart) {
+            let d = &defs.structure[s.def];
+            let i = s.y as usize * mat.w + s.x as usize;
+            let dark = !((mat.hy[i] == hy::CORD || mat.hy[i] == hy::NODE) && mat.sig[i] >= d.sigma);
+            if dark != s.dark && d.job().is_some() {
+                out.lines.push(if dark { format!("{} at {},{} is dark: its cord carries no power", d.name, s.x, s.y) } else { format!("{} at {},{} has power again", d.name, s.x, s.y) });
+                out.power.push((s.id, dark));
+            }
+            s.dark = dark;
+        }
         // the work
         let mut eddies_left = ledger_eddies;
         let mut builders: HashMap<u32, Vec<(i32, bool)>> = HashMap::new(); // ghost -> (hands, forge in district)
@@ -1618,6 +1660,9 @@ impl Colony {
                 continue;
             }
             let Some(s) = self.get(sid) else { continue };
+            if s.dark {
+                continue;
+            }
             let d = &defs.structure[s.def];
             match job {
                 Job::Build => builders.entry(sid).or_default().push((r.stat(Stat::Hands), s.district.is_some_and(|dd| forge_districts.contains(&dd)))),
@@ -1760,7 +1805,8 @@ impl Colony {
                 .collect();
             let home = self.home_of(r.id).map(|h| (defs.structure[h.def].id.clone(), h.tier, h.district));
             let in_bunkhouse = home.as_ref().is_some_and(|h| h.0 == "bunkhouse");
-            let in_pod = home.as_ref().is_some_and(|h| h.0 == "pod");
+            let drowned_home = self.home_of(r.id).is_some_and(|h| h.drowned);
+            let in_pod = home.as_ref().is_some_and(|h| h.0 == "pod") && !drowned_home;
             let alone_in_pod = in_pod && self.homes.values().filter(|hid| Some(**hid) == self.homes.get(&r.id).copied()).count() == 1;
             // the laws the wave has brought to this slimo
             let wd = self.wave_dist(defs, mat, r.id);
@@ -2535,6 +2581,13 @@ mod tests {
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
         assert_eq!(o.bench_slots, 1);
         assert_eq!(o.work.crafts_by.len(), 1);
+        // signal is power: the cord under the Bench dies, and the shift's end finds it dark — no work, no slot
+        let bench = c.structures.iter().find(|s| defs.structure[s.def].id == "bench").map(|s| (s.id, s.y as usize * mat.w + s.x as usize)).unwrap();
+        mat.hy[bench.1] = 0;
+        mat.sig[bench.1] = 0.0;
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert_eq!(o.power, vec![(bench.0, true)]);
+        assert!(!c.slots(&defs).iter().any(|&(_, s)| s == bench.0), "a dark Bench offers work");
     }
 }
 

@@ -32,6 +32,8 @@ pub struct RouteCard {
     /// water tiles / passable tiles, 0..1
     pub water: f32,
     pub grates: usize,
+    /// a Flood shift: how far the water rises and when (the run reads the same plan)
+    pub flood: Option<crate::water::RunFlood>,
 }
 
 impl RouteCard {
@@ -57,8 +59,9 @@ fn remembered(bits: Option<&[u8]>, n: usize, i: usize) -> bool {
     }
 }
 
-/// The card for a compiled route; `memory` is the route's memory bits from the save (None before any run).
-pub fn card(map: &RouteMap, defs: &CreatureFile, memory: Option<&[u8]>) -> RouteCard {
+/// The card for a compiled route; `memory` is the route's memory bits from the save (None before any run); `flood`
+/// the shift's roll on a Flood shift, `next_flood` the next shift's when that is one (its water comes in overtime).
+pub fn card(map: &RouteMap, defs: &CreatureFile, memory: Option<&[u8]>, day: u32, flood: Option<u8>, next_flood: Option<u8>) -> RouteCard {
     let n = map.w * map.h;
     let passable = map.passable_mask();
     let total = passable.iter().filter(|&&p| p).count().max(1);
@@ -117,9 +120,10 @@ pub fn card(map: &RouteMap, defs: &CreatureFile, memory: Option<&[u8]>) -> Route
             }
         }
     }
+    let shift_ticks = defs.shift.shift_ticks(map.chunks.len());
     RouteCard {
         chunks: map.chunks.len(),
-        shift_ticks: defs.shift.shift_ticks(map.chunks.len()),
+        shift_ticks,
         danger,
         density,
         burrows,
@@ -129,6 +133,7 @@ pub fn card(map: &RouteMap, defs: &CreatureFile, memory: Option<&[u8]>) -> Route
         known_crates,
         water: water as f32 / total as f32,
         grates: grate_groups,
+        flood: crate::water::RunFlood::for_shift(map.seed, day, flood, next_flood, shift_ticks, &defs.flood),
     }
 }
 
@@ -147,7 +152,7 @@ mod tests {
     fn a_fresh_card_knows_the_route_but_not_its_contents() {
         let defs = CreatureFile::shipped();
         let m = map(11, 1);
-        let c = card(&m, &defs, None);
+        let c = card(&m, &defs, None, 1, None, None);
         assert_eq!(c.chunks, m.chunks.len());
         assert_eq!(c.known, 0.0);
         assert_eq!((c.known_lockers, c.known_crates), (0, 0));
@@ -162,12 +167,12 @@ mod tests {
         // remember every tile: every container is known, the route is fully known
         let n = m.w * m.h;
         let bits = vec![0xFFu8; n.div_ceil(8)];
-        let c = card(&m, &defs, Some(&bits));
+        let c = card(&m, &defs, Some(&bits), 1, None, None);
         assert!((c.known - 1.0).abs() < 1e-6);
         assert_eq!(c.known_lockers + c.known_crates, m.containers.len());
         // S1 has no patrols and the lightest mix; a deeper route carries more trouble per chunk
         let m3 = map(11, 3);
-        let c3 = card(&m3, &defs, None);
+        let c3 = card(&m3, &defs, None, 1, None, None);
         assert!(c3.density > c.density, "S3 {} vs S1 {} per chunk", c3.density, c.density);
         assert_eq!(c.danger_band(), "low");
         assert_ne!(c3.danger_band(), "low");

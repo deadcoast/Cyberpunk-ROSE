@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, is next.
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, under way (PAC-060 done: Attention, Patrols, Sweeps, Cleansings, Blooms, Floods and raiders; the economy, PAC-061, is next).
 
     ./run.sh /path/to/godot4.5
 
@@ -57,5 +57,7 @@ with `--loot N` opens every container on N seeds per stratum and reports value p
 the stratum-to-stratum ratio.
 
 `rose city --shifts 20` plays the whole game headless — a bot run each shift, a steward's standing orders, the shift in `game` — twice, asserts that it replays bit-exact, that cargo lands within the next shift, that the build plan stands, that the cord to the first grate stands or a Relay can go out to win it back, that nobody starves and the Heart keeps its signal, and writes the merged run-and-city cadence to `docs/telemetry/city.md` (the full log to `out/city.log`). The game writes the city's log to `user://telemetry/city.log`.
+
+`rose cleansing --seed 11 --shifts 10` is Phase D's proof: the steward of `rose city` plays ten shifts, then a Cleansing comes down the first grate twice from the same state — as the city stands, and with two Sphincter Gates and a manned Scrap Turret on the squads' way — and it asserts the designed spread (the Heart falls undefended and stands defended with most of its Mat) and writes both logs to `docs/telemetry/cleansing.md`. The threats (`data/threats.toml`, the `threat` crate) run in `rose city` and the game alike: Attention per grate zone, the stage that comes down at a zone's line, the white light and bleach on the Mat, Blooms from cut-off strains, Flood shifts in the city and on runs, raiders on routes.
 
 `rose cadence --runs 20 --strata 1,2,3` plays seeded runs with the cautious bot (`run::bot`) and writes every run's cadence report and the aggregate against the design's budget to `docs/telemetry/cadence.md` (`--logs DIR` keeps each run's full log). Every run played in the game writes the same log to `user://telemetry/`.

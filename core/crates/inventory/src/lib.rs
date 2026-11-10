@@ -469,6 +469,8 @@ impl Stash {
         let hot = |it: &ItemInstance| matches!(table.def(it.def).tier, Tier::Blackline | Tier::Relic);
         self.grid.items().filter(|i| hot(i)).count()
             + self.containers.iter().filter(|c| !c.vault).flat_map(|c| c.grid.items()).filter(|i| hot(i)).count()
+            + self.rooms.iter().flat_map(|r| r.items.iter()).filter(|s| hot(&s.item)).count()
+            + self.floor.iter().filter(|s| hot(&s.item)).count()
     }
     pub fn count(&self) -> usize {
         self.all_items().count()

@@ -23,7 +23,7 @@ impl RoseSim {
         let (Some(c), Some(st)) = (self.city.as_ref(), self.stash.as_ref()) else { return out };
         let p = people.bind();
         let st = st.bind();
-        for a in game::alerts::current(&self.colony, &defs, c, &p.roster, st.stash.as_ref().unwrap(), &st.ledger, self.last_outcome.as_ref(), self.jam_since) {
+        for a in game::alerts::current(&self.colony, &defs, c, &p.roster, st.stash.as_ref().unwrap(), &st.ledger, self.last_outcome.as_ref(), self.jam_since, self.threats.as_ref()) {
             let mut e = VarDictionary::new();
             e.set("level", level_name(a.level));
             e.set("key", a.key.as_str());
@@ -183,6 +183,8 @@ impl RoseSim {
         let ai = s.y as usize * c.sim.w + s.x as usize;
         e.set("sigma", c.sim.sig.get(ai).copied().unwrap_or(0.0) as f64);
         e.set("sigma_need", d.sigma as f64);
+        e.set("dark", s.dark);
+        e.set("drowned", s.drowned);
         e.set("hosts", d.hosts.as_str());
         e.set("slots", d.slots_at(s.tier) as i64);
         e.set("rotated", s.rotated);

@@ -1,6 +1,7 @@
-# Cyberpunk: ROSE — creatures of the run (Full Design v3.1, Threats; research 09). Speeds in tiles per second,
-# times in seconds, hearing on the noise scale 0-15, damage in HP. section_odds = [head, torso, arms, legs] weights.
-# feral: hears you -> hunts you (no Suspicious phase). hold_chunk: never leaves the chunk it spawned in.
+# Cyberpunk: ROSE — creatures of the run (Full Design v3.1, Threats; research 09; raiders and the run's Flood v3.14).
+# Speeds in tiles per second, times in seconds, hearing on the noise scale 0-15, damage in HP. section_odds = [head,
+# torso, arms, legs] weights. feral: hears you -> hunts you (no Suspicious phase). hold_chunk: never leaves the chunk it
+# spawned in.
 
 [creature.crawler]
 sprite = "rat.crawler"
@@ -77,6 +78,52 @@ range = 12
 leave_after = 90
 feral = false
 salvage = "scout_drop"
+
+# Raiders (Full Design, the Threats table; this design's): a gang comes down a drain, walks the floors to the
+# containers, loots one in loot_s, leaves by its drain after `loots` of them or leave_after; shoots the Runner once
+# alert and the other gang on sight; no magazine (mag 0: a shot each shot_interval). shot_noise is a gunshot's 8 plus
+# the Scrap Pistol's 5, the gun it drops in its pile with what it took, at a condition in drop_condition.
+[creature.raider]
+sprite = "raider.gang"
+hp = 35
+speed = 3.0
+prowl_speed = 3.0
+hear = 3
+sees = true
+lamp = 4
+damage = 0
+reach = 1
+section_odds = [10, 50, 20, 20]
+ranged_damage = 7
+shot_interval = 1.5
+mag = 0
+shot_noise = 13
+range = 6
+leave_after = 120
+feral = false
+salvage = "raider_pile"
+loot_s = 4.0
+loots = 3
+drop = "ger_scrap_pistol"
+drop_condition = [30, 70]
+
+[raid]
+# each route rolls for each of `gangs` gangs at the stratum's chance (S1, S2, S3 and below), a gang of `gang` raiders
+# entering by a grate chunk (else the chunk farthest from the entry) at a seeded moment in the first `within` of the
+# shift (Full Design, Pressure: Raiders; this design's)
+chance = [0.0, 0.15, 0.25]
+gangs = 2
+gang = [2, 3]
+within = 0.3333
+
+[flood]
+# a Flood shift on a run (Full Design, the Threats table): the water in every chunk that holds some rises the day's
+# roll over rise_s from a moment the route card prints, a seeded one in the shift between from and to (shares of the
+# shift; this design's, so a short route's rise ends before its clock does); a Runner under water drown_s goes Down
+rise_s = 90.0
+from = 0.0
+to = 0.5
+drown_s = 15.0
 
 [spawn]
 # what comes out of a burrow, per stratum, as weights [crawler, burster, maw]; maws only in nest chunks

@@ -65,6 +65,8 @@ var runner_pose := ""
 var latched := 0
 # ---- the HUD
 var rings: Node2D                 # exposure and noise arcs, notice ring, channel ring, in world space
+var water_fx: Node2D              # a Flood shift's risen water in Flood Light, its surface a Cyan line
+var risen := {}                   # tile -> true: what the Flood turned to Water this run
 var ring_exposure := 0.0
 var ring_noise := 0.0
 var noise_peak := 0.0
@@ -132,6 +134,7 @@ func _ready() -> void:
 		memory_bits = Sim.memory_of(stratum, seed_value)
 	if not memory_bits.is_empty():
 		route.restore_memory(memory_bits)
+	route.set_shift(Sim.day, Sim.flood_roll(), Sim.next_flood_roll())
 	var rig: PackedByteArray = launch.get("rig", PackedByteArray())
 	var followers: Array = launch.get("followers", FOLLOWERS)
 	var runner_setup: Dictionary = launch.get("runner", RosePeople.plain_runner(BODY))
@@ -161,6 +164,10 @@ func _ready() -> void:
 	rings = Node2D.new()
 	rings.z_index = 6
 	rings.draw.connect(_draw_rings)
+	water_fx = Node2D.new()
+	water_fx.z_index = 1
+	water_fx.draw.connect(_draw_water)
+	add_child(water_fx)
 	add_child(rings)
 	fog = FogOverlay.new()
 	fog.setup(route.width(), route.height())
@@ -462,6 +469,18 @@ func _handle_events() -> void:
 			"dug":
 				world.repaint_tile(int(e.x), int(e.y), int(route.substrate()[int(e.y) * world.w + int(e.x)]))
 				_refresh_sources()
+			"water_rose":
+				# the Flood shift's water: repaint what turned to Water
+				var sub: PackedByteArray = route.substrate()
+				for i in e.tiles:
+					world.repaint_tile(int(i) % world.w, int(i) / world.w, int(sub[int(i)]))
+					risen[int(i)] = true
+				water_fx.queue_redraw()
+				_flash(runner.position + Vector2(0, -40), "THE WATER RISES  +%d" % int(e.level), UiTheme.CYAN)
+			"raiders":
+				_flash(Vector2(int(e.x) * 32 + 16, int(e.y) * 32 - 8), "RAIDERS x%d" % int(e.n), UiTheme.MUZZLE)
+			"raided":
+				_refresh_sources()
 			"runner_hit":
 				_flash(runner.position + Vector2(0, -24), "-%d %s" % [int(e.damage), String(e.section)], UiTheme.HOT_PINK)
 				runner.modulate = Color(1.0, 0.5, 0.6)
@@ -731,6 +750,19 @@ func _chip(f: Dictionary) -> void:
 
 ## The senses drawn on the Runner: the exposure arc (left, Ooze Glow), the noise arc (right, Cyan), the notice
 ## ring at its true radius, and the channel ring while extracting or digging.
+## The Flood's risen water, as the Colony draws it: Flood Light over the tile, a Cyan surface where air is above.
+func _draw_water() -> void:
+	if risen.is_empty():
+		return
+	var sub: PackedByteArray = route.substrate()
+	for i in risen:
+		var r := Rect2((i % world.w) * 32, (i / world.w) * 32, 32, 32)
+		water_fx.draw_rect(r, Color(UiTheme.DRAIN_LIGHT, 0.55))
+		water_fx.draw_rect(Rect2(r.position + Vector2(4, 12), Vector2(10, 1)), Color(UiTheme.CYAN, 0.6))
+		water_fx.draw_rect(Rect2(r.position + Vector2(18, 22), Vector2(10, 1)), Color(UiTheme.CYAN, 0.6))
+		if i - world.w >= 0 and int(sub[i - world.w]) != 5:
+			water_fx.draw_rect(Rect2(r.position, Vector2(32, 2)), UiTheme.CYAN)
+
 func _draw_rings() -> void:
 	var r := 22.0
 	var c := Vector2(0, -18)
@@ -829,6 +861,16 @@ func _hud() -> void:
 		var ls := left / 20
 		clock_label.text = "SHIFT %d:%02d" % [ls / 60, ls % 60]
 		clock_label.add_theme_color_override("font_color", UiTheme.ACID if ls < 60 else UiTheme.CYAN)
+	# the Flood shift: when the water comes, then how high it is
+	var flood_rise := int(sh.get("flood_rise", -1))
+	if flood_rise > 0:
+		var into := int(sh.get("tick", 0)) / 20
+		var flood_s := int(sh.get("flood_s", 0))
+		if into < flood_s:
+			var fin := flood_s - into
+			clock_label.text += "   FLOOD +%d IN %d:%02d" % [flood_rise, fin / 60, fin % 60]
+		else:
+			clock_label.text += "   WATER +%d OF %d" % [int(sh.get("water", 0)), flood_rise]
 	route_label.text = "S%d %s   %s" % [stratum, route_name, runner_name]
 	var cs: PackedInt32Array = route.run_stats()
 	kills_label.text = "KILLS %d   %d ALIVE" % [kills_seen, cs[6] if cs.size() > 6 else 0]
@@ -875,6 +917,9 @@ func _hud() -> void:
 		tags.append("DIMMED")
 	if not bool(state.get("lantern", true)):
 		tags.append("LANTERN OFF")
+	var under := int(state.get("under", 0))
+	if under > 0:
+		tags.append("UNDER %d s" % int(ceil(float(int(state.get("drown", 300)) - under) / 20.0)))
 	var have := []
 	for ch in status_tags.get_children():
 		have.append(ch.text)
@@ -884,7 +929,7 @@ func _hud() -> void:
 		for t in tags:
 			var l := Label.new()
 			l.text = t
-			l.add_theme_color_override("font_color", UiTheme.HOT_PINK if t in ["BLEEDING", "BLINDED", "CHROME SHOCK", "FUNGAL FEVER"] else (UiTheme.ACID if t == "OVERWEIGHT" else UiTheme.DUST))
+			l.add_theme_color_override("font_color", UiTheme.HOT_PINK if t in ["BLEEDING", "BLINDED", "CHROME SHOCK", "FUNGAL FEVER"] or t.begins_with("UNDER") else (UiTheme.ACID if t == "OVERWEIGHT" else UiTheme.DUST))
 			status_tags.add_child(l)
 	var life := String(state.get("life", "up"))
 	down_label.text = "DOWN  %d s" % int(int(state.get("down_left", 0)) / 20) if life == "down" else ("DEAD" if life == "dead" else "")

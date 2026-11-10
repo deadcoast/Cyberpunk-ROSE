@@ -122,6 +122,11 @@ impl CadenceLog {
                 Event::FollowerDown { id } => self.push(tick, Class::Loss, "follower_down", 0, format!("#{id}")),
                 Event::FollowerDead { id } => self.push(tick, Class::Loss, "follower_dead", 0, format!("#{id}")),
                 Event::Overtime { minute, .. } => self.push(tick, Class::Loss, "overtime", *minute as i32, String::new()),
+                // the surface's pressure on a route (Full Design v3.14): raiders down a drain, a source they emptied,
+                // the Flood's water rising
+                Event::Raiders { n, gang, .. } => self.push(tick, Class::Loss, "raiders", *n as i32, format!("gang {gang}")),
+                Event::Raided { taken, .. } => self.push(tick, Class::Loss, "raided", *taken as i32, String::new()),
+                Event::WaterRose { level, .. } => self.push(tick, Class::Loss, "water", *level as i32, String::new()),
                 _ => {}
             }
         }

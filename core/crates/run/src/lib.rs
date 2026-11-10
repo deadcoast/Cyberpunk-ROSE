@@ -2,7 +2,8 @@
 //! route (`assemble`), the compiled tile map a run is played on (`map`), and the fields played against it:
 //! light (`light`), sight (`fov`), fog of war with route memory (`fog`), noise (`noise`), all ticked together by
 //! `senses`; what a route gives (`loot`: tables, sources, the rig intake); threats (`creature`), the Runner's body
-//! (`runner`), followers (`follower`), the route card (`board`) and the 20 Hz simulation that ticks them all (`sim`).
+//! (`runner`), followers (`follower`), raiders (`creature`), a Flood shift's water (`water`), the route card (`board`)
+//! and the 20 Hz simulation that ticks them all (`sim`).
 //!
 //! Perspective and traversal. Every ROSE view is a side-on cross-section. Slimos are ooze: they cling to and
 //! crawl along any surface, so a Runner moves in four directions through every passable tile (open floor and air,
@@ -24,12 +25,13 @@ pub mod runner;
 pub mod senses;
 pub mod sim;
 pub mod telemetry;
+pub mod water;
 pub mod bot;
 
 pub use assemble::{assemble, route, Layout, Placed, MAX_CHUNKS, MIN_CHUNKS};
 pub use board::{card, RouteCard};
 pub use chunk::{Chunk, ChunkLib, Dir, CHUNK_H, CHUNK_W};
-pub use creature::{Creature, CreatureFile, Kind, Phase};
+pub use creature::{Creature, CreatureFile, Kind, Phase, Raid};
 pub use fog::Fog;
 pub use light::{LightField, Source};
 pub use loot::{LootState, LootTables, OpenMethod, OpenResult, SourceKind, SourceState};
@@ -40,6 +42,7 @@ pub use follower::{Follower, FollowerLife, Order};
 pub use sim::{Corpse, Event, FollowerSetup, Outcome, RunInput, RunResult, RunSetup, RunSim};
 pub use senses::{notice_range, Lume, Motion, Senses};
 pub use telemetry::{CadenceLog, Class, Report};
+pub use water::RunFlood;
 pub use bot::{play, Bot};
 
 /// The authored chunk library shipped with the game (data/chunks.toml). Tools and tests use it; the game may

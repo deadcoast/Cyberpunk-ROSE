@@ -27,7 +27,7 @@ pub const JAM_ALERT_TICKS: u64 = 120;
 
 /// The alerts standing now. `last` is the last shift's outcome (strikes, defection, ghosts waiting).
 #[allow(clippy::too_many_arguments)]
-pub fn current(colony: &Colony, defs: &StructureFile, city: &City, roster: &Roster, stash: &Stash, ledger: &Ledger, last: Option<&ShiftOutcome>, jam_since: Option<u64>) -> Vec<Alert> {
+pub fn current(colony: &Colony, defs: &StructureFile, city: &City, roster: &Roster, stash: &Stash, ledger: &Ledger, last: Option<&ShiftOutcome>, jam_since: Option<u64>, threats: Option<&threat::Threats>) -> Vec<Alert> {
     let mut v = Vec::new();
     let w = city.sim.w;
     let hub_cell = |d: &colony::District| Some(d.hub.1 as usize * w + d.hub.0 as usize);
@@ -93,6 +93,35 @@ pub fn current(colony: &Colony, defs: &StructureFile, city: &City, roster: &Rost
     }
     if !stash.floor.is_empty() {
         v.push(Alert { level: Level::Yellow, key: "floor".into(), text: format!("{} on the Heart's floor: no room in the grid", stash.floor.len()), cell: city.heart_cell() });
+    }
+    // white: the Oathkeepers (Full Design v3.14, Pressure); a Bloom and a drowned home are losses in progress
+    if let Some(t) = threats {
+        for e in t.events.iter().filter(|e| e.phase != threat::Phase::Done) {
+            let st = &t.rules.stage[e.stage];
+            let g = t.zones[e.zone as usize].grate;
+            let standing = t.bodies.iter().filter(|b| b.event == e.id && !b.dead && !b.gone).collect::<Vec<_>>();
+            let cell = standing.first().map(|b| b.y as usize * w + b.x as usize).or(Some(g));
+            let what = match e.phase {
+                threat::Phase::Flood => format!("a {} at grate {}: bleach in the water", st.name, e.zone + 1),
+                threat::Phase::Leaving => format!("the {} at grate {} is leaving", st.name, e.zone + 1),
+                _ => format!("a {} down grate {}: {} standing, {} fallen", st.name, e.zone + 1, standing.len(), e.fallen),
+            };
+            v.push(Alert { level: Level::White, key: format!("oath {}", e.id), text: what, cell });
+        }
+        for d in &t.due {
+            let st = &t.rules.stage[d.stage];
+            v.push(Alert { level: Level::White, key: format!("due {}", d.zone), text: format!("grate {} is loud: a {} is coming", d.zone + 1, st.name), cell: Some(t.zones[d.zone as usize].grate) });
+        }
+        let crawlers = t.bodies.iter().filter(|b| b.role == threat::Role::Crawler && !b.dead && !b.gone).collect::<Vec<_>>();
+        if let Some(c) = crawlers.first() {
+            v.push(Alert { level: Level::Red, key: "bloom".into(), text: format!("{} Bloom crawler{} in the city", crawlers.len(), if crawlers.len() == 1 { "" } else { "s" }), cell: Some(c.y as usize * w + c.x as usize) });
+        }
+        if t.flood.level > 0 {
+            v.push(Alert { level: Level::Yellow, key: "flood".into(), text: format!("the Flood is up {} tile{}", t.flood.level, if t.flood.level == 1 { "" } else { "s" }), cell: t.flood.changed.first().map(|c| c.0 as usize) });
+        }
+    }
+    for s in colony.structures.iter().filter(|s| s.drowned) {
+        v.push(Alert { level: Level::Red, key: format!("drowned {}", s.id), text: format!("{} is drowned this shift", defs.structure[s.def].name), cell: Some(s.y as usize * w + s.x as usize) });
     }
     v.sort_by(|a, b| a.level.cmp(&b.level).then(a.key.cmp(&b.key)));
     v

@@ -225,6 +225,7 @@ dependencies = [
  "people",
  "run",
  "serde",
+ "threat",
 ]
 
 [[package]]
@@ -540,6 +541,7 @@ dependencies = [
  "render",
  "run",
  "save",
+ "threat",
  "toml",
 ]
 
@@ -585,6 +587,7 @@ dependencies = [
  "people",
  "postcard",
  "serde",
+ "threat",
 ]
 
 [[package]]
@@ -694,6 +697,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "threat"
+version = "0.2.0"
+dependencies = [
+ "colony",
+ "logistics",
+ "mat",
+ "people",
+ "serde",
+ "toml",
 ]
 
 [[package]]

@@ -313,6 +313,16 @@ impl City {
         self.rebuild_fields();
     }
 
+    /// A grate's number on the stratum, west to east from 1 (the threats' zones and every line of the log name grates so).
+    pub fn grate_number(&self, x: usize) -> usize {
+        1 + (0..x.min(self.sim.w)).filter(|&c| self.sim.sub[c] == sub::GRATE).count()
+    }
+
+    /// The number of the grate a market stands under.
+    pub fn market_grate(&self, market: usize) -> usize {
+        self.markets.get(market).map_or(market + 1, |&x| self.grate_number(x))
+    }
+
     pub fn heart_cell(&self) -> Option<usize> {
         self.sim.heart.map(|(x, y)| y * self.sim.w + x)
     }

@@ -99,13 +99,14 @@ pub fn send(city: &mut City, colony: &Colony, defs: &StructureFile, stash: &Stas
 
 /// Packets that reached their consumer: the ledger lands them (a Pit's nutrient into the Mat and the genome's
 /// drift here), the Foreman's Cut takes its share, and what fell off the Mat is spilled. Each is a line of the
-/// city's log.
+/// city's log. Returns the sales, (market, eddies), for the grates' Attention.
 #[allow(clippy::too_many_arguments)]
-pub fn land(city: &mut City, colony: &mut Colony, defs: &StructureFile, stash: &mut Stash, ledger: &mut Ledger, table: &ItemTable, log: &mut CityLog) {
+pub fn land(city: &mut City, colony: &mut Colony, defs: &StructureFile, stash: &mut Stash, ledger: &mut Ledger, table: &ItemTable, log: &mut CityLog) -> Vec<(u8, u32)> {
+    let mut sold = Vec::new();
     let arrivals = city.take_arrivals();
     let spills = city.take_spills();
     if arrivals.is_empty() && spills.is_empty() {
-        return;
+        return sold;
     }
     let pits = colony.pits(defs);
     let tick = city.tick;
@@ -134,7 +135,10 @@ pub fn land(city: &mut City, colony: &mut Colony, defs: &StructureFile, stash: &
                 city.sim.drift_genome(drift);
                 log.push(tick, Class::Landing, format!("{name} fed to {}", if pit == 0 { "the Heart".to_string() } else { format!("Pit {pit}") }));
             }
-            Some(Landing::Sold { market, eddies }) => log.push(tick, Class::Landing, format!("{name} sold for {eddies} e at grate {}", market + 1)),
+            Some(Landing::Sold { market, eddies }) => {
+                sold.push((market, eddies));
+                log.push(tick, Class::Landing, format!("{name} sold for {eddies} e at grate {}", city.market_grate(market as usize)))
+            }
             Some(Landing::Stored { .. }) => log.push(tick, Class::Landing, format!("{name} into the Still's store")),
             Some(Landing::Home { placed }) => {
                 let back = if a.kind == Kind::Heart && sent_to != Some(Dest::Stash) { ", back: nothing of its kind in reach" } else { "" };
@@ -149,6 +153,7 @@ pub fn land(city: &mut City, colony: &mut Colony, defs: &StructureFile, stash: &
             log.push(tick, Class::Loss, format!("{} spilled off the Mat", table.def(it.def).name));
         }
     }
+    sold
 }
 
 /// The quotas standing on the Pits and Stills for this shift's pull.

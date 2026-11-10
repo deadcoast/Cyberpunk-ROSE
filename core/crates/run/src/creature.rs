@@ -69,6 +69,41 @@ pub struct CreatureDef {
     #[serde(default)]
     pub feral: bool,
     pub salvage: String,
+    /// raiders: seconds to loot a container, containers before they leave, the gun in their pile and its condition
+    #[serde(default)]
+    pub loot_s: f32,
+    #[serde(default)]
+    pub loots: u32,
+    #[serde(default)]
+    pub drop: String,
+    #[serde(default)]
+    pub drop_condition: [u8; 2],
+}
+
+/// Raider gangs on a route (`[raid]`): the chance per gang by stratum (S1, S2, S3 and below), how many gangs roll,
+/// a gang's size, and the share of the shift they arrive within.
+#[derive(Clone, Debug, Deserialize)]
+pub struct RaidRules {
+    pub chance: [f32; 3],
+    pub gangs: u8,
+    pub gang: [u8; 2],
+    pub within: f32,
+}
+
+impl RaidRules {
+    pub fn chance(&self, stratum: u8) -> f32 {
+        self.chance[(stratum.max(1) as usize - 1).min(2)]
+    }
+}
+
+/// The run's Flood (`[flood]`): the rise takes `rise_s` from a seeded moment between `from` and `to` of the shift;
+/// a Runner under water `drown_s` goes Down.
+#[derive(Clone, Debug, Deserialize)]
+pub struct RunFloodRules {
+    pub rise_s: f32,
+    pub from: f32,
+    pub to: f32,
+    pub drown_s: f32,
 }
 
 fn one() -> i32 {
@@ -170,6 +205,8 @@ pub struct CreatureFile {
     pub runner: RunnerRules,
     #[serde(default)]
     pub shift: ShiftRules,
+    pub raid: RaidRules,
+    pub flood: RunFloodRules,
 }
 
 /// The run clock (`[shift]` in creatures.toml): one shift is `base_s` + `per_chunk_s` per chunk beyond
@@ -202,7 +239,7 @@ pub const CREATURES_TOML: &str = include_str!("../../../../data/creatures.toml")
 impl CreatureFile {
     pub fn from_toml(text: &str) -> Result<CreatureFile, String> {
         let f: CreatureFile = toml::from_str(text).map_err(|e| format!("creatures.toml: {e}"))?;
-        for k in ["crawler", "burster", "maw", "scout"] {
+        for k in ["crawler", "burster", "maw", "scout", "raider"] {
             if !f.creature.contains_key(k) {
                 return Err(format!("creatures.toml: missing {k}"));
             }
@@ -229,6 +266,7 @@ pub enum Kind {
     Burster,
     Maw,
     Scout,
+    Raider,
 }
 
 impl Kind {
@@ -238,7 +276,17 @@ impl Kind {
             Kind::Burster => "burster",
             Kind::Maw => "maw",
             Kind::Scout => "scout",
+            Kind::Raider => "raider",
         }
+    }
+    /// Oathkeeper scouts walk floors; sewerats and raiders go anywhere a Runner can (a raider climbs the rungs of a
+    /// shaft — this design's: they come down drains on them).
+    pub fn walks(self) -> bool {
+        self == Kind::Scout
+    }
+    /// People: they face one way, carry a light and a gun.
+    pub fn person(self) -> bool {
+        matches!(self, Kind::Scout | Kind::Raider)
     }
 }
 
@@ -297,6 +345,14 @@ pub struct Creature {
     pub shot_cd: i32,
     pub look_left: i32,
     pub dead: bool,
+    /// raiders: the gang (1 or 2), what they took, the source they are walking to and how long its looting has left,
+    /// and how many they have looted
+    pub gang: u8,
+    pub carried: Vec<items::ItemInstance>,
+    pub loot_target: Option<usize>,
+    pub loot_goal: Option<(i32, i32)>,
+    pub loot_left: i32,
+    pub looted: u32,
     /// index into Stimuli.targets of whoever this creature hunts
     pub target: usize,
     /// cached distance field to the current target tile
@@ -344,6 +400,12 @@ impl Creature {
             shot_cd: 0,
             look_left: 0,
             dead: false,
+            gang: 0,
+            carried: Vec::new(),
+            loot_target: None,
+            loot_goal: None,
+            loot_left: 0,
+            looted: 0,
             target: 0,
             field_target: None,
             field: Vec::new(),
@@ -360,14 +422,19 @@ impl Creature {
             return;
         }
         self.field_target = Some(target);
-        self.field = if self.kind == Kind::Scout { distance_field_walk(map, target) } else { distance_field(map, target) };
+        self.field = if self.kind.walks() { distance_field_walk(map, target) } else { distance_field(map, target) };
+    }
+
+    /// Forget the cached path: the ground changed under it (the Flood).
+    pub fn repath(&mut self) {
+        self.field_target = None;
     }
 
     /// Step toward `target` along the distance field at `speed` units per tick. Returns true when moved.
     /// With `salt`, a salted next tile is never entered (ferals). Scouts walk floors: a target on the back wall is
     /// taken as the floor beneath it.
     fn step_toward(&mut self, map: &RouteMap, target: (i32, i32), speed: i32, salt: Option<&[bool]>) -> bool {
-        let target = if self.kind == Kind::Scout { floor_under(map, target) } else { target };
+        let target = if self.kind.walks() { floor_under(map, target) } else { target };
         self.ensure_field(map, target);
         let (tx, ty) = self.tile();
         if (tx, ty) == target {
@@ -564,7 +631,7 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
     let me = c.tile();
     let w = map.w as i32;
     // ---- target: the nearest one this creature can see, else the one it last tracked
-    let facing = if c.kind == Kind::Scout { Some(c.facing) } else { None };
+    let facing = if c.kind.person() { Some(c.facing) } else { None };
     let mut best: Option<(usize, i32)> = None;
     if def.sees && c.phase != Phase::Flee {
         for (i, t) in st.targets.iter().enumerate() {
@@ -634,6 +701,11 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
     if c.kind == Kind::Scout && c.phase == Phase::Calm && (c.laps >= 2 || c.age >= ticks(def.leave_after)) {
         c.phase = Phase::Leaving;
     }
+    if c.kind == Kind::Raider && c.phase == Phase::Calm && (c.looted >= def.loots || c.age >= ticks(def.leave_after)) {
+        c.phase = Phase::Leaving;
+        c.loot_target = None;
+        c.loot_goal = None;
+    }
     // ---- cooldowns
     c.cooldown_left = (c.cooldown_left - 1).max(0);
     c.shot_cd = (c.shot_cd - 1).max(0);
@@ -642,6 +714,10 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
         if c.reload_left == 0 {
             c.mag = def.mag;
         }
+    }
+    // a raider looting stops when anything stirs it
+    if c.phase != Phase::Calm {
+        c.loot_left = 0;
     }
     if c.grab_left > 0 {
         c.grab_left -= 1;
@@ -671,15 +747,17 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
                 } else {
                     c.step_toward(map, target, hunt_speed, Some(st.salt));
                 }
-            } else if c.kind == Kind::Scout && c.saw_runner && def.ranged_damage > 0 && dist2 <= def.range * def.range && !adjacent {
-                // hold and shoot
+            } else if c.kind.person() && c.saw_runner && def.ranged_damage > 0 && dist2 <= def.range * def.range && (!adjacent || def.damage == 0) {
+                // hold and shoot (a raider has no melee: it shoots at any range inside its own)
                 if tt.0 != me.0 {
                     c.facing = (tt.0 - me.0).signum();
                 }
-                if c.mag == 0 && c.reload_left == 0 {
+                if def.mag > 0 && c.mag == 0 && c.reload_left == 0 {
                     c.reload_left = ticks(def.reload);
-                } else if c.mag > 0 && c.shot_cd == 0 && c.reload_left == 0 {
-                    c.mag -= 1;
+                } else if (def.mag == 0 || c.mag > 0) && c.shot_cd == 0 && c.reload_left == 0 {
+                    if def.mag > 0 {
+                        c.mag -= 1;
+                    }
                     c.shot_cd = ticks(def.shot_interval);
                     out.shot_from = Some(me);
                     if !t_dodging {
@@ -750,6 +828,13 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
                 } else {
                     c.step_toward(map, target, prowl, None);
                 }
+            } else if c.kind == Kind::Raider {
+                // walk to the container the sim gave it; standing there, the sim counts the looting down
+                if let Some(g) = c.loot_goal {
+                    if me != g {
+                        c.step_toward(map, g, prowl, None);
+                    }
+                }
             } else if c.kind != Kind::Scout {
                 // ferals prowl around the burrow: every few seconds pick a tile within 3 of home
                 if c.age % (TICK_HZ * 3) == 0 {
@@ -782,8 +867,8 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
             }
         }
         Phase::Leaving => {
-            // walk to the far east edge of the route and leave
-            let exit = east_exit(map);
+            // a scout walks to the far east edge of the route and leaves; a raider leaves by the drain it came down
+            let exit = if c.kind == Kind::Raider { c.home } else { east_exit(map) };
             if me == exit || !c.step_toward(map, exit, hunt_speed, None) {
                 out.left = true;
                 c.dead = true;
@@ -881,6 +966,59 @@ pub fn spawn_pack(map: &RouteMap, defs: &CreatureFile, rng: &mut Pcg32, s: &crat
     }
 }
 
+/// A raider gang still to come down: when, the floor under its drain (where it leaves by too), the drain's chunk, how
+/// many, and which gang (1 or 2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Raid {
+    pub at: u64,
+    pub tile: (i32, i32),
+    pub chunk: u16,
+    pub n: u8,
+    pub gang: u8,
+}
+
+/// The route's raiders (Full Design, Pressure: Raiders): each of `[raid].gangs` gangs rolls at the stratum's chance;
+/// a gang of 2-3 comes down a grate chunk's drain (one picked at random), or with no grate onto the floor farthest
+/// from the entry along the Runner's ways (in the chunk farthest from it), at a seeded tick in the first third of the
+/// shift. They leave by the same tile.
+pub fn plan_raids(map: &RouteMap, defs: &CreatureFile, shift_ticks: u64, rng: &mut Pcg32) -> Vec<Raid> {
+    let r = &defs.raid;
+    let p = r.chance(map.stratum);
+    // drains: the first grate tile of each grate chunk, in chunk order
+    let mut drains: Vec<((i32, i32), u16)> = Vec::new();
+    for &(gx, gy) in &map.grates {
+        let ch = map.chunk_of[gy as usize * map.w + gx as usize];
+        if ch == crate::map::NO_CHUNK || drains.iter().any(|d| d.1 == ch) {
+            continue;
+        }
+        drains.push(((gx as i32, gy as i32), ch));
+    }
+    drains.sort_by_key(|d| d.1);
+    if drains.is_empty() {
+        // no grate: the floor farthest from the Mat edge along the Runner's own ways
+        let e = map.entry.get(1).or(map.entry.first()).copied().unwrap_or((1, 12));
+        let d = distance_field(map, (e.0 as i32, e.1 as i32));
+        let far = d.iter().enumerate().filter(|&(i, &v)| v != NO_PATH && walkable(map, (i % map.w) as i32, (i / map.w) as i32)).max_by_key(|&(i, &v)| (v, std::cmp::Reverse(i)));
+        if let Some((i, _)) = far {
+            drains.push((((i % map.w) as i32, (i / map.w) as i32), map.chunk_of[i]));
+        }
+    }
+    let mut out = Vec::new();
+    if drains.is_empty() {
+        return out;
+    }
+    let within = ((shift_ticks as f32 * r.within) as u32).max(1);
+    for g in 0..r.gangs {
+        if rng.f32() >= p {
+            continue;
+        }
+        let (tile, chunk) = drains[rng.below(drains.len() as u32) as usize];
+        let n = rng.range(r.gang[0] as i32, r.gang[1] as i32) as u8;
+        out.push(Raid { at: rng.below(within) as u64 + 1, tile, chunk, n, gang: g + 1 });
+    }
+    out
+}
+
 /// A patrol of two scouts on a chunk's chalk marks.
 pub fn spawn_patrol(defs: &CreatureFile, pts: &[(i32, i32)], ch: u16, next_id: &mut u32, out: &mut Vec<Creature>) {
     let def = &defs.creature["scout"];
@@ -908,7 +1046,7 @@ mod tests {
     #[test]
     fn defs_parse_and_spawns_match_the_route() {
         let defs = CreatureFile::shipped();
-        assert_eq!(defs.creature.len(), 4);
+        assert_eq!(defs.creature.len(), 5);
         let m = map(7, 2);
         let mut rng = Pcg32::new(1);
         let cs = spawn_all(&m, &defs, &mut rng);

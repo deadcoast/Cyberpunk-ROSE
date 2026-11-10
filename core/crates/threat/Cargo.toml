@@ -1,0 +1,14 @@
+[package]
+name = "threat"
+description = "Cyberpunk: ROSE - the surface's answer: Attention per grate zone, Patrols, Sweeps and Cleansings against the Mat and the city, Blooms from cut-off strains, Floods"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mat = { path = "../mat" }
+colony = { path = "../colony" }
+logistics = { path = "../logistics" }
+people = { path = "../people" }
+serde.workspace = true
+toml.workspace = true
