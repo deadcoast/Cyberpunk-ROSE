@@ -670,6 +670,12 @@ fn cmd_cleansing(t: &Term, seed: u64, shifts: u32, report_path: &Path) {
         md.push_str(&format!("| {} | {} | {} → {} | {} → {} | {} → {} | {} | {} | {} of {} | {} | {} | {:.0} | {} |\n", if r.defended { "defended" } else { "as it stands" }, if r.heart_lost { "burned".to_string() } else { format!("{} HP", r.after.heart_hp) }, r.before.cells, r.after.cells, r.before.structures, r.after.structures, r.before.slimos, r.after.slimos, r.dead, r.bleeding, r.fallen, r.sent, r.burned, r.ruined, r.seconds, r.blackline));
     }
     md.push_str(&format!("\n**The defence**: {}. The Gates {} the way from the grate to the Heart.\n\n", b.defence.join("; "), if b.closed { "close" } else { "do not close" }));
+    // the aftermath: HP the standing structures are short, shift by shift while the builders mend (v3.17)
+    for r in [a, b] {
+        let line = if r.heart_lost { "the Heart burned: nothing left to mend it".to_string() } else { r.short.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" → ") };
+        md.push_str(&format!("**After, {}** (HP short across the standing structures at the Cleansing's shift end and the next three, the builders mending from the shift after): {line}.\n\n", if r.defended { "defended" } else { "as it stands" }));
+        println!("  {} {}: {}{line}", t.dim("after"), if r.defended { "defended" } else { "as it is" }, if r.heart_lost { "" } else { "HP short " });
+    }
     for r in &runs {
         md.push_str(&format!("**The Cleansing, {}**\n\n```\n{}```\n\n", if r.defended { "defended" } else { "as it stands" }, r.log));
     }

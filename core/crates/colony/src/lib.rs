@@ -402,6 +402,10 @@ pub enum QuotaFrom {
 pub const QUOTA_CEILING: u8 = 1;
 /// The Foreman's Cut: one in this many packets landing in the district is the foreman's.
 pub const CUT_EVERY: u32 = 20;
+/// Mending (Full Design v3.17, Building): a builder mends this many HP a shift a point of Hands (10 at Hands 5).
+pub const MEND_PER_HANDS: i32 = 2;
+/// Under the Foreman's Cut a packet of the foreman's stock mends this much of the district's damage, and is spent.
+pub const STOCK_MEND: i32 = 10;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ZoneKind {
@@ -552,6 +556,8 @@ pub struct ShiftOutcome {
     pub power: Vec<(u32, bool)>,
     pub built: Vec<u32>,
     pub upgraded: Vec<u32>,
+    /// HP mended this shift: (structure, HP), by builders and by a foreman's stock
+    pub mended: Vec<(u32, i32)>,
     /// ghosts the Stash could not pay for: (structure, what it lacks)
     pub waiting: Vec<(u32, Cost)>,
     /// Bench jobs the Tweak slots advance
@@ -1531,7 +1537,7 @@ impl Colony {
                 }
             }
         }
-        for (id, n) in self.build_work() {
+        for (id, n) in self.build_work(defs) {
             for _ in 0..n {
                 v.push((Job::Build, id));
             }
@@ -1539,11 +1545,20 @@ impl Colony {
         v
     }
 
-    /// The Build work standing, first asked first (ghosts, upgrades and cuts share one id counter): (id, slots).
-    pub fn build_work(&self) -> Vec<(u32, usize)> {
+    /// The Build work standing (Full Design v3.17, Building): the mending first, oldest structure first, then the
+    /// rest first asked first (ghosts, upgrades and cuts share one id counter): (id, slots).
+    pub fn build_work(&self, defs: &StructureFile) -> Vec<(u32, usize)> {
+        let mut mend: Vec<(u32, usize)> = self.structures.iter().filter(|s| self.damaged(defs, s)).map(|s| (s.id, 2)).collect();
+        mend.sort_unstable();
         let mut w: Vec<(u32, usize)> = self.structures.iter().filter(|s| !s.built || s.upgrading_to.is_some()).map(|s| (s.id, 2)).chain(self.cuts.iter().map(|c| (c.id, 1))).collect();
         w.sort_unstable();
-        w
+        mend.extend(w);
+        mend
+    }
+
+    /// A built structure under its HP, and not being upgraded (an upgrade raises it to the new tier's HP).
+    pub fn damaged(&self, defs: &StructureFile, s: &Structure) -> bool {
+        s.built && s.upgrading_to.is_none() && s.hp < defs.structure[s.def].hp_at(s.tier)
     }
 
     /// Hand the open slots to the highest utilities (Full Design, Jobs by utility): one slot per slimo on duty this
@@ -1660,12 +1675,17 @@ impl Colony {
                 continue;
             }
             let Some(s) = self.get(sid) else { continue };
+            // a dark structure does no work of its own; building on it goes on
+            if job == Job::Build {
+                builders.entry(sid).or_default().push((r.stat(Stat::Hands), s.district.is_some_and(|dd| forge_districts.contains(&dd))));
+                continue;
+            }
             if s.dark {
                 continue;
             }
             let d = &defs.structure[s.def];
             match job {
-                Job::Build => builders.entry(sid).or_default().push((r.stat(Stat::Hands), s.district.is_some_and(|dd| forge_districts.contains(&dd)))),
+                Job::Build => {}
                 Job::Tweak => {
                     out.bench_slots += 1;
                     out.work.crafts_by.push(slimo);
@@ -1712,7 +1732,7 @@ impl Colony {
         // for goes on to the next work in the order, so builders are never idle while there is work they can do
         let mut spare: Vec<(i32, bool)> = Vec::new();
         let mut done = Vec::new();
-        for (sid, _) in self.build_work() {
+        for (sid, _) in self.build_work(defs) {
             if let Some(h) = cutters.get(&sid) {
                 spare.push((*h, false));
             }
@@ -1736,6 +1756,27 @@ impl Colony {
             }
             let Some(idx) = self.structures.iter().position(|s| s.id == sid) else { continue };
             let def = defs.structure[self.structures[idx].def].clone();
+            // mending: 2 x Hands a builder (doubled by a Forge in the district), up to the structure's HP; what is
+            // left of the crew goes on to the next work
+            if self.damaged(defs, &self.structures[idx]) {
+                let s = &mut self.structures[idx];
+                let max = def.hp_at(s.tier);
+                let mut gave = 0;
+                for (h, forge) in crew {
+                    if s.hp >= max {
+                        spare.push((h, forge));
+                        continue;
+                    }
+                    let m = (MEND_PER_HANDS * h * if forge { 2 } else { 1 }).max(0).min(max - s.hp);
+                    s.hp += m;
+                    gave += m;
+                }
+                if gave > 0 {
+                    out.mended.push((sid, gave));
+                    out.lines.push(format!("{} at {},{} mended {gave} HP ({}/{max})", def.name, s.x, s.y, s.hp));
+                }
+                continue;
+            }
             let to = self.structures[idx].upgrading_to.unwrap_or(1);
             if !self.structures[idx].paid {
                 let cost = def.cost_at(to);
@@ -1773,6 +1814,33 @@ impl Colony {
             }
         }
         self.cuts.retain(|c| !done.contains(&c.id));
+        // the Foreman's Cut: the foreman's stock mends its district's damage, the most damaged first, a packet a time
+        for k in 0..self.districts.len() {
+            if self.districts[k].cut == 0 || !self.charter.flag_at("stock_mends", self.district_dist(mat, &self.districts[k])) {
+                continue;
+            }
+            let did = self.districts[k].id;
+            let mut spent = 0;
+            loop {
+                let worst = self.structures.iter().enumerate().filter(|(_, s)| s.district == Some(did) && self.damaged(defs, s)).min_by(|a, b| {
+                    let f = |s: &Structure| s.hp as f32 / defs.structure[s.def].hp_at(s.tier) as f32;
+                    f(a.1).total_cmp(&f(b.1)).then(a.1.id.cmp(&b.1.id))
+                });
+                let Some((i, _)) = worst else { break };
+                if self.districts[k].cut == 0 {
+                    break;
+                }
+                let max = defs.structure[self.structures[i].def].hp_at(self.structures[i].tier);
+                let m = STOCK_MEND.min(max - self.structures[i].hp);
+                self.structures[i].hp += m;
+                self.districts[k].cut -= 1;
+                spent += m;
+                out.mended.push((self.structures[i].id, m));
+            }
+            if spent > 0 {
+                out.lines.push(format!("the foreman's stock mended {spent} HP in {}", self.districts[k].name));
+            }
+        }
         // lanterns burn oil
         let lanterns = self.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "lantern").map(|s| defs.structure[s.def].value_at("upkeep", s.tier).max(0) as u32).sum::<u32>();
         let lanterns_lit = lanterns <= eddies_left;
@@ -2400,6 +2468,51 @@ mod tests {
         assert_eq!(c.upgrade(&defs, id, 1), Err("needs the Quarter".to_string()));
         assert_eq!(c.upgrade(&defs, id, 2), Ok(2));
         assert_eq!(defs.get("bunkhouse").unwrap().cost_at(2).parts, 20);
+    }
+
+    #[test]
+    fn mending_comes_first_costs_no_parts_and_the_cuts_stock_mends_its_district() {
+        let (mut c, defs, mut mat, mut r, t) = with_district();
+        for rec in r.records.iter_mut() {
+            rec.priorities[Job::Build.index()] = 4;
+        }
+        // a pod burned to 40 of 100, and a ghost asked for after it
+        let pod = c.structures.iter().find(|s| defs.structure[s.def].id == "pod").unwrap().id;
+        c.get_mut(pod).unwrap().hp = 40;
+        let (x, y) = spot(&c, &defs, &mat, "bunkhouse", (48, 24)).unwrap();
+        let ghost = c.place(&defs, &mat, "bunkhouse", x, y).unwrap();
+        assert_eq!(c.build_work(&defs)[0], (pod, 2), "the mending before the rest");
+        let mut paid = Vec::new();
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |cost| {
+            paid.push(cost);
+            true
+        });
+        let on_pod: Vec<i32> = o.assignments.iter().filter(|a| a.1 == Job::Build && a.2 == pod).map(|a| r.get(a.0).unwrap().stat(Stat::Hands)).collect();
+        assert_eq!(on_pod.len(), 2);
+        let mend = (MEND_PER_HANDS * on_pod.iter().sum::<i32>()).min(60);
+        assert_eq!(c.get(pod).unwrap().hp, 40 + mend);
+        assert_eq!(o.mended, vec![(pod, mend)]);
+        // no Parts: the only payment is the ghost's own
+        assert_eq!(paid, vec![defs.get("bunkhouse").unwrap().cost_at(1)]);
+        let _ = ghost;
+        // a dark pod is mended all the same
+        c.get_mut(pod).unwrap().hp = 30;
+        c.get_mut(pod).unwrap().dark = true;
+        c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |_| true);
+        assert!(c.get(pod).unwrap().hp > 30);
+        // the Foreman's Cut: the foreman's stock mends the district's most damaged structure, ten a packet, spent
+        for rec in r.records.iter_mut() {
+            rec.priorities[Job::Build.index()] = 0;
+        }
+        c.get_mut(pod).unwrap().hp = 50;
+        c.districts[0].cut = 3;
+        c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |_| true);
+        assert_eq!((c.get(pod).unwrap().hp, c.districts[0].cut), (50, 3), "no stock mending before the law");
+        c.charter.earn(2);
+        c.sign(&defs, &mat, LawFile::shipped().get("foremans_cut").unwrap()).unwrap();
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |_| true);
+        assert_eq!((c.get(pod).unwrap().hp, c.districts[0].cut), (80, 0));
+        assert!(o.lines.iter().any(|l| l.starts_with("the foreman's stock mended 30 HP")), "{:?}", o.lines);
     }
 
     #[test]

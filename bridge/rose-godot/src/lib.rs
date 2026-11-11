@@ -221,6 +221,14 @@ impl RoseSim {
         }
     }
 
+    /// Development only (the play script): set a built structure's HP, as a flood or a flamer would leave it.
+    #[func]
+    fn debug_hp(&mut self, structure: i64, hp: i64) -> bool {
+        let Some(s) = self.colony.get_mut(structure as u32) else { return false };
+        s.hp = hp.clamp(1, i32::MAX as i64) as i32;
+        true
+    }
+
     /// Development only (the screenshot script): send a stage ("patrol", "sweep", "cleansing") down a zone's grate now.
     #[func]
     fn debug_send(&mut self, stage: GString, zone: i64) -> bool {

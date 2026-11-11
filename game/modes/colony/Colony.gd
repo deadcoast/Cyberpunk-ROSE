@@ -593,8 +593,16 @@ func _card_structure(info: Dictionary) -> void:
 		state = "TIER %d/%d   to tier %d: %d/%d" % [int(s.tier), int(s.tiers), int(s.upgrading_to), int(s.progress), int(s.need)]
 	else:
 		state = "TIER %d/%d   HP %d/%d" % [int(s.tier), int(s.tiers), int(s.hp), int(s.hp_max)]
+	# mending (Full Design v3.17, Building): the builders on a damaged structure this shift
+	var menders := 0
+	for wk in s.workers:
+		if String(wk.job) == "Build":
+			menders += 1
+	var damaged := bool(s.built) and int(s.upgrading_to) == 0 and int(s.hp) < int(s.hp_max)
+	if damaged:
+		state += ("   %d MENDING IT" % menders) if menders > 0 else "   NO BUILDER FREE"
 	make_label(card, String(s.name).to_upper(), Vector2(6, 4), UiTheme.CYAN)
-	make_label(card, state, Vector2(110, 4), UiTheme.CHALK)
+	make_label(card, state, Vector2(110, 4), (UiTheme.ACID if menders > 0 else UiTheme.HOT_PINK) if damaged else UiTheme.CHALK)
 	var sig_line := ""
 	if float(s.sigma_need) > 0.0:
 		sig_line = "signal %.2f of %.2f" % [float(s.sigma), float(s.sigma_need)]
@@ -606,7 +614,8 @@ func _card_structure(info: Dictionary) -> void:
 	if String(s.hosts) != "":
 		var names := []
 		for wk in s.workers:
-			names.append(Sim.slimo_name(int(wk.slimo)))
+			if String(wk.job).to_lower() == String(s.hosts).to_lower():
+				names.append(Sim.slimo_name(int(wk.slimo)))
 		slots = "%s %d slot%s: %s" % [String(s.hosts).to_upper(), int(s.slots), "" if int(s.slots) == 1 else "s", ", ".join(names) if not names.is_empty() else "no one this shift"]
 	make_label(card, ("%s   %s" % [slots, sig_line]).strip_edges().left(72), Vector2(6, 15), UiTheme.HOT_PINK if sig_line != "" and float(s.sigma) < float(s.sigma_need) else UiTheme.DUST)
 	if info.has("q") and not (info.q as Dictionary).is_empty():

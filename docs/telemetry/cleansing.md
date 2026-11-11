@@ -9,6 +9,10 @@ Written by `rose cleansing --seed 11 --shifts 10` on 2026-11-11 (Full Design v3.
 
 **The defence**: Sphincter Gate at 102,1, across the way 1 steps down from the grate; Sphincter Gate at 102,18, across the way 18 steps down from the grate; Scrap Turret at 102,7; Dez on Guard at Sphincter Gate; Fenn on Guard at Sphincter Gate; Sol on Guard at Scrap Turret. The Gates close the way from the grate to the Heart.
 
+**After, as it stands** (HP short across the standing structures at the Cleansing's shift end and the next three, the builders mending from the shift after): the Heart burned: nothing left to mend it.
+
+**After, defended** (HP short across the standing structures at the Cleansing's shift end and the next three, the builders mending from the shift after): 15 → 15 → 0 → 0.
+
 **The Cleansing, as it stands**
 
 ```
@@ -68,10 +72,17 @@ Written by `rose cleansing --seed 11 --shifts 10` on 2026-11-11 (Full Design v3.
  256.0 s  landing  the flamer fell at 102,7
  256.0 s  landing  the Cleansing at grate 5 is over: 8 of 8 fell, 15 tiles of Mat burned, 1 structures ruined
  256.0 s  landing  2 newcomers came down a grate
+ 256.0 s  landing  Scrap Turret at 102,7 mended 12 HP (85/100)
  256.0 s  landing  17 Blackline salvaged into the Stash
  256.0 s  landing  2 Relics salvaged into the Stash
  256.0 s  loss  Dez died to the Oathkeepers; to the memorial
  256.0 s  loss  Sol is bleeding from the fight
  256.0 s  loss  Flood shift: the water rises 3 tiles
+ 256.0 s  landing  Sump Row elected a foreman
+ 256.0 s  loss  Brix 'Cordwalker' went feral in the drain
+ 256.0 s  loss  Gale went feral in the drain
+ 256.0 s  landing  Scrap Turret at 102,7 mended 15 HP (100/100)
+ 256.0 s  landing  Sump Row elected a foreman
+ 256.0 s  loss  Flood shift: the water rises 1 tile
 ```
 

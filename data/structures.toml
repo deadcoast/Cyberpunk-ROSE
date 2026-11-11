@@ -76,7 +76,7 @@ build = 14
 hosts = "build"
 slots = [2, 3, 4]
 hp = 100
-text = "Anvil, torch and a pile of plate. Build points double in its district; a builder here mends 10 HP a shift."
+text = "Anvil, torch and a pile of plate. Build points and mending double in its district."
 art = "struct.forge"
 
 [[structure]]

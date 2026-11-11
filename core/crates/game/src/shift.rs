@@ -262,6 +262,20 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
             log.push(tick, Class::Landing, format!("{} upgraded to tier {}", defs.structure[s.def].name, s.tier));
         }
     }
+    // mending (Full Design v3.17): a line a structure, the builders' and a foreman's stock's together
+    let mut mended: Vec<(u32, i32)> = Vec::new();
+    for &(sid, hp) in &outcome.mended {
+        match mended.iter_mut().find(|m| m.0 == sid) {
+            Some(m) => m.1 += hp,
+            None => mended.push((sid, hp)),
+        }
+    }
+    for (sid, hp) in mended {
+        if let Some(s) = colony.get(sid) {
+            let d = &defs.structure[s.def];
+            log.push(tick, Class::Landing, format!("{} at {},{} mended {hp} HP ({}/{})", d.name, s.x, s.y, s.hp, d.hp_at(s.tier)));
+        }
+    }
     for did in &outcome.districts_formed {
         if let Some(d) = colony.districts.iter().find(|d| d.id == *did) {
             log.push(tick, Class::Landing, format!("{} is a district", d.name));

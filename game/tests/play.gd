@@ -37,6 +37,13 @@ func _shot(name: String) -> void:
 
 var t0 := 0
 var runner_id := -1
+var mend_id := -1
+
+func _hp(id: int) -> int:
+	for st in sim.ensure().structures():
+		if int(st.id) == id:
+			return int(st.hp)
+	return -1
 
 func _process(_delta: float) -> bool:
 	t += 1
@@ -256,6 +263,32 @@ func _process(_delta: float) -> bool:
 				_shot("13_intel")
 				var z: Array = sim.ensure().attention()
 				print("[play] after the shift: intel shows %s; ledger %d e" % [str(z.map(func(q): return bool(q.get("exact", false)))), int(sim.ensure_stash().eddies())])
+				# mending (Full Design v3.17): the Bench left at 55 of its HP, as a flamer would leave it; its card
+				var rs: RoseSim = sim.ensure()
+				for st in rs.structures():
+					if String(st.def) == "bench" and bool(st.built):
+						mend_id = int(st.id)
+						rs.debug_hp(mend_id, int(int(st.hp_max) * 0.55))
+						rs.refresh_movers(sim.ensure_people(), sim.day)
+						scr.set_view(0)
+						scr.cam.position = Vector2(int(st.x) * 32 + 16, int(st.y) * 32 + 48)
+						scr.selected = {"kind": "structure", "id": mend_id}
+						scr.card_sig = ""
+						scr._draw_card()
+				phase = 20
+		20:
+			if t % 10 == 5:
+				_shot("14_mending")
+				var before := _hp(mend_id)
+				sim.end_shift()
+				sim.day += 1
+				scr.card_sig = ""
+				scr._draw_card()
+				print("[play] the Bench mended from %d to %d HP at the shift's end" % [before, _hp(mend_id)])
+				phase = 21
+		21:
+			if t % 10 == 5:
+				_shot("15_mended")
 				print("[play] %d frames, %d shots -> %s" % [t, shots, out_dir])
 				quit(0)
 				return true

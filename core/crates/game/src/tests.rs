@@ -364,6 +364,24 @@ fn a_recover_body_is_laid_at_the_far_end_of_a_route_and_its_tag_counts_where_it_
 }
 
 #[test]
+fn a_drowned_structure_loses_a_quarter_at_the_shift_end_and_the_builders_mend_it_the_next() {
+    let mut w = world();
+    for r in w.roster.records.iter_mut() {
+        r.priorities[people::Job::Build.index()] = 4;
+    }
+    let bench = w.colony.structures.iter().find(|s| w.defs.structure[s.def].id == "bench").unwrap().id;
+    w.colony.get_mut(bench).unwrap().drowned = true;
+    w.end_shift();
+    assert_eq!(w.colony.get(bench).unwrap().hp, 75, "the Flood took a quarter");
+    // the next shift's plan puts builders on it, and its end mends 2 x Hands each
+    let on: Vec<i32> = w.plan.iter().filter(|p| p.1 == people::Job::Build && p.2 == bench).map(|p| w.roster.get(p.0).unwrap().stat(people::Stat::Hands)).collect();
+    assert_eq!(on.len(), 2);
+    w.end_shift();
+    assert_eq!(w.colony.get(bench).unwrap().hp, (75 + colony::MEND_PER_HANDS * on.iter().sum::<i32>()).min(100));
+    assert!(w.log.events.iter().any(|e| e.what.starts_with("Tweaker Bench at") && e.what.contains("mended")));
+}
+
+#[test]
 fn the_city_log_has_the_cargo_landing_and_the_structure_built() {
     let mut w = world();
     let heart = w.colony.pits(&w.defs)[0];

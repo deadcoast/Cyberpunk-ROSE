@@ -37,7 +37,14 @@ pub struct Siege {
     /// city seconds from the sluice to the last body gone
     pub seconds: f32,
     pub blackline: u32,
+    /// the HP the standing structures were short after the Cleansing's shift, and after each of the three shifts
+    /// that followed (Full Design v3.17, Building: mending)
+    pub short: Vec<i32>,
     pub log: String,
+}
+
+fn short_of(w: &World) -> i32 {
+    w.colony.structures.iter().filter(|s| s.built).map(|s| (w.defs.structure[s.def].hp_at(s.tier) - s.hp).max(0)).sum()
 }
 
 fn tally(w: &World) -> Tally {
@@ -271,6 +278,15 @@ pub fn cleansing(seed: u64, shifts: u32, defended: bool) -> Siege {
     out.dead = roster_before.saturating_sub(w.roster.records.len());
     out.bleeding = w.roster.records.iter().filter(|r| r.injuries.iter().any(|(i, _)| *i == people::Injury::Bleeding)).count().saturating_sub(bleeding_before);
     out.after = tally(&w);
+    // the aftermath: the city's builders mend what the flame left standing
+    out.short.push(short_of(&w));
+    for _ in 0..3 {
+        if w.city.sim.heart_lost {
+            break;
+        }
+        w.end_shift();
+        out.short.push(short_of(&w));
+    }
     for e in &w.log.events[log_from..] {
         if matches!(e.class, Class::Loss | Class::Landing) && !e.what.contains(" fed to ") && !e.what.contains(" home") {
             out.log.push_str(&format!("{:>6.1} s  {}  {}\n", (e.tick.saturating_sub(start)) as f32 / 2.0, e.class.name(), e.what));

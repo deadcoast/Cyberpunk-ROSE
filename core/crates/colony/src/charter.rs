@@ -23,7 +23,7 @@ pub const KNOWN_FLAGS: [&str; 13] = [
     "false_positive_sever",
     "tithe_t1_10",
     "foreman_cut_5",
-    "self_repair_x2",
+    "stock_mends",
     "quotas_slower",
 ];
 

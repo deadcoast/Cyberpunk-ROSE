@@ -182,3 +182,34 @@ the first Market frame showed the Nomads out of reach because the colony's Sweep
 
 **Tests**: `game` +2 (the services from the shift after they are paid; a recover end to end), `colony`'s laws test;
 the smoke builds the Market on live data. `cargo clippy` adds no warning in this work's code.
+
+## PAC-063 — mending: structures repaired, the Foreman's Cut's self-repair (2026-11-11)
+
+Full Design v3.17 first (Colony mode: Building — mending; the Scrap Forge's row; the Foreman's Cut; the Charter
+table's Live column), research 20 (RimWorld's Construct repairs and 0 A.D.'s repair, both for work alone). The rule
+is the colony crate's: a damaged structure is Build work ahead of the ghosts, upgrades and cuts, two builders from the
+next shift's plan, each mending 2 × Hands HP a shift (a Forge in the district doubling it), no Parts; a dark structure
+is mended all the same; under the Foreman's Cut each packet of the foreman's stock mends 10 HP of its district's most
+damaged structure at the shift's end and is spent. The Full Design already named "a Build slimo mends 10 a shift" and
+"the stock pays the district's self-repair"; nothing in the game did either until now, and the Forge's row carried a
+second, flat "10 HP a shift per builder" this replaces.
+
+**In play.** `rose cleansing` now plays the three shifts after the Cleansing: defended on seed 11 the standing
+structures were 15 HP short at its shift's end, 15 after the next (that shift's plan was made before the flame), 0
+after the one after. Defended, seed 14: 35 → 23 → 11 → 0; seed 17: 110 → 84 → 72 → 58; seed 15: 243 → 225 → 215 →
+189; on seed 12 a burned Gate stays 294 short — its three slimos are ordered to Guard and nobody is left to build; on 16
+and 18 nothing standing was hurt. As the city stands the Heart burns, and nothing is left to mend it. The live game
+(`play.gd`): the Bench left at 55 of 100, its card reads HP 55/100 and 2 MENDING IT, and at the shift's end 81/100 (two
+builders, Hands 13 between them). `rose city` over seeds 11–26: every plan and death count as before and every city
+replays bit-exact — in twenty shifts the steward's structures never stand in a Flood's water or a flamer's reach,
+so nothing is mended there.
+
+**Reviewed by eye** (`docs/shots/play_14_mending.png`, `play_15_mended.png`): the Bench outlined in Cyan, its card's
+state line HP 55/100 with 2 MENDING IT in Acid, then HP 81/100. What the frames changed: the click on the Bench
+picked the slimo standing at it, so the frame opens the structure's card directly; and the card's slot line listed
+every worker at the structure as its Tweak slot's, the menders among them — it lists the hosted job's now.
+
+**Tests**: `colony` +1 (mending first and free, a Forge's double through the shared crew rule, a dark structure
+mended, the stock mending only under the Cut, ten a packet, spent); `game` +1 (a Flood takes a quarter at the shift's
+end and the next shift's builders mend it); the laws test reads the Cut's renamed flag. `cargo clippy` adds no warning
+in this work's code.
