@@ -28,7 +28,7 @@ authority = 1
 mood = 0
 effect = "Markets trade with any faction at +1 reputation."
 cost = "Attention +50% at every claimed grate."
-live = "Phase D: factions, Attention"
+live = ""
 flags = ["any_faction_plus_1", "attention_x1_5"]
 
 [[law]]
@@ -38,7 +38,7 @@ authority = 2
 mood = 0
 effect = "Every D2 is militia during a Patrol or worse."
 cost = "Scav yield -20% during alarms."
-live = "Phase D: Patrols"
+live = "its cost: Scav yield, Phase E"
 flags = ["d2_militia", "scav_alarm_minus_20"]
 
 [[law]]
@@ -48,7 +48,7 @@ authority = 2
 mood = 0
 effect = "Relays auto-sever any region that loses signal for a shift."
 cost = "Loses outlying cords to false positives."
-live = "Phase D: Blooms, ferals"
+live = ""
 flags = ["relay_auto_sever", "false_positive_sever"]
 
 [[law]]

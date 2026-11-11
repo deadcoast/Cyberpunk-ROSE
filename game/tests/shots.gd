@@ -25,6 +25,9 @@ func _initialize() -> void:
 	root.add_child((load("res://Main.tscn") as PackedScene).instantiate())
 	sim.ticks_per_frame = 2
 	screen_ids = screens.ids()
+	# the Market first: the colony's shots send a Sweep down grate 5, whose bleach cuts the cord to its market
+	screen_ids.erase("market")
+	screen_ids.push_front("market")
 	out_dir = ProjectSettings.globalize_path("res://../docs/shots")
 	DirAccess.make_dir_recursive_absolute(out_dir)
 
@@ -138,6 +141,34 @@ func _process(_delta: float) -> bool:
 				st.queue_feed(int(it.handle), 0, sim.day)
 				break
 		scr._select(first_chrome)
+	if frames_on_screen == 6 and screen_i >= 0 and screen_ids[screen_i] == "market":
+		# the Market under load (Full Design v3.16): the Nomads' tab with its first offer taken, a stock entry picked
+		# and ordered, a curio riding to their stall to sell
+		var scr: Node = screens.current
+		var st: RoseStash = sim.ensure_stash()
+		for it in st.items():
+			if String(it.category) == "curio" and not bool(it.pinned):
+				st.queue_sell(int(it.handle), 0, sim.day)
+				break
+		var offers: Array = scr.m.get("offers", [])
+		if offers.size() > 0:
+			scr.picked_offer = int(offers[0].id)
+			scr._accept()
+		for e in scr.m.get("stock", []):
+			if bool(e.open) and String(e.item) != "":
+				scr.picked_entry = int(e.entry)
+				scr._order()
+				break
+	if frames_on_screen == 13 and screen_i >= 0 and screen_ids[screen_i] == "market":
+		# a faction whose street the Mat does not reach: what it would trade, the verbs greyed and why
+		var scr: Node = screens.current
+		for t in scr.m.get("factions", []):
+			if not bool(t.reached):
+				scr._tab(int(t.index))
+				break
+	if frames_on_screen == 16 and screen_i >= 0 and screen_ids[screen_i] == "market":
+		var img: Image = root.get_viewport().get_texture().get_image()
+		img.save_png(out_dir + "/market_far.png")
 	if frames_on_screen == 6 and screen_i >= 0 and screen_ids[screen_i] == "bench":
 		# the Bench with a Stash item slotted into the scrap sword and a job on the queue
 		var st: RoseStash = sim.ensure_stash()

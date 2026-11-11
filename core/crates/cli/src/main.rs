@@ -734,6 +734,13 @@ fn cmd_economy(t: &Term, seed: u64, shifts: u32, report_path: &Path) {
     }
     let held: Vec<String> = e.s.contracts.iter().map(|c| c.line(&e.file, table)).collect();
     println!("  contracts in hand: {}", if held.is_empty() { "none".to_string() } else { held.join("; ") });
+    // the services the steward bought, by name, and what they did
+    let bought = |w: &game::World| -> String {
+        let n = |svc: &str| w.log.events.iter().filter(|ev| ev.what.starts_with(&format!("{svc} from the "))).count();
+        let did = |pat: &str| w.log.events.iter().filter(|ev| ev.what.contains(pat)).count();
+        format!("protection {} (held off {} Patrols), intel {}, timings {}, convoy {}, hire {} ({} hired)", n("protection"), did("held off the Patrol"), n("intel"), n("timings"), n("convoy"), n("hire"), did("hired through the"))
+    };
+    println!("  services: {}", bought(&w));
     let chain_log: Vec<String> = w.log.events.iter().filter(|ev| ev.what.contains("chain") || ev.what.contains("link") || ev.what.starts_with("took ") || ev.what.contains("missed")).map(|ev| ev.what.clone()).collect();
     println!("  the nearer grate reached: trading {}, feeding {}   shifts with no market: trading {}, feeding {}", at(tr), at(gr), trade.shifts.iter().filter(|s| s.markets == 0).count(), grow.shifts.iter().filter(|s| s.markets == 0).count());
     println!("  eddies at the end: trading {}, feeding {}", w.ledger.eddies, g.ledger.eddies);
@@ -766,6 +773,7 @@ fn cmd_economy(t: &Term, seed: u64, shifts: u32, report_path: &Path) {
     let fed = |w: &game::World| w.log.events.iter().filter(|ev| ev.what.ends_with("fed to the Heart")).count();
     let lost = |r: &game::city::CityRun| r.shifts.iter().filter(|s| s.markets == 0).count();
     md.push_str(&format!("\n## Trading against feeding\n\n| | the nearer grate reached | shifts with no market | eddies at the end | sold | Chrome fed to the Heart |\n|---|---|---|---|---|---|\n| trading | {} | {} | {} | {} | {} |\n| feeding | {} | {} | {} | {} | {} |\n", at(tr), lost(&trade), w.ledger.eddies, trade.shifts.iter().map(|r| r.sales.len()).sum::<usize>(), fed(&w), at(gr), lost(&grow), g.ledger.eddies, grow.shifts.iter().map(|r| r.sales.len()).sum::<usize>(), fed(&g)));
+    md.push_str(&format!("\n## Services\n\nTrading: {}.\n\nFeeding: {}.\n", bought(&w), bought(&g)));
     let events: Vec<String> = w.log.events.iter().filter(|ev| ev.what.starts_with("topside")).map(|ev| ev.what.clone()).collect();
     md.push_str(&format!("\n## Topside\n\n{}\n", if events.is_empty() { "No events.".to_string() } else { events.iter().map(|l| format!("- {l}")).collect::<Vec<_>>().join("\n") }));
     if let Some(parent) = report_path.parent() {

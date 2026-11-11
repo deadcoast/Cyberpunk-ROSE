@@ -10,6 +10,7 @@ use mat::MatSim;
 
 mod cargo_bridge;
 mod hud_bridge;
+mod market_bridge;
 mod colony_bridge;
 mod people;
 
@@ -49,7 +50,9 @@ pub struct RoseSim {
     run_kills: u32,
     /// the surface's factions (Full Design v3.15, Economy)
     economy: Option<economy::Economy>,
-    /// raiders walk the Board's routes (`set_strata_open`): clear-raiders contracts are offered
+    /// the strata the Board offers (`set_strata_open`): raiders walk its routes from S2, and a recover's body lies on
+    /// one of them
+    strata: u8,
     raiders: bool,
 }
 
@@ -78,7 +81,8 @@ impl RoseSim {
     /// The Board's open strata: raiders walk its routes when one of them rolls for raiders (clear-raiders contracts).
     #[func]
     fn set_strata_open(&mut self, strata: i64) {
-        self.raiders = game::trade::raiders_walk(strata.clamp(0, 255) as u8);
+        self.strata = strata.clamp(1, 255) as u8;
+        self.raiders = game::trade::raiders_walk(self.strata);
     }
 
     /// Fresh stratum with a Heart at (x, y) and no city; feed it to make it grow.
@@ -797,21 +801,28 @@ impl RoseSim {
                 let kills = std::mem::take(&mut self.run_kills);
                 game::pressure::end(t, city, &mut self.colony, &defs, &mut p.roster, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), &mut self.log, &mut p.died_this_shift, &shift.outcome, day.max(1) as u32, kills);
             }
+            let mut laid = Vec::new();
             if let Some(e) = self.economy.as_mut() {
-                let lines = game::trade::end_shift(e, &mut st.ledger, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), city, &mut p.roster, &traits, &names, self.threats.as_mut(), &shift.closed.report.to_faction, day.max(1) as u32, self.raiders, &mut self.log);
+                let lib = run::ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
+                let board = game::trade::Board { lib: &lib, city_seed: e.s.seed, strata: self.strata.max(1) };
+                let (lines, l) = game::trade::end_shift(e, &mut st.ledger, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), city, &mut p.roster, &traits, &names, self.threats.as_mut(), Some(&board), &shift.closed.report.to_faction, day.max(1) as u32, self.raiders, &mut self.log);
                 shift.stash_lines.extend(lines);
+                laid = l;
             }
             if let Some(t) = self.threats.as_mut() {
                 let next = day.max(1) as u32 + 1;
                 let notes = t.start_shift(city, &mut self.colony, &defs, next, game::shift_of_day(next) == 2);
                 game::pressure::note(&mut self.log, city.tick, notes);
             }
-            shift
+            (shift, laid)
         };
+        let (shift, laid) = shift;
         let mut report = stash.bind().closed_dict(&shift.closed);
         report.set("stash_lines", &PackedStringArray::from(shift.stash_lines.iter().map(|s| GString::from(s.as_str())).collect::<Vec<_>>().as_slice()));
         self.last_jobs = shift.outcome.assignments.clone();
-        let out = colony_bridge::outcome_dict(&shift.outcome, &shift.people_lines, report, &defs, &self.colony);
+        let mut out = colony_bridge::outcome_dict(&shift.outcome, &shift.people_lines, report, &defs, &self.colony);
+        // recover links begun at this shift's end: their bodies, for the Board's corpses
+        out.set("laid", &market_bridge::laid_array(&laid));
         self.last_outcome = Some(shift.outcome);
         self.refresh_movers(people, day + 1);
         out
@@ -1015,6 +1026,8 @@ impl RoseStash {
         e.set("condition", item.condition as i64);
         e.set("identified", item.ident == items::Ident::Full);
         e.set("pinned", item.pinned);
+        // a recover contract's item (Economy): sent from the Market screen, it counts where it lands
+        e.set("bound", item.bound.map_or(-1, |c| c as i64));
         e.set("sell", items::price(d, item, PriceContext::default()) as i64);
         e.set("feed", items::feed_value(d, item).0 as f64);
         e.set("category", format!("{:?}", d.category).to_lowercase().as_str());

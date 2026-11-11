@@ -311,7 +311,8 @@ mod tests {
         let r = f.get("rationing").unwrap();
         assert_eq!((r.authority, r.mood), (1, -5));
         assert!(r.is_live());
-        assert!(!f.get("open_grates").unwrap().is_live());
+        assert!(f.get("open_grates").unwrap().is_live());
+        assert!(!f.get("tithe").unwrap().is_live());
         assert_eq!(f.get("tithe").unwrap().offered_by, "accord");
         let bad = LAWS_TOML.replacen("\"meal_draw_half\"", "\"free_lunch\"", 1);
         assert!(LawFile::from_toml(&bad).unwrap_err().contains("unknown flag"));

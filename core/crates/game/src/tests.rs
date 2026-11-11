@@ -271,6 +271,98 @@ fn protection_holds_off_the_patrol_due_at_a_gang_grate() {
     assert!(w.threats.due.iter().any(|d| d.zone as usize == zone));
 }
 
+fn order(w: &mut World, f: u8, service: &str) -> Result<u32, String> {
+    let e = w.economy.service_entry(f, service).unwrap();
+    let plan = w.plan.clone();
+    crate::trade::order(&mut w.economy, &mut w.ledger, &w.table, &w.city, &w.colony, &w.defs, &w.roster, &plan, 0, f, e, 1)
+}
+
+#[test]
+fn the_services_run_from_the_shift_after_they_are_paid_and_do_what_they_are_for() {
+    let mut w = world();
+    let ix = |w: &World, id: &str| w.economy.file.index(id).unwrap();
+    let (nomads, corpo, badges) = (ix(&w, "nomads"), ix(&w, "corpo"), ix(&w, "badges"));
+    w.economy.s.standing[nomads as usize].opened = 4;
+    w.ledger.eddies = 2000;
+    // the Nomads' convoy and a hire at their stall over grate 5; the Corpo remnants have no street in reach
+    order(&mut w, nomads, "convoy").unwrap();
+    order(&mut w, nomads, "hire").unwrap();
+    assert!(order(&mut w, corpo, "intel").unwrap_err().contains("do not trade"));
+    let waiting = w.roster.waiting.len();
+    w.end_shift();
+    // the convoy covers this shift's landings: every trading faction buys at the Nomads' stall, the others less 10 %
+    assert_eq!(w.economy.s.convoy, vec![0]);
+    let books = &w.ledger.books[0];
+    assert_eq!(books.len(), 4, "the Nomads, the Gangs, the Corpo remnants and the Badges");
+    let own = books.iter().find(|b| b.faction == nomads).unwrap().rep;
+    assert!(books.iter().filter(|b| b.faction != nomads).all(|b| (b.rep - 0.9).abs() < 1e-4) && (own - 1.0).abs() < 1e-4);
+    // the hire: a Nomad at a grate, their Past's skills two over the roll
+    let hired = w.roster.waiting.iter().map(|(r, _)| r).find(|r| r.past == people::Past::Nomad && w.log.events.iter().any(|e| e.what.starts_with(&r.full_name()) && e.what.contains("hired through the Nomads")));
+    assert!(hired.is_some() && w.roster.waiting.len() > waiting);
+    w.end_shift();
+    assert!(w.economy.s.convoy.is_empty() && w.ledger.books[0].len() == 1, "the convoy ran one shift");
+    // Open Grates: the Corpo remnants' intel and the Badges' timings at the same stall
+    let law = w.laws.get("open_grates").unwrap().clone();
+    w.colony.charter.authority = 1;
+    w.colony.sign(&w.defs, &w.city.sim, &law).unwrap();
+    w.economy.s.standing[badges as usize].opened = 4;
+    order(&mut w, corpo, "intel").unwrap();
+    order(&mut w, badges, "timings").unwrap();
+    w.end_shift();
+    assert_eq!((w.economy.s.intel, w.economy.s.timings), (3, 3));
+    // a zone a shift from the Sweep line: intel says so, and the timings say it of every line
+    let zone = w.threats.zones.iter().position(|z| z.grate == w.city.markets[0]).unwrap();
+    let sweep = w.threats.rules.stage.iter().find(|s| s.id == "sweep").unwrap().at;
+    w.threats.zones[zone].attention = sweep - 4.0;
+    w.threats.zones[zone].gained = 8.0;
+    let alerts: Vec<String> = w.alerts().into_iter().map(|a| a.text).collect();
+    assert!(alerts.iter().any(|a| a.starts_with("the Badges' timings: grate") && a.contains("Sweep")), "{alerts:?}");
+    w.economy.s.timings = 0;
+    let alerts: Vec<String> = w.alerts().into_iter().map(|a| a.text).collect();
+    assert!(alerts.iter().any(|a| a.starts_with("Corpo intel: grate") && a.contains("Sweep")), "{alerts:?}");
+    for _ in 0..3 {
+        w.end_shift();
+    }
+    assert_eq!(w.economy.s.intel, 0, "intel ran three shifts");
+}
+
+#[test]
+fn a_recover_body_is_laid_at_the_far_end_of_a_route_and_its_tag_counts_where_it_lands() {
+    let mut w = world();
+    let gangs = w.economy.file.index("gangs").unwrap();
+    let t = w.economy.file.factions[gangs as usize].contracts.iter().position(|c| c.kind == "recover").unwrap() as u16;
+    w.economy.s.offers.push(economy::Offer { id: 77, faction: gangs, template: t, links: 3, until: 9, name: "Hull".into() });
+    let lib = run::ChunkLib::from_toml(run::CHUNKS_TOML).unwrap();
+    let board = crate::trade::Board { lib: &lib, city_seed: 11, strata: 3 };
+    // the Gangs' street is not in reach: under Open Grates the market nearest the Heart deals with them
+    assert!(crate::trade::accept(&mut w.economy, (&w.city, &w.colony), &mut w.roster, &w.traits, &w.names, &w.table, Some(&board), 77, 1, &mut w.log).unwrap_err().contains("reaches no street"));
+    let law = w.laws.get("open_grates").unwrap().clone();
+    w.colony.charter.authority = 1;
+    w.colony.sign(&w.defs, &w.city.sim, &law).unwrap();
+    assert_eq!(crate::trade::market_of(&w.economy, &w.city, &w.colony, gangs), Some(0));
+    let (line, laid) = crate::trade::accept(&mut w.economy, (&w.city, &w.colony), &mut w.roster, &w.traits, &w.names, &w.table, Some(&board), 77, 1, &mut w.log).unwrap();
+    assert!(line.contains("recover Hull"), "{line}");
+    assert_eq!(laid.len(), 1);
+    let body = &laid[0];
+    // the floor farthest from the Mat edge on the Board's route of its stratum, the tag in its pack, bound
+    let map = run::RouteMap::compile(&lib, &run::route(&lib, run::route_seed(11, body.stratum), body.stratum).unwrap());
+    assert_eq!(run::creature::far_floor(&map).map(|f| (f.0 .0 as u16, f.0 .1 as u16)), Some((body.corpse.x, body.corpse.y)));
+    let tag = body.corpse.rig.backpack.placed().into_iter().map(|(_, p)| p.item.clone()).next().unwrap();
+    assert_eq!((w.table.def(tag.def).id.as_str(), tag.bound), ("org_corpse_tag", Some(77)));
+    assert_eq!(w.economy.s.contracts.iter().find(|c| c.id == 77).unwrap().route, Some((body.stratum, body.route)));
+    // an unbound tag does not count; the body's does
+    for it in [ItemInstance::new(tag.def), tag.clone()] {
+        let h = w.stash.grid.auto_place(w.table.def(tag.def), it).unwrap();
+        w.ledger.queue(&mut w.stash, h, inventory::Verb::Deliver { market: 0, contract: 77 }, 1);
+    }
+    w.end_shift();
+    tick_n(&mut w, 400);
+    assert_eq!(w.economy.s.contracts.iter().find(|c| c.id == 77).map(|c| (c.link, c.got)), Some((1, 1)));
+    assert!(w.log.events.iter().any(|e| e.what.contains("not taken at grate")), "the unbound tag rode home");
+    w.end_shift();
+    assert!(w.log.events.iter().any(|e| e.what == "the Gangs' link 1/3 done: 50 e"));
+}
+
 #[test]
 fn the_city_log_has_the_cargo_landing_and_the_structure_built() {
     let mut w = world();

@@ -998,10 +998,15 @@ impl Economy {
         for b in &mut self.s.bought_service {
             *b = 0;
         }
+        out
+    }
+
+    /// A shift's services run down before the stalls settle its orders, so what is bought this shift runs from the
+    /// next: intel and timings a shift less, the convoy gone.
+    pub fn services_tick(&mut self) {
         self.s.intel = self.s.intel.saturating_sub(1);
         self.s.timings = self.s.timings.saturating_sub(1);
         self.s.convoy.clear();
-        out
     }
 
     fn next_link(&mut self, c: &Contract, shift: u32, facts: &ShiftFacts) -> Contract {

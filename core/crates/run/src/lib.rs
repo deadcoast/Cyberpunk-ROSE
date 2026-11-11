@@ -29,7 +29,7 @@ pub mod water;
 pub mod bot;
 
 pub use assemble::{assemble, route, Layout, Placed, MAX_CHUNKS, MIN_CHUNKS};
-pub use board::{card, RouteCard};
+pub use board::{card, laid_body, route_seed, RouteCard};
 pub use chunk::{Chunk, ChunkLib, Dir, CHUNK_H, CHUNK_W};
 pub use creature::{Creature, CreatureFile, Kind, Phase, Raid};
 pub use fog::Fog;

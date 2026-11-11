@@ -1,6 +1,6 @@
 # The economy, thirty shifts
 
-Written by `rose economy --seed 11 --shifts 30` on 2026-11-10 (Full Design v3.15, Economy — The proof; the Build plan's Phase D). The steward of `rose city` plays the seed trading — the surplus, its Chrome too, to whichever stall in reach pays most, five of a category a stall a shift, the three-link deliver and host contracts it can fill taken, protection bought when a Patrol is due at a Gang grate — then plays it again feeding, as `rose city` does: the same, but the Heart keeping 2.0 nutrient on the haul's Common and Uncommon Chrome. (A district's foreman keeps the Heart fed on the members' meals either way.) **Result: every demand's walk stayed inside its band every day** (widest walk 0.16, band 0.30).
+Written by `rose economy --seed 11 --shifts 30` on 2026-11-11 (Full Design v3.15, Economy — The proof; the Build plan's Phase D). The steward of `rose city` plays the seed trading — the surplus, its Chrome too, to whichever stall in reach pays most, five of a category a stall a shift, the three-link deliver and host contracts it can fill taken, protection bought when a Patrol is due at a Gang grate — then plays it again feeding, as `rose city` does: the same, but the Heart keeping 2.0 nutrient on the haul's Common and Uncommon Chrome. (A district's foreman keeps the Heart fed on the members' meals either way.) **Result: every demand's walk stayed inside its band every day** (widest walk 0.16, band 0.30).
 
 ## The streets
 
@@ -84,7 +84,13 @@ In hand at the end: Nomads 2/3: shelter Kett five shifts, 62 e by shift 34.
 | | the nearer grate reached | shifts with no market | eddies at the end | sold | Chrome fed to the Heart |
 |---|---|---|---|---|---|
 | trading | not in 30 shifts | 9 | 870 | 312 | 32 |
-| feeding | not in 30 shifts | 0 | 809 | 245 | 182 |
+| feeding | not in 30 shifts | 0 | 833 | 245 | 182 |
+
+## Services
+
+Trading: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 1, hire 0 (0 hired).
+
+Feeding: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 2, hire 0 (0 hired).
 
 ## Topside
 

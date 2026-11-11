@@ -133,3 +133,52 @@ smoke checks the first grate's street and market name. `cargo clippy` adds no wa
 exercised in play: the steward buys only protection, at a Gang grate in reach; intel, timings, the convoy and hires
 are bought on the Market screen (PAC-062), and recover's body is planted on its route when that screen takes the
 offer.
+
+## PAC-062 — the Market screen live (2026-11-11)
+
+Full Design v3.16 first (UI and screens: the Market written to its panels and verbs; Economy: where the city deals
+with a faction, services from the shift after they are paid, where a recover's body lies). The screen reads
+`RoseSim.market` (`bridge/rose-godot/src/market_bridge.rs`) and acts through `market_order`, `market_accept` and
+`market_send`; every rule is `game::trade`'s and the economy crate's.
+
+What closing PAC-061's open ends found, each now in the design: the services ran down in the same shift's end that
+paid them, so intel and timings ran two shifts and the convoy was cleared before the cargo it was bought for could
+land — a shift's services now run down before its orders settle, so what is bought runs from the next shift; an offer
+outlives the cord to its grate and could be taken with no street in reach — taking, ordering and sending now need the
+faction's street in reach or Open Grates; Open Grates' trade read its Attention flag — it reads its own; three laws'
+cards still said they waited on Phase D — Open Grates and Quarantine are live, Conscription's militia is live and its
+cost waits on a Scav yield no rule defines before the collections (Phase E); the Board's route seed was written twice
+(GDScript and the headless steward) — `run::route_seed` now.
+
+**The services in play.** The live game (`play.gd`, after the run and the Stash): Open Grates signed on the Charter,
+the Corpo remnants' intel and the Gangs' protection ordered on the Market at grate 5 with 0 e in the ledger — the
+orders waited, the haul's sales landed (128 e, 39 city ticks on), the next shift's end paid them, and the gauge under
+grate 5 shows the number, G5 33 (`play_12_market.png`, `play_13_intel.png`). The headless steward over seeds 11–26
+(`rose economy`): the Nomads' convoy 28 times in nine cities, intel once (seed 25, the one city whose Mat reached a
+Corpo street); no city reached a Gang grate with a Patrol due, the Badges' tier 4, or a free bed with 300 e at a tier
+4 within thirty shifts, so it bought no protection, timings or hire. `game`'s test buys each through order, settle
+and effect: the convoy's books at the Nomads' stall (every trading faction, the others 10 % less) for one shift, a
+hired Nomad at a grate, intel and timings three shifts and their alerts.
+
+**Recover.** `game`'s test takes the Gangs' recover offer (refused while their street is out of reach, taken under
+Open Grates): the corpse tag, bound to the contract, lies in a body on the far floor of the Board's route of a seeded
+stratum, the floor `run::creature::far_floor` names; an unbound tag sent with it rides home, the bound one counts,
+and the link is done at the shift's end. In the game the body joins the route's corpses under the contract's name
+(the card's BODY line). Not in the play test: its city reaches only the Nomads, who offer no recover.
+
+**Trading against feeding, re-measured** with the steward's services (`rose economy`, seeds 11–26): selling the
+Chrome 11,889 e, feeding it 8,519 (more on fifteen), the nearer grate in four cities each way, 50 shifts without a
+market against 24. The design's line carries these numbers.
+
+**Reviewed by eye** (`docs/shots/market.png`, `market_far.png`, `play_12_market.png`, `play_13_intel.png`): the
+Nomads' tab with G5 lit; the standing line — seven reputation pips with 0 lit, favour 0/20, "TIER 2 AT REP +0 AND 150 E
+TRADED: 0"; today's stock with units and prices, tiers 2–4 dimmed under their tier, the picked Food Paste ordered and
+its count down to 11; the stall's queue with three sales quoted and the order, net +7 e; demand bars with the buy-list
+tick; two offers and a link in hand with SEND. The Gangs' tab says THE MAT REACHES NONE OF G2 G6 in Hot Pink, with no
+offers and ORDER greyed. What the frames changed: the pips, the favour bar and the demand tracks drawn in Sump were
+lost in the frame — Dust at 30 % now; the "·" in the tier ask is outside the pixel font and drew nothing — words now;
+the first Market frame showed the Nomads out of reach because the colony's Sweep shot had bleached the cord to grate
+5 — the shots take the Market first.
+
+**Tests**: `game` +2 (the services from the shift after they are paid; a recover end to end), `colony`'s laws test;
+the smoke builds the Market on live data. `cargo clippy` adds no warning in this work's code.

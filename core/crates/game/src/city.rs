@@ -198,7 +198,7 @@ impl Steward {
         // protection when a Patrol is due at a Gang grate
         self.contracts(w, &mut out);
         self.surplus(w, &mut out);
-        self.protection(w, &mut out);
+        self.services(w, &mut out);
         // the steering: whenever the cord to the first grate is lost, a Relay ghost at the anchor nearest the grate on
         // the Heart's side of the break, the next when it stands
         if self.relay.and_then(|id| w.colony.get(id)).is_none_or(|s| s.built) {
@@ -266,9 +266,8 @@ impl Steward {
     /// first three-link deliver offer the Stash can fill now taken and sent, or its first three-link host offer while
     /// a bed is free (a longer chain asks more than one route's hauls bring in its shifts).
     fn contracts(&mut self, w: &mut World, out: &mut Vec<String>) {
-        let reach = Self::in_reach(w);
         let kit = Self::kit(w);
-        let market_of = |w: &World, f: u8| reach.iter().copied().find(|&k| w.economy.faction_at(w.city.markets[k]) == Some(f));
+        let market_of = |w: &World, f: u8| crate::trade::market_of(&w.economy, &w.city, &w.colony, f).map(|m| m as usize);
         for c in w.economy.s.contracts.clone() {
             if let (economy::Kind::Deliver, Some(k)) = (c.kind, market_of(w, c.faction)) {
                 self.send(w, &c, k, &kit, out);
@@ -293,8 +292,7 @@ impl Steward {
             if !take {
                 continue;
             }
-            let tick = w.city.tick;
-            if let Ok(line) = crate::trade::accept(&mut w.economy, &mut w.roster, &w.traits, &w.names, &w.table, o.id, w.day, tick, &mut w.log) {
+            if let Ok((line, _)) = crate::trade::accept(&mut w.economy, (&w.city, &w.colony), &mut w.roster, &w.traits, &w.names, &w.table, None, o.id, w.day, &mut w.log) {
                 out.push(line);
                 if let Some(held) = w.economy.s.contracts.iter().find(|x| x.id == o.id).cloned() {
                     if held.kind == economy::Kind::Deliver {
@@ -388,18 +386,53 @@ impl Steward {
         }
     }
 
-    /// Protection from the Gangs when a Patrol is due in the zone of one of their grates and none is bought.
-    fn protection(&mut self, w: &mut World, out: &mut Vec<String>) {
-        let Some(g) = w.economy.file.index("gangs") else { return };
-        let due = w.threats.due.iter().any(|d| d.stage == 0 && w.economy.faction_at(w.threats.zones[d.zone as usize].grate) == Some(g));
-        if !due || w.economy.s.protection > 0 || w.ledger.orders.iter().any(|o| o.faction == g) {
-            return;
+    /// The services it buys (Full Design v3.16, Economy: the proof): protection when a Patrol is due at a Gang grate,
+    /// intel when a reached zone stands within 15 of the Sweep line, the Badges' timings when one stands within 10 of
+    /// any line, the Nomads' convoy every shift it sells at their stall, a hire when a bed stands free and the eddies
+    /// cover it twice. A service the faction's open tier does not stock is not bought.
+    fn services(&mut self, w: &mut World, out: &mut Vec<String>) {
+        let reached: Vec<usize> = Self::in_reach(w).into_iter().map(|k| w.city.markets[k]).collect();
+        let zones: Vec<(f32, usize)> = w.threats.zones.iter().enumerate().filter(|(_, z)| reached.contains(&z.grate)).map(|(k, z)| (z.attention, k)).collect();
+        let stages = w.threats.rules.stage.clone();
+        let mut want: Vec<(Option<u8>, &str)> = Vec::new();
+        let ix = |w: &World, id: &str| w.economy.file.index(id);
+        let gangs = w.economy.file.index("gangs");
+        if w.economy.s.protection == 0 && w.threats.due.iter().any(|d| d.stage == 0 && w.economy.faction_at(w.threats.zones[d.zone as usize].grate) == gangs) {
+            want.push((gangs, "protection"));
         }
-        let Some(k) = Self::in_reach(w).into_iter().find(|&k| w.economy.faction_at(w.city.markets[k]) == Some(g)) else { return };
-        let Some(entry) = w.economy.service_entry(g, "protection") else { return };
-        let plan = w.plan.clone();
-        if let Ok(each) = crate::trade::order(&mut w.economy, &mut w.ledger, &w.table, &w.city, &w.colony, &w.defs, &w.roster, &plan, k as u8, g, entry, 1) {
-            Self::decide(w, format!("protection from the Gangs at grate {}: {each} e", w.city.market_grate(k)), out);
+        let sweep = stages.iter().find(|s| s.id == "sweep").map_or(f32::MAX, |s| s.at);
+        if w.economy.s.intel == 0 && zones.iter().any(|&(a, _)| a < sweep && a >= sweep - 15.0) {
+            want.push((ix(w, "corpo"), "intel"));
+        }
+        if w.economy.s.timings == 0 && zones.iter().any(|&(a, _)| stages.iter().any(|s| a < s.at && a >= s.at - 10.0)) {
+            want.push((ix(w, "badges"), "timings"));
+        }
+        if let Some(n) = w.economy.file.index("nomads") {
+            if let Some(m) = crate::trade::market_of(&w.economy, &w.city, &w.colony, n) {
+                if w.ledger.queue.iter().any(|q| q.verb == Verb::Sell { market: m }) {
+                    want.push((Some(n), "convoy"));
+                }
+            }
+        }
+        let (beds, taken) = w.colony.bed_count(&w.defs);
+        if beds - taken > w.roster.waiting.len() as i32 && w.ledger.eddies >= 2 * w.economy.file.services.hire {
+            let f = (0..w.economy.file.factions.len() as u8).find(|&f| w.economy.tier_open(f) >= 4 && w.economy.service_entry(f, "hire").is_some() && crate::trade::market_of(&w.economy, &w.city, &w.colony, f).is_some());
+            if f.is_some() {
+                want.push((f, "hire"));
+            }
+        }
+        for (f, svc) in want {
+            let Some(f) = f else { continue };
+            let Some(m) = crate::trade::market_of(&w.economy, &w.city, &w.colony, f) else { continue };
+            let Some(entry) = w.economy.service_entry(f, svc) else { continue };
+            if w.ledger.orders.iter().any(|o| o.faction == f && o.entry == entry) {
+                continue;
+            }
+            let plan = w.plan.clone();
+            if let Ok(each) = crate::trade::order(&mut w.economy, &mut w.ledger, &w.table, &w.city, &w.colony, &w.defs, &w.roster, &plan, m, f, entry, 1) {
+                let line = format!("{svc} from the {} at grate {}: {each} e", w.economy.name(f), w.city.market_grate(m as usize));
+                Self::decide(w, line, out);
+            }
         }
     }
 
@@ -531,7 +564,7 @@ pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize,
     let (tables, creatures) = (LootTables::shipped(), CreatureFile::shipped());
     let mut w = World::found(seed, table.clone());
     let mut steward = Steward { haul, ..Steward::default() };
-    let route_seed = seed * 7 + 1;
+    let route_seed = run::route_seed(seed, 1);
     let map = RouteMap::compile(&lib, &run::route(&lib, route_seed, 1).expect("the first route of S1"));
     let mut memory: Vec<u8> = Vec::new();
     let mut runs = 0u16;

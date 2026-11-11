@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, under way (PAC-060 done: Attention, Patrols, Sweeps, Cleansings, Blooms, Floods and raiders; PAC-061 done: the surface's factions, their streets, demand, reputation, stock tiers, services and contract chains; the Market screen, PAC-062, is next).
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, under way (PAC-060 done: Attention, Patrols, Sweeps, Cleansings, Blooms, Floods and raiders; PAC-061 done: the surface's factions, their streets, demand, reputation, stock tiers, services and contract chains; PAC-062 done: the Market screen; structure repair, PAC-063, is next).
 
     ./run.sh /path/to/godot4.5
 

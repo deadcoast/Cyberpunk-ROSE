@@ -266,6 +266,8 @@ func _draw_card() -> void:
 		where = ("in " if int(it.cell) >= 0 else "waits at ") + String(_room().name)
 	elif room == -2:
 		where = "on the Heart's floor"
+	if int(it.get("bound", -1)) >= 0:
+		where = "a contract's: send from Market"
 	make_label(card, "condition %d   %s%s" % [int(it.condition), where, "   PINNED" if bool(it.pinned) else ""], Vector2(44, 30), UiTheme.DUST)
 	# the three numbers
 	var y := 46

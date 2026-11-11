@@ -194,6 +194,10 @@ func _process(_delta: float) -> bool:
 						chrome = int(it.handle)
 				if curio >= 0:
 					st.queue_sell(curio, 0, sim.day)
+				# and the rest of what a stall buys and the city does not use, for the Market's orders to come
+				for it in st.items():
+					if String(it.category) in ["curio", "tech", "contraband"] and int(it.handle) != curio and not bool(it.pinned):
+						st.queue_sell(int(it.handle), 0, sim.day)
 				scr.filter_cat = 1
 				scr._select(chrome)
 				phase = 15
@@ -209,6 +213,49 @@ func _process(_delta: float) -> bool:
 		16:
 			if t % 10 == 5:
 				_shot("11_slimo")
+				# the Market (Full Design v3.16): Open Grates signed on the Charter, then the Corpo remnants' intel and
+				# the Gangs' protection ordered at the Nomads' stall over grate 5
+				var why: String = sim.ensure().sign_law("open_grates")
+				print("[play] Open Grates: %s" % ("signed" if why == "" else why))
+				screens.show_screen("market")
+				scr = screens.current
+				phase = 17
+		17:
+			if t % 10 == 5:
+				for svc in [["Corpo remnants", "intel"], ["Gangs", "protection"]]:
+					for tab in scr.m.get("factions", []):
+						if String(tab.name) == svc[0]:
+							scr._tab(int(tab.index))
+					for e in scr.m.get("stock", []):
+						if String(e.service) == svc[1]:
+							scr.picked_entry = int(e.entry)
+							scr._order()
+							print("[play] %s from the %s: %s" % [svc[1], svc[0], scr.status])
+				phase = 18
+		18:
+			if t % 10 == 5:
+				_shot("12_market")
+				# the shift ends with the ledger short: the orders wait; the sales ride to grate 5 and land while the
+				# city's clock runs; the next shift's end pays them and intel runs from the shift after
+				sim.end_shift()
+				sim.day += 1
+				var rs: RoseSim = sim.ensure()
+				var steps := 0
+				while sim.ensure_stash().eddies() < 70 and steps < 2400:
+					rs.step()
+					steps += 1
+				print("[play] the orders waited a shift; %d ticks later the ledger holds %d e" % [steps, int(sim.ensure_stash().eddies())])
+				sim.end_shift()
+				sim.day += 1
+				screens.show_screen("colony")
+				scr = screens.current
+				scr.set_view(2)
+				phase = 19
+		19:
+			if t % 10 == 5:
+				_shot("13_intel")
+				var z: Array = sim.ensure().attention()
+				print("[play] after the shift: intel shows %s; ledger %d e" % [str(z.map(func(q): return bool(q.get("exact", false)))), int(sim.ensure_stash().eddies())])
 				print("[play] %d frames, %d shots -> %s" % [t, shots, out_dir])
 				quit(0)
 				return true

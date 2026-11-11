@@ -73,7 +73,7 @@ pub fn faster(city: &City, colony: &Colony, defs: &StructureFile) -> Vec<f32> {
 
 /// Open Grates (the Charter): every market trades with every faction.
 pub fn open_grates(colony: &Colony) -> bool {
-    colony.charter.flag_at("attention_x1_5", 0)
+    colony.charter.flag_at("any_faction_plus_1", 0)
 }
 
 /// The books the ledger prices by, as the day's demand, the standing and the staff have them now.
@@ -111,14 +111,66 @@ pub fn start_shift(econ: &mut Economy, ledger: &mut Ledger, city: &City, colony:
     set_books(econ, ledger, city, colony, defs, roster, plan);
 }
 
-/// Take an offer. Returns the log line.
+/// The Route Board a recover link's body is laid on: the chunks, the save's seed (its routes' seeds) and the strata it
+/// offers.
+pub struct Board<'a> {
+    pub lib: &'a run::ChunkLib,
+    pub city_seed: u64,
+    pub strata: u8,
+}
+
+/// A recover link's body as laid: the Board's route of `stratum` (seed `route`), for the routes' corpses.
+#[derive(Clone, Debug)]
+pub struct Laid {
+    pub contract: u32,
+    pub stratum: u8,
+    pub route: u64,
+    pub name: String,
+    pub corpse: run::Corpse,
+}
+
+/// Take an offer: a host's newcomer comes down a grate, a recover's body is laid on its route. Returns the log line
+/// and the bodies laid.
 #[allow(clippy::too_many_arguments)]
-pub fn accept(econ: &mut Economy, roster: &mut Roster, traits: &TraitFile, names: &NameFile, table: &ItemTable, offer: u32, shift: u32, tick: u64, log: &mut CityLog) -> Result<String, String> {
-    let c = econ.accept(offer, shift).ok_or("no such offer")?;
+pub fn accept(econ: &mut Economy, town: (&City, &Colony), roster: &mut Roster, traits: &TraitFile, names: &NameFile, table: &ItemTable, board: Option<&Board>, offer: u32, shift: u32, log: &mut CityLog) -> Result<(String, Vec<Laid>), String> {
+    let (city, colony) = town;
+    let f = econ.s.offers.iter().find(|o| o.id == offer).map(|o| o.faction).ok_or("no such offer")?;
+    if market_of(econ, city, colony, f).is_none() {
+        return Err(format!("the Mat reaches no street of the {}", econ.name(f)));
+    }
+    let tick = city.tick;
+    let c = econ.accept(offer, shift).ok_or(format!("the {}' stalls are closed to the city", econ.name(f)))?;
     hosts(econ, roster, traits, names, shift, tick, log);
+    let laid = bodies(econ, table, board, shift, tick, log);
     let line = format!("took {}", econ.s.contracts.iter().find(|x| x.id == c.id).map(|x| x.line(&econ.file, table)).unwrap_or_default());
     log.push(tick, Class::Decision, line.clone());
-    Ok(line)
+    Ok((line, laid))
+}
+
+/// A recover link in hand without its body: the named item, bound to the contract, in a body at the far end of the
+/// Board's route of a stratum seeded among those the Board offers.
+fn bodies(econ: &mut Economy, table: &ItemTable, board: Option<&Board>, shift: u32, tick: u64, log: &mut CityLog) -> Vec<Laid> {
+    let mut out = Vec::new();
+    let Some(b) = board else { return out };
+    for k in 0..econ.s.contracts.len() {
+        let c = &econ.s.contracts[k];
+        if c.kind != Kind::Recover || c.route.is_some() {
+            continue;
+        }
+        let Some(item) = c.ask.item else { continue };
+        let stratum = 1 + mat::rng::Pcg32::new(econ.s.seed ^ 0x0B0D_0000 ^ ((c.id as u64) << 8) ^ c.link as u64).below(b.strata.max(1) as u32) as u8;
+        let route = run::route_seed(b.city_seed, stratum);
+        let Ok(lay) = run::route(b.lib, route, stratum) else { continue };
+        let map = run::RouteMap::compile(b.lib, &lay);
+        let mut it = ItemInstance::new(item);
+        it.bound = Some(c.id);
+        let Some(corpse) = run::laid_body(&map, shift, it, table) else { continue };
+        let (id, name) = (c.id, c.name.clone());
+        log.push(tick, Class::Decision, format!("{name}'s body lies at the far end of the S{stratum} route ({})", econ.name(c.faction)));
+        econ.s.contracts[k].route = Some((stratum, route));
+        out.push(Laid { contract: id, stratum, route, name, corpse });
+    }
+    out
 }
 
 /// A host link in hand without its newcomer: one of the faction's Past joins the waiting list at a grate (the chain's
@@ -137,6 +189,19 @@ fn hosts(econ: &mut Economy, roster: &mut Roster, traits: &TraitFile, names: &Na
         log.push(tick, Class::Landing, format!("{who} came down a grate for the {}: shelter them five shifts", econ.name(c.faction)));
         econ.s.contracts[k].host = Some(id);
     }
+}
+
+/// Where the city deals with a faction: its own street nearest the Heart when the Mat reaches one, else under Open
+/// Grates the market nearest the Heart (Full Design v3.16, Economy: Buying).
+pub fn market_of(econ: &Economy, city: &City, colony: &Colony, faction: u8) -> Option<u8> {
+    let near = |own: bool| {
+        (0..city.markets.len())
+            .filter(|&k| !own || econ.faction_at(city.markets[k]) == Some(faction))
+            .filter_map(|k| city.from_heart(logistics::Kind::Market, k as u32).map(|d| (d, k)))
+            .min_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)))
+            .map(|(_, k)| k as u8)
+    };
+    near(true).or_else(|| if open_grates(colony) { near(false) } else { None })
 }
 
 /// An order at a market's stall: the faction must trade there (its street, or Open Grates). Returns the price a unit.
@@ -178,15 +243,17 @@ pub fn home_from(ledger: &mut Ledger, city: &mut City, market: u8, item: ItemIns
     }
 }
 
-/// The shift's end at the stalls, after the threats' (their next Patrols are known): orders are paid and their
-/// goods leave the stalls on the cords, a hire joins the waiting list, contracts finish or lapse, the levers move
+/// The shift's end at the stalls, after the threats' (their next Patrols are known): last shift's services run
+/// down, orders are paid and their goods leave the stalls on the cords, a hire joins the waiting list, contracts finish or lapse, the levers move
 /// favour, a chain's unique item lands in the Stash, protection holds off a Patrol at a Gang grate, and on a clinic
-/// day a double flush comes down. Returns the lines for the report.
+/// day a double flush comes down; a recover link begun now has its body laid. Returns the lines for the report and
+/// the bodies laid.
 #[allow(clippy::too_many_arguments)]
-pub fn end_shift(econ: &mut Economy, ledger: &mut Ledger, stash: &mut Stash, table: &ItemTable, city: &mut City, roster: &mut Roster, traits: &TraitFile, names: &NameFile, threats: Option<&mut Threats>, sold: &[(u8, u32, u32)], shift: u32, raiders: bool, log: &mut CityLog) -> Vec<String> {
+pub fn end_shift(econ: &mut Economy, ledger: &mut Ledger, stash: &mut Stash, table: &ItemTable, city: &mut City, roster: &mut Roster, traits: &TraitFile, names: &NameFile, threats: Option<&mut Threats>, board: Option<&Board>, sold: &[(u8, u32, u32)], shift: u32, raiders: bool, log: &mut CityLog) -> (Vec<String>, Vec<Laid>) {
     let tick = city.tick;
     let mut lines = Vec::new();
-    // the orders
+    // the services bought last shift run down; then the orders
+    econ.services_tick();
     let (bought, paid) = econ.settle(&mut ledger.orders, &mut ledger.eddies);
     for b in bought {
         match b {
@@ -224,6 +291,7 @@ pub fn end_shift(econ: &mut Economy, ledger: &mut Ledger, stash: &mut Stash, tab
     }
     note(log, tick, ended.notes);
     hosts(econ, roster, traits, names, shift, tick, log);
+    let laid = bodies(econ, table, board, shift, tick, log);
     // protection: the next Patrol due in a zone of the Gangs' grates holds off a shift
     if let (Some(t), Some(gangs)) = (threats, econ.file.index("gangs")) {
         if let Some(k) = t.due.iter().position(|d| d.stage == 0 && econ.faction_at(t.zones[d.zone as usize].grate) == Some(gangs)) {
@@ -240,5 +308,5 @@ pub fn end_shift(econ: &mut Economy, ledger: &mut Ledger, stash: &mut Stash, tab
         let came = roster.clinic_flush(traits, names, &mut rng, shift);
         log.push(tick, Class::Landing, format!("clinic day topside: {came} newcomers came down a grate"));
     }
-    lines
+    (lines, laid)
 }

@@ -144,6 +144,13 @@ func end_shift() -> void:
 	last_shift = city.colony_end_shift(ensure_people(), st, day)
 	shift_report = last_shift.get("report", {})
 	people_lines = last_shift.get("lines", PackedStringArray())
+	lay_bodies(last_shift.get("laid", []))
+
+## Recover contracts' bodies (Full Design v3.16, Economy: Contracts), laid at the far end of a Board route as the
+## link is taken: they join our dead on that route, under the contract's name, and raiders roll on them as on ours.
+func lay_bodies(laid: Array) -> void:
+	for b in laid:
+		corpses.append({"seed": int(b.route), "stratum": int(b.stratum), "x": int(b.x), "y": int(b.y), "chunk": String(b.chunk), "day": int(b.day), "runner": String(b.name), "rig": b.rig, "raided": false, "contract": int(b.contract)})
 
 ## The structure def the Colony's build tool places next ("" none); set by the Build menu.
 var build_tool := ""
@@ -175,7 +182,7 @@ func ensure_stash() -> RoseStash:
 
 ## A route's seed is fixed by the save and the stratum, so a route can be re-run and learned.
 func route_seed(stratum: int) -> int:
-	return seed_value * 7 + stratum
+	return ensure().route_seed(seed_value, stratum)
 
 func region_name(stratum: int) -> String:
 	return String(REGIONS.get(stratum, "S%d DRAIN" % stratum))

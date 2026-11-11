@@ -12,6 +12,22 @@ use mat::sim::sub;
 /// per stratum at launch: S1 ≈ 1.2 per chunk (LOW), S3 ≈ 2.1 (MEDIUM), S2 ≈ 2.4 (MEDIUM to HIGH: the culvert
 /// chunks carry the most chalk).
 pub const DENSITY_MEDIUM: f32 = 1.5;
+
+/// The Board's route of a stratum: its seed is fixed by the save's seed and the stratum, so a route can be re-run and
+/// learned (Full Design v3.3, The Route Board).
+pub fn route_seed(city_seed: u64, stratum: u8) -> u64 {
+    city_seed.wrapping_mul(7).wrapping_add(stratum as u64)
+}
+
+/// A recover contract's body (Full Design v3.16, Economy: Contracts): on the route's floor farthest from the Mat edge,
+/// dead since shift `day` (the clock our dead keep), carrying the one item in its pack.
+pub fn laid_body(map: &RouteMap, day: u32, item: items::ItemInstance, table: &items::ItemTable) -> Option<crate::sim::Corpse> {
+    let ((x, y), ch) = crate::creature::far_floor(map)?;
+    let mut rig = inventory::Rig::new(8, 5, 4, 18.0);
+    rig.backpack.auto_place(table.def(item.def), item).ok()?;
+    let chunk = map.chunks.get(ch as usize).map(|c| c.id.clone()).unwrap_or_default();
+    Some(crate::sim::Corpse { x: x as u16, y: y as u16, chunk, day, rig, raided: false })
+}
 pub const DENSITY_HIGH: f32 = 2.5;
 
 #[derive(Clone, Debug, PartialEq)]

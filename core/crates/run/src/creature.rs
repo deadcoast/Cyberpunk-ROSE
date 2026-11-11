@@ -995,13 +995,7 @@ pub fn plan_raids(map: &RouteMap, defs: &CreatureFile, shift_ticks: u64, rng: &m
     }
     drains.sort_by_key(|d| d.1);
     if drains.is_empty() {
-        // no grate: the floor farthest from the Mat edge along the Runner's own ways
-        let e = map.entry.get(1).or(map.entry.first()).copied().unwrap_or((1, 12));
-        let d = distance_field(map, (e.0 as i32, e.1 as i32));
-        let far = d.iter().enumerate().filter(|&(i, &v)| v != NO_PATH && walkable(map, (i % map.w) as i32, (i / map.w) as i32)).max_by_key(|&(i, &v)| (v, std::cmp::Reverse(i)));
-        if let Some((i, _)) = far {
-            drains.push((((i % map.w) as i32, (i / map.w) as i32), map.chunk_of[i]));
-        }
+        drains.extend(far_floor(map));
     }
     let mut out = Vec::new();
     if drains.is_empty() {
@@ -1017,6 +1011,15 @@ pub fn plan_raids(map: &RouteMap, defs: &CreatureFile, shift_ticks: u64, rng: &m
         out.push(Raid { at: rng.below(within) as u64 + 1, tile, chunk, n, gang: g + 1 });
     }
     out
+}
+
+/// The floor farthest from the Mat edge along the Runner's own ways, and its chunk: where raiders land on a route
+/// with no grate, and where a recover contract's body lies (Full Design v3.16, Economy: Contracts).
+pub fn far_floor(map: &RouteMap) -> Option<((i32, i32), u16)> {
+    let e = map.entry.get(1).or(map.entry.first()).copied().unwrap_or((1, 12));
+    let d = distance_field(map, (e.0 as i32, e.1 as i32));
+    let far = d.iter().enumerate().filter(|&(i, &v)| v != NO_PATH && walkable(map, (i % map.w) as i32, (i / map.w) as i32)).max_by_key(|&(i, &v)| (v, std::cmp::Reverse(i)));
+    far.map(|(i, _)| (((i % map.w) as i32, (i / map.w) as i32), map.chunk_of[i]))
 }
 
 /// A patrol of two scouts on a chunk's chalk marks.
