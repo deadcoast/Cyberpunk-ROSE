@@ -200,6 +200,7 @@ impl Steward {
         // protection when a Patrol is due at a Gang grate
         self.contracts(w, &mut out);
         self.research(w, &mut out);
+        self.route_loop(w, &mut out);
         self.surplus(w, &mut out);
         self.services(w, &mut out);
         // the steering: whenever the cord to the first grate is lost, a Relay ghost at the anchor nearest the grate on
@@ -288,6 +289,22 @@ impl Steward {
             if crate::grow::pick_project(&mut w.colony, &mut w.stash, &mut w.ledger, &w.table, p).is_ok() {
                 Self::decide(w, format!("research: {}", n.name), out);
                 return;
+            }
+        }
+    }
+
+    /// The loop standing order (this design's steward; Full Design v3.18, Route loops): once Route automation stands
+    /// and S1's route has seen two runs home, the eligible slimo second by Scav loops it (the first is the Runner).
+    fn route_loop(&mut self, w: &mut World, out: &mut Vec<String>) {
+        if !w.colony.loops.is_empty() || !w.colony.progress.tech.flag("route_loops") || w.colony.homes_from(1) < colony::LOOP_AFTER {
+            return;
+        }
+        let mut crew: Vec<&people::Record> = w.roster.eligible();
+        crew.sort_by_key(|r| (std::cmp::Reverse(r.skill(Skill::Scav)), r.id));
+        if let Some(r) = crew.get(1) {
+            let (id, name) = (r.id, r.full_name());
+            if w.colony.set_loop(1, Some(id)).is_ok() {
+                Self::decide(w, format!("{name} loops the S1 route"), out);
             }
         }
     }
@@ -622,7 +639,8 @@ pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize,
         rec.decisions = steward.act(&mut w);
         // the Runner: the eligible slimo of best Scav, alone; a contract's guest stays home
         let hosts: Vec<u32> = w.economy.s.contracts.iter().filter_map(|c| c.host).collect();
-        let runner = w.roster.eligible().into_iter().filter(|r| !hosts.contains(&r.id)).max_by_key(|r| (r.skill(Skill::Scav), std::cmp::Reverse(r.id))).map(|r| r.id);
+        let looping: Vec<u32> = w.colony.loops.iter().map(|l| l.slimo).collect();
+        let runner = w.roster.eligible().into_iter().filter(|r| !hosts.contains(&r.id) && !looping.contains(&r.id)).max_by_key(|r| (r.skill(Skill::Scav), std::cmp::Reverse(r.id))).map(|r| r.id);
         let riding: Vec<u32> = w.ledger.in_flight.iter().map(|s| s.id).collect();
         let mut moments: Vec<Moment> = Vec::new();
         let mut run_times: Vec<f32> = Vec::new();
@@ -670,6 +688,9 @@ pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize,
                 moments.push(Moment { t, from: "run", class: e.class.tag(), what: format!("{} {}", e.kind, e.detail).trim().to_string() });
             }
             let extracted = matches!(o.result, RunResult::Extracted { .. });
+            if extracted {
+                w.colony.home_from(1);
+            }
             let report = RunReport {
                 runner: id,
                 followers: Vec::new(),

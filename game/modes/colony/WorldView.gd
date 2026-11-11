@@ -254,6 +254,21 @@ func _draw_cargo() -> void:
 		cargo.draw_rect(Rect2(x - 1, y - 1, size + 2, size + 2), UiTheme.VOID)
 		cargo.draw_rect(Rect2(x, y, size, size), col)
 
+## The handoff's bypass (Full Design v3.18): dashed in Ooze Glow tile by tile while proposed, solid once confirmed.
+func _draw_proposal(sim: RoseSim) -> void:
+	var p: Dictionary = sim.proposal()
+	var tiles: PackedInt32Array = p.tiles
+	var w: int = sim.width()
+	for k in tiles.size():
+		var i := tiles[k]
+		var r := Rect2((i % w) * TILE, (i / w) * TILE, TILE, TILE)
+		if bool(p.confirmed):
+			buildings.draw_rect(r.grow(-10), Color(UiTheme.OOZE_GLOW, 0.8))
+		else:
+			for d in 4:
+				buildings.draw_rect(Rect2(r.position.x + 2 + d * 8, r.position.y + 15, 4, 2), UiTheme.OOZE_GLOW)
+				buildings.draw_rect(Rect2(r.position.x + 15, r.position.y + 2 + d * 8, 2, 4), UiTheme.OOZE_GLOW)
+
 ## The Mat's own structures (Full Design v3.18, Organs): drawn as their organ, never with a footprint outline.
 const OWN_ORGANS := ["knot", "sphincter", "maw", "gland"]
 
@@ -285,6 +300,7 @@ func _draw_buildings() -> void:
 	var sim: RoseSim = Sim.ensure()
 	_draw_zones(sim)
 	_draw_organs(sim)
+	_draw_proposal(sim)
 	for st in sim.structures():
 		var own := String(st.def) in OWN_ORGANS
 		var tex: Texture2D = _organ_frame(String(st.art)) if own else Assets.texture(String(st.art), "t%d" % int(st.tier))

@@ -120,12 +120,15 @@ impl RoseSim {
                 c.step();
                 // a jam's standing time, for its alert
                 self.jam_since = if c.last_jam > 0 { Some(self.jam_since.unwrap_or(c.tick)) } else { None };
+                let shift = self.colony.shift.max(1);
+                game::handoff::tick(c, &mut self.colony, self.jam_since, shift, &mut self.log);
                 if let Some(st) = self.stash.as_mut() {
                     let mut st = st.bind_mut();
                     st.ensure();
                     let st = &mut *st;
                     let (stash, table) = (st.stash.as_mut().unwrap(), st.table.as_ref().unwrap());
                     if c.tick % logistics::city::REBUILD_EVERY == 0 && !c.synthetic() {
+                        game::nerve::beat(c, &mut self.colony, &defs, self.threats.as_ref(), stash, &mut st.ledger, table, &mut self.log);
                         game::cargo::refresh_demands(&self.colony, &defs, c, stash, &st.ledger, table);
                     }
                     let landed = game::cargo::land(c, &mut self.colony, &defs, stash, &mut st.ledger, table, &mut self.log);
@@ -255,6 +258,50 @@ impl RoseSim {
                 c.sim.p = c.sim.genome.params();
             }
         }
+    }
+
+    /// Development only (the play script): every node researched and every tier open, as a long campaign leaves the
+    /// Bench, so the later frames reach the systems the tree gates.
+    #[func]
+    fn debug_tech_all(&mut self) {
+        // the HP nodes raise what stands by their share, as researching them does
+        let defs = self.defs().clone();
+        let before: Vec<i32> = self.colony.structures.iter().map(|s| self.colony.hp_max(&defs, s)).collect();
+        self.colony.progress.tech = progress::Tech::all();
+        for k in 0..self.colony.structures.len() {
+            let after = self.colony.hp_max(&defs, &self.colony.structures[k]);
+            let s = &mut self.colony.structures[k];
+            s.hp = s.hp * after / before[k].max(1);
+        }
+    }
+
+    /// Development only (the play script): the Mat's proposal round a jam on the first strand tile that has ground
+    /// round it, as a jam standing a minute on a bred strain makes it (game::handoff).
+    #[func]
+    fn debug_proposal(&mut self) -> i64 {
+        let Some(c) = self.city.as_mut() else { return 0 };
+        let (w, h) = (c.sim.w, c.sim.h);
+        let saved = c.jam.clone();
+        let mut path = None;
+        for i in w..w * (h - 1) {
+            let hy_at = |j: usize| matches!(c.sim.hy[j], mat::sim::hy::CORD | mat::sim::hy::NODE);
+            if !hy_at(i) || c.sim.sig[i] <= 0.0 || i % w == 0 || i % w + 1 == w || !(hy_at(i - 1) && hy_at(i + 1)) {
+                continue;
+            }
+            c.jam.iter_mut().for_each(|j| *j = false);
+            c.jam[i] = true;
+            if let Some(p) = game::handoff::bypass(c) {
+                path = Some(p);
+                break;
+            }
+        }
+        c.jam = saved;
+        let n = path.as_ref().map_or(0, |p| p.len() as i64);
+        if let Some(p) = path {
+            self.colony.proposal = p;
+            self.colony.proposal_confirmed = false;
+        }
+        n
     }
 
     /// Development only (the play script): set a built structure's HP, as a flood or a flamer would leave it.
@@ -845,12 +892,18 @@ impl RoseSim {
             let mut st = stash.bind_mut();
             st.ensure();
             let st = &mut *st;
+            // the route loops run first, as a run comes home before the shift ends (Full Design v3.18)
+            let loop_lines = {
+                let mut folk = game::Folk { roster: &mut p.roster, traits: &traits, names: &names, died: &mut p.died_this_shift };
+                let city_seed = self.economy.as_ref().map_or(0, |e| e.s.seed);
+                game::loops::play(&mut self.colony, &mut folk, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), self.threats.as_ref(), &city.sim, city_seed, day.max(1) as u32, city.tick, &mut self.log)
+            };
             let town = game::Town { city, colony: &mut self.colony, defs: &defs };
             let store = game::Store { stash: st.stash.as_mut().unwrap(), ledger: &mut st.ledger, bench: &mut st.bench, table: st.table.as_ref().unwrap(), recipes: st.recipes.as_ref().unwrap() };
             let folk = game::Folk { roster: &mut p.roster, traits: &traits, names: &names, died: &mut p.died_this_shift };
-            let shift = game::end_shift(town, store, folk, day.max(1) as u32, &mut self.log);
+            let mut shift = game::end_shift(town, store, folk, day.max(1) as u32, &mut self.log);
+            shift.people_lines.splice(0..0, loop_lines);
             // the threats' side, the stalls' (Full Design v3.15, Economy), then the next shift's water (v3.14, Pressure)
-            let mut shift = shift;
             if let Some(t) = self.threats.as_mut() {
                 let kills = std::mem::take(&mut self.run_kills);
                 game::pressure::end(t, city, &mut self.colony, &defs, &mut p.roster, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), &mut self.log, &mut p.died_this_shift, &shift.outcome, day.max(1) as u32, kills);

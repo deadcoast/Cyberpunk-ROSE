@@ -530,3 +530,128 @@ fn a_feed_past_the_ceiling_reflects_and_a_repelled_patrol_pays_authority() {
     assert_eq!(w.colony.charter.authority, before + 4);
     assert!(w.colony.progress.collections.has_trophy("kill_flamer") && w.colony.progress.collections.has_trophy("lived_flood"));
 }
+
+#[test]
+fn a_shrines_nerve_rules_read_at_its_relay_flip_a_quota_and_sever_once() {
+    let mut w = world();
+    w.colony.progress.tech = progress::Tech::all();
+    // a Relay raised by the founding: a Shrine on it
+    let (rx, ry) = w.city.sim.relays.first().copied().unwrap_or_else(|| {
+        let (hx, hy_) = w.city.sim.heart.unwrap();
+        (hx + 2, hy_)
+    });
+    if !w.city.sim.relays.contains(&(rx, ry)) {
+        w.city.sim.place_relay(rx, ry);
+    }
+    w.city.sim.compute_signal();
+    // the founding's Pit on the Relay goes, so the Shrine can stand
+    if let Some(p) = w.colony.occupied(&w.defs, rx as u16, ry as u16) {
+        w.colony.ruin(&w.defs, p);
+    }
+    let shrine = w.colony.place_built(&w.defs, &w.city.sim, "shrine", rx as u16, ry as u16, 1).unwrap();
+    // before Nerve logic stands the card refuses
+    let mut t = progress::Tech::every_structure();
+    std::mem::swap(&mut t, &mut w.colony.progress.tech);
+    let rule = colony::NerveRule { reading: colony::Reading::Signal, above: true, value: 0.0, action: colony::NerveAction::FlipQuota, held: false };
+    assert!(w.colony.set_rule(&w.defs, shrine, 0, Some(rule)).is_err());
+    std::mem::swap(&mut t, &mut w.colony.progress.tech);
+    w.colony.set_rule(&w.defs, shrine, 0, Some(rule)).unwrap();
+    w.colony.set_rule(&w.defs, shrine, 1, Some(colony::NerveRule { action: colony::NerveAction::Sever, ..rule })).unwrap();
+    let heart = w.colony.pits(&w.defs)[0];
+    w.colony.set_quota(&w.defs, heart, Some(colony::QuotaSet { target: 2.0, ceiling: 2 }));
+    let cuts = w.colony.cuts.len();
+    crate::nerve::beat(&w.city, &mut w.colony, &w.defs, Some(&w.threats), &mut w.stash, &mut w.ledger, &w.table, &mut w.log);
+    assert!(w.colony.rules_of(shrine).iter().all(|r| r.held), "signal over 0 at the Relay");
+    let near = w.colony.get(heart).map(|h| (h.x as i32 - rx as i32).abs().max((h.y as i32 - ry as i32).abs()) <= colony::NERVE_REACH).unwrap();
+    assert_eq!(w.colony.quota_of(&w.defs, heart).unwrap().0 == 0.0, near, "a Pit within 12 pulls nothing while it holds");
+    assert_eq!(w.colony.cuts.len(), cuts + 1, "sever here marks the outward cord");
+    // the second beat: still held, no second cut
+    crate::nerve::beat(&w.city, &mut w.colony, &w.defs, Some(&w.threats), &mut w.stash, &mut w.ledger, &w.table, &mut w.log);
+    assert_eq!(w.colony.cuts.len(), cuts + 1, "the once-actions fire on the rising edge");
+    // cleared, the quota is the player's again
+    w.colony.set_rule(&w.defs, shrine, 0, None).unwrap();
+    crate::nerve::beat(&w.city, &mut w.colony, &w.defs, Some(&w.threats), &mut w.stash, &mut w.ledger, &w.table, &mut w.log);
+    assert_eq!(w.colony.quota_of(&w.defs, heart).unwrap().0, 2.0);
+}
+
+#[test]
+fn a_route_come_home_from_twice_loops_with_a_slimo_every_shift_and_decays() {
+    let mut w = world();
+    let slimo = w.roster.eligible()[0].id;
+    // not before Route automation, nor before two runs home
+    assert!(w.colony.set_loop(1, Some(slimo)).is_err());
+    w.colony.progress.tech = progress::Tech::all();
+    assert_eq!(w.colony.set_loop(1, Some(slimo)), Err("come home from this route 2 times first".into()));
+    w.colony.home_from(1);
+    w.colony.home_from(1);
+    w.colony.set_loop(1, Some(slimo)).unwrap();
+    let before = w.stash.all_items().count();
+    w.end_shift();
+    let looped = w.log.events.iter().any(|e| e.what.contains("loop on the S1 route came home") || e.what.contains("died on the S1 route's loop"));
+    assert!(looped, "the loop ran at the shift's end");
+    let alive = w.roster.get(slimo).is_some();
+    if alive {
+        assert_eq!(w.colony.loops[0].repeats, 1);
+        assert!(w.stash.all_items().count() + w.stash.floor.len() >= before.saturating_sub(5), "the kit went out and the haul came home");
+        // a run by hand on the route starts the decay over
+        w.colony.home_from(1);
+        assert_eq!(w.colony.loops[0].repeats, 0);
+    } else {
+        assert!(w.colony.loops.is_empty(), "a loop whose slimo died ends");
+    }
+}
+
+#[test]
+fn a_bred_strain_proposes_a_bypass_round_a_standing_jam_and_lays_it_when_confirmed() {
+    let mut w = world();
+    let (sw, sh) = (w.city.sim.w, w.city.sim.h);
+    // a jam on one tile of a strand: try strands until one has open ground round it
+    let mut found = None;
+    for c in sw..sw * (sh - 1) {
+        let h = |i: usize| hy::CORD == w.city.sim.hy[i] || hy::NODE == w.city.sim.hy[i];
+        if !h(c) || w.city.sim.sig[c] <= 0.0 || c % sw == 0 || c % sw + 1 == sw {
+            continue;
+        }
+        if !(h(c - 1) && h(c + 1)) {
+            continue;
+        }
+        w.city.jam.iter_mut().for_each(|j| *j = false);
+        w.city.jam[c] = true;
+        if crate::handoff::bypass(&w.city).is_some() {
+            found = Some(c);
+            break;
+        }
+    }
+    let c = found.expect("a strand with ground round it");
+    // not bred: nothing proposed
+    crate::handoff::tick(&mut w.city, &mut w.colony, Some(0), 1, &mut w.log);
+    assert!(w.colony.proposal.is_empty());
+    w.city.sim.genome.0[mat::genome::PLASTICITY] = 0.75;
+    w.city.sim.genome.0[mat::genome::CONDUCTANCE] = 0.75;
+    // a jam that stood less than a minute: nothing yet
+    let t = w.city.tick;
+    crate::handoff::tick(&mut w.city, &mut w.colony, Some(t), 1, &mut w.log);
+    assert!(w.colony.proposal.is_empty());
+    w.city.tick += crate::alerts::JAM_ALERT_TICKS;
+    crate::handoff::tick(&mut w.city, &mut w.colony, Some(t), 1, &mut w.log);
+    let path = w.colony.proposal.clone();
+    assert!(!path.is_empty() && path.len() <= crate::handoff::MOST_TILES);
+    assert!(!path.contains(&(c as u32)), "it keeps off the jam");
+    assert!(w.colony.progress.strain.has_card("handoff"));
+    assert!(w.alerts().iter().any(|a| a.key == "handoff"));
+    // confirmed: a tile a Mat step, paid from the Heart
+    crate::handoff::answer(&mut w.colony, true);
+    let (hx, hy_) = w.city.sim.heart.unwrap();
+    for _ in 0..path.len() * 2 + 2 {
+        let hi = w.city.sim.idx(hx, hy_);
+        w.city.sim.n[hi] = 1.0;
+        w.city.tick += w.city.mat_every.max(1) - w.city.tick % w.city.mat_every.max(1);
+        crate::handoff::tick(&mut w.city, &mut w.colony, None, 1, &mut w.log);
+    }
+    assert!(w.colony.proposal.is_empty() && !w.colony.proposal_confirmed);
+    assert!(path.iter().all(|&i| w.city.sim.hy[i as usize] != hy::EMPTY), "the bypass is laid");
+    // severed, a proposal is dropped
+    w.colony.proposal = vec![1, 2];
+    crate::handoff::answer(&mut w.colony, false);
+    assert!(w.colony.proposal.is_empty());
+}

@@ -228,6 +228,8 @@ func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Diction
 	var before: int = st.count()
 	var held := 0
 	if String(o.get("result", "")) == "extracted":
+		# a run by hand home: it counts toward a loop on the route (Full Design v3.18, Route loops)
+		ensure().note_route_home(stratum)
 		var rig: PackedByteArray = o.get("rig", PackedByteArray())
 		held += maxi(0, st.import_rig(rig)) if not rig.is_empty() else 0
 	for key in ["mat_haul", "regrown"]:

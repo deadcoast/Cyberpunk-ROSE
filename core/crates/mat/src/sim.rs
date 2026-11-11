@@ -358,8 +358,8 @@ impl MatSim {
     /// at once. Returns the genes that reflected: (gene, off the ceiling).
     pub fn drift_genome(&mut self, drift: [f32; 10]) -> Vec<(usize, bool)> {
         let mut bounced = Vec::new();
-        for g in 0..10 {
-            let mut v = self.genome.0[g] + drift[g];
+        for (g, d) in drift.iter().enumerate() {
+            let mut v = self.genome.0[g] + d;
             if v > 1.0 {
                 v = 2.0 - v;
                 bounced.push((g, true));
@@ -377,6 +377,23 @@ impl MatSim {
     /// (0.16) from the parent cell, so one nutrient is about six cells; θ_grow is the threshold to start, not a cost.
     pub fn cells_per_nutrient(&self) -> f32 {
         1.0 / (self.grow_cost + self.tip_starter).max(0.01)
+    }
+
+    /// The handoff lays a tile of its bypass (Full Design v3.18): a tip on growable empty ground, paid from the
+    /// Heart's tile at the growth cost. True when it was laid.
+    pub fn lay(&mut self, i: usize) -> bool {
+        let Some((hx, hy)) = self.heart else { return false };
+        let h = self.idx(hx, hy);
+        let cost = self.grow_cost + self.tip_starter;
+        if self.hy[i] != hy::EMPTY || self.salt[i] || !sub::GROWABLE[self.sub[i] as usize] || self.n[h] < cost {
+            return false;
+        }
+        self.n[h] -= cost;
+        self.set_hy(i, hy::TIP);
+        self.age[i] = 0;
+        self.stall[i] = 0;
+        self.n[i] = (self.n[i] + self.tip_starter).min(1.0);
+        true
     }
 
     /// Bait Smear: paint nutrient straight onto the ground.

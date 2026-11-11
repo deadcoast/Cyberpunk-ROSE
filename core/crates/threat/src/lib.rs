@@ -609,7 +609,7 @@ impl Threats {
         Pcg32::new(self.seed ^ 0x7E2E_A700_0000 ^ ((self.shift as u64) << 20) ^ salt)
     }
 
-    fn body_def(&self, role: Role) -> &BodyDef {
+    pub fn body_def(&self, role: Role) -> &BodyDef {
         &self.rules.body[role.key()]
     }
 
@@ -854,7 +854,7 @@ impl Threats {
                     }
                 }
             }
-            for s in colony.structures.iter().filter(|s| s.built && !colony.dimmed.contains(&s.id)) {
+            for s in colony.structures.iter().filter(|s| s.built && !colony.dimmed.contains(&s.id) && !colony.nerve.dim.contains(&s.id)) {
                 let a = defs.structure[s.def].value_at("attention", s.tier) as f32;
                 if a <= 0.0 {
                     continue;
@@ -871,7 +871,7 @@ impl Threats {
             // a Lume Bulb out of a housing: +1 at a grate within reach, unless dark or a Garden's Lung quiets it
             for &(bi, _) in &bulbs {
                 let t = ((bi % sim.w) as i32, (bi / sim.w) as i32);
-                if colony.dark_bulbs.contains(&(bi as u32)) || colony.occupied(defs, t.0 as u16, t.1 as u16).is_some() || garden_quiet(sim, garden, t) {
+                if colony.dark_bulbs.contains(&(bi as u32)) || colony.nerve.dark_bulbs.contains(&(bi as u32)) || colony.occupied(defs, t.0 as u16, t.1 as u16).is_some() || garden_quiet(sim, garden, t) {
                     continue;
                 }
                 if (t.0 - g.0 as i32).abs() + t.1 <= near {
@@ -1099,6 +1099,13 @@ impl Threats {
             let d = &defs.structure[st.def];
             if !d.shuts {
                 return false;
+            }
+            // a Nerve rule holds it open or shut (Full Design v3.18, Nerve logic)
+            if colony.nerve.open.contains(&st.id) {
+                return false;
+            }
+            if colony.nerve.shut.contains(&st.id) {
+                return true;
             }
             if d.category != "organ" {
                 return true;
@@ -1364,6 +1371,12 @@ impl Threats {
                 if posts.d2.contains(id) && !strikers.iter().any(|s| s.0 == *id) {
                     strikers.push((*id, *p));
                 }
+            }
+        }
+        // a Nerve rule's alarm: its district's D2s are militia while it holds
+        for (id, p) in &slimos {
+            if colony.nerve.alarm.contains(id) && posts.d2.contains(id) && !strikers.iter().any(|s| s.0 == *id) {
+                strikers.push((*id, *p));
             }
         }
         for (id, at) in strikers {

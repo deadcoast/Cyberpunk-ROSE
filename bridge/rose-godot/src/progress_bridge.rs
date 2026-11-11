@@ -93,7 +93,7 @@ impl RoseSim {
     /// Stash. Returns why not, or "" when it stands.
     #[func]
     fn research_pick(&mut self, kind: GString, id: GString) -> GString {
-        let p = if kind.to_string() == "study" { Project::Study(id.to_string()) } else { Project::Node(id.to_string()) };
+        let p = if kind == "study" { Project::Study(id.to_string()) } else { Project::Node(id.to_string()) };
         let Some(st) = self.stash.as_mut() else { return "no Stash".into() };
         let mut st = st.bind_mut();
         st.ensure();
@@ -187,7 +187,7 @@ impl RoseSim {
             e.set("name", od.name.as_str());
             e.set("art", od.art.as_str());
             e.set("rule", o.rule as i64);
-            e.set("dark", self.colony.dark_bulbs.contains(&o.i));
+            e.set("dark", self.colony.dark_bulbs.contains(&o.i) || self.colony.nerve.dark_bulbs.contains(&o.i));
             e.set("housed", self.colony.occupied(defs, x, y).is_some_and(|sid| self.colony.get(sid).is_some_and(|s| defs.structure[s.def].category != "organ")));
             a.push(&e.to_variant());
         }
@@ -287,5 +287,114 @@ impl RoseSim {
         d.set("memorial", &memorial);
         let _ = BRANCHES;
         d
+    }
+
+    /// A Shrine's Nerve rules for its card (Full Design v3.18, Nerve logic): {reading, reading_name, above, value,
+    /// action, action_name, held} each, with whether Nerve logic stands.
+    #[func]
+    fn nerve_rules(&self, shrine: i64) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        d.set("researched", self.colony.progress.tech.flag("nerve_logic"));
+        let mut a = VarArray::new();
+        for r in self.colony.rules_of(shrine.max(0) as u32) {
+            let mut e = VarDictionary::new();
+            e.set("reading", colony::Reading::ALL.iter().position(|x| *x == r.reading).unwrap_or(0) as i64);
+            e.set("reading_name", r.reading.name());
+            e.set("above", r.above);
+            e.set("value", r.value);
+            e.set("action", colony::NerveAction::ALL.iter().position(|x| *x == r.action).unwrap_or(0) as i64);
+            e.set("action_name", r.action.name());
+            e.set("held", r.held);
+            a.push(&e.to_variant());
+        }
+        d.set("rules", &a);
+        let mut steps = VarArray::new();
+        for r in colony::Reading::ALL {
+            steps.push(&PackedFloat32Array::from(r.steps().as_slice()).to_variant());
+        }
+        d.set("steps", &steps);
+        d
+    }
+
+    /// Set a Shrine's rule `k`: `reading` an index into the readings (-1 clears the rule), `value` the threshold,
+    /// `action` an index into the actions. Returns why not, or "".
+    #[func]
+    fn set_nerve_rule(&mut self, shrine: i64, k: i64, reading: i64, above: bool, value: f64, action: i64) -> GString {
+        let defs = self.defs().clone();
+        let rule = (reading >= 0).then(|| colony::NerveRule {
+            reading: colony::Reading::ALL[(reading as usize).min(6)],
+            above,
+            value: value as f32,
+            action: colony::NerveAction::ALL[(action.max(0) as usize).min(6)],
+            held: false,
+        });
+        match self.colony.set_rule(&defs, shrine.max(0) as u32, k.max(0) as usize, rule) {
+            Ok(()) => GString::new(),
+            Err(why) => why.as_str().into(),
+        }
+    }
+
+    /// A run by hand came home from a stratum's route (Full Design v3.18, Route loops).
+    #[func]
+    fn note_route_home(&mut self, stratum: i64) {
+        self.colony.home_from(stratum.clamp(1, 6) as u8);
+    }
+
+    /// The route loops for the Route Board: {stratum, slimo, repeats, decay, homes}, and whether loops can be set.
+    #[func]
+    fn route_loops(&self) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        d.set("researched", self.colony.progress.tech.flag("route_loops"));
+        let mut homes = VarDictionary::new();
+        for (st, n) in &self.colony.route_homes {
+            homes.set(*st as i64, *n as i64);
+        }
+        d.set("homes", &homes);
+        d.set("after", colony::LOOP_AFTER as i64);
+        let mut a = VarArray::new();
+        for l in &self.colony.loops {
+            let mut e = VarDictionary::new();
+            e.set("stratum", l.stratum as i64);
+            e.set("slimo", l.slimo as i64);
+            e.set("repeats", l.repeats as i64);
+            a.push(&e.to_variant());
+        }
+        d.set("loops", &a);
+        d
+    }
+
+    /// Put a stratum's route on a loop with a slimo (-1 takes it off). Returns why not, or "".
+    #[func]
+    fn set_route_loop(&mut self, people: Gd<RosePeople>, stratum: i64, slimo: i64) -> GString {
+        let st = stratum.clamp(1, 6) as u8;
+        if slimo < 0 {
+            let _ = self.colony.set_loop(st, None);
+            return GString::new();
+        }
+        let p = people.bind();
+        let Some(r) = p.roster.get(slimo as u32) else { return "no such slimo".into() };
+        let able = r.can_run() || (p.roster.d4_runs && r.depth == ::people::Depth::D4 && r.is_up());
+        if !able {
+            return "cannot run now".into();
+        }
+        match self.colony.set_loop(st, Some(slimo as u32)) {
+            Ok(()) => GString::new(),
+            Err(why) => why.as_str().into(),
+        }
+    }
+
+    /// The handoff's proposal (Full Design v3.18): its tiles and whether it was confirmed.
+    #[func]
+    fn proposal(&self) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        d.set("tiles", &PackedInt32Array::from(self.colony.proposal.iter().map(|&i| i as i32).collect::<Vec<i32>>().as_slice()));
+        d.set("confirmed", self.colony.proposal_confirmed);
+        d
+    }
+
+    /// Answer the proposal: confirm lays it, sever drops it.
+    #[func]
+    fn answer_proposal(&mut self, confirm: bool) {
+        game::handoff::answer(&mut self.colony, confirm);
     }
 }

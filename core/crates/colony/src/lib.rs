@@ -387,6 +387,113 @@ pub struct Cut {
     pub progress: u32,
 }
 
+/// What a Nerve rule reads at its Shrine (Full Design v3.18, Nerve logic; Pass 2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Reading {
+    Signal,
+    Nutrient,
+    Attention,
+    Water,
+    Traffic,
+    Light,
+    Strain,
+}
+
+impl Reading {
+    pub const ALL: [Reading; 7] = [Reading::Signal, Reading::Nutrient, Reading::Attention, Reading::Water, Reading::Traffic, Reading::Light, Reading::Strain];
+    pub fn name(self) -> &'static str {
+        match self {
+            Reading::Signal => "signal",
+            Reading::Nutrient => "nutrient",
+            Reading::Attention => "attention",
+            Reading::Water => "water",
+            Reading::Traffic => "traffic",
+            Reading::Light => "white light",
+            Reading::Strain => "feral strain",
+        }
+    }
+    /// The values a rule steps through (the card cycles them).
+    pub fn steps(self) -> Vec<f32> {
+        match self {
+            Reading::Signal | Reading::Nutrient => (0..=10).map(|k| k as f32 / 10.0).collect(),
+            Reading::Attention => (0..=10).map(|k| k as f32 * 10.0).collect(),
+            Reading::Water => vec![0.0, 1.0, 2.0, 3.0],
+            Reading::Traffic => (0..=10).map(|k| k as f32 * 4.0).collect(),
+            Reading::Light => (0..=15).map(|k| k as f32 * 2.0).collect(),
+            Reading::Strain => (0..=10).map(|k| k as f32 * 5.0).collect(),
+        }
+    }
+}
+
+/// What a Nerve rule does while it holds (Sever and Dump fire once, the rest hold while the rule does).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NerveAction {
+    Sever,
+    ShutGates,
+    OpenGates,
+    FlipQuota,
+    Alarm,
+    Dim,
+    Dump,
+}
+
+impl NerveAction {
+    pub const ALL: [NerveAction; 7] = [NerveAction::Sever, NerveAction::ShutGates, NerveAction::OpenGates, NerveAction::FlipQuota, NerveAction::Alarm, NerveAction::Dim, NerveAction::Dump];
+    pub fn name(self) -> &'static str {
+        match self {
+            NerveAction::Sever => "sever here",
+            NerveAction::ShutGates => "shut gates",
+            NerveAction::OpenGates => "open gates",
+            NerveAction::FlipQuota => "flip quota",
+            NerveAction::Alarm => "alarm",
+            NerveAction::Dim => "dim",
+            NerveAction::Dump => "dump",
+        }
+    }
+}
+
+/// A Nerve rule: when [reading] [< or >] [value] then [action] (Pass 2).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct NerveRule {
+    pub reading: Reading,
+    pub above: bool,
+    pub value: f32,
+    pub action: NerveAction,
+    /// held at the last evaluation (the once-actions fire on the rising edge)
+    #[serde(default)]
+    pub held: bool,
+}
+
+/// Rules a Shrine holds (Pass 2).
+pub const NERVE_RULES: usize = 4;
+/// The reach of a rule's actions, in tiles (Full Design v3.18).
+pub const NERVE_REACH: i32 = 12;
+
+/// What the Nerve rules hold this beat, read by the threats, the cargo and the light (set by the game every 20 ticks).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NerveState {
+    pub shut: HashSet<u32>,
+    pub open: HashSet<u32>,
+    pub quota_off: HashSet<u32>,
+    pub alarm: HashSet<u32>,
+    pub dim: HashSet<u32>,
+    pub dark_bulbs: HashSet<u32>,
+    /// the shift a Dump last fired
+    pub dumped: u32,
+}
+
+/// A route on a loop (Full Design v3.18, Route loops): the stratum's route, the slimo who runs it every shift, the
+/// repeats since a run by hand.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RouteLoop {
+    pub stratum: u8,
+    pub slimo: u32,
+    pub repeats: u32,
+}
+
+/// Runs home a route asks before it can be looped (Pass 2: "a route that returned twice").
+pub const LOOP_AFTER: u32 = 2;
+
 /// A cut is one tweaker-shift: the eight points a Pit prices one at (Pass 1).
 pub const CUT_POINTS: u32 = 8;
 /// A bag of road salt lays eight tiles (Pass 1).
@@ -660,6 +767,22 @@ pub struct Colony {
     /// the tree, the strain's classes and Strainbook, the collections (Full Design v3.18, Progression; save v14)
     #[serde(default)]
     pub progress: progress::Progress,
+    /// each Relay Shrine's Nerve rules (Full Design v3.18, Nerve logic): (shrine, its rules)
+    #[serde(default)]
+    pub nerves: Vec<(u32, Vec<NerveRule>)>,
+    /// what the rules hold now
+    #[serde(skip)]
+    pub nerve: NerveState,
+    /// the routes on a loop, and the runs come home from each stratum's route (Full Design v3.18, Route loops)
+    #[serde(default)]
+    pub loops: Vec<RouteLoop>,
+    #[serde(default)]
+    pub route_homes: Vec<(u8, u32)>,
+    /// the handoff (Full Design v3.18): the bypass the Mat proposes, tile by tile, and whether it was confirmed
+    #[serde(default)]
+    pub proposal: Vec<u32>,
+    #[serde(default)]
+    pub proposal_confirmed: bool,
     /// structures a Nerve rule dims, and Lume Bulbs dark by their rule or a Nerve rule (tiles), set by the game
     #[serde(skip)]
     pub dimmed: HashSet<u32>,
@@ -722,6 +845,12 @@ impl Colony {
             salt_left: 0,
             orders: HashMap::new(),
             progress: progress::Progress::default(),
+            nerves: Vec::new(),
+            nerve: NerveState::default(),
+            loops: Vec::new(),
+            route_homes: Vec::new(),
+            proposal: Vec::new(),
+            proposal_confirmed: false,
             dimmed: HashSet::new(),
             dark_bulbs: HashSet::new(),
             strain_shift: progress::StrainShift::default(),
@@ -844,7 +973,9 @@ impl Colony {
         if def.node && mat.hy[ai] != hy::NODE {
             return Err(PlaceError::NeedsNode);
         }
-        if def.relay && !mat.relays.contains(&(x as usize, y as usize)) && !organ_at(mat, ai, "ganglion") {
+        // a Hive strain carries the rules on its cords: a Shrine on any Node with Chrome Affinity over 0.6 (Pass 2)
+        let hive_node = self.progress.strain.holds("hive") && mat.genome.0[mat::genome::CHROME] > 0.6 && mat.hy[ai] == hy::NODE;
+        if def.relay && !mat.relays.contains(&(x as usize, y as usize)) && !organ_at(mat, ai, "ganglion") && !hive_node {
             return Err(PlaceError::NeedsRelay);
         }
         if !def.organ.is_empty() && !organ_at(mat, ai, &def.organ) {
@@ -913,7 +1044,75 @@ impl Colony {
         let s = self.structures.remove(i);
         self.homes.retain(|_, h| *h != id);
         self.orders.retain(|_, sid| *sid != id);
+        self.nerves.retain(|n| n.0 != id);
         Some(s)
+    }
+
+    /// Runs come home from a stratum's route.
+    pub fn homes_from(&self, stratum: u8) -> u32 {
+        self.route_homes.iter().find(|h| h.0 == stratum).map_or(0, |h| h.1)
+    }
+
+    /// A run by hand came home from a stratum's route: it counts toward a loop, and a loop on it starts its decay
+    /// over (Full Design v3.18, Route loops).
+    pub fn home_from(&mut self, stratum: u8) {
+        match self.route_homes.iter_mut().find(|h| h.0 == stratum) {
+            Some(h) => h.1 += 1,
+            None => self.route_homes.push((stratum, 1)),
+        }
+        for l in self.loops.iter_mut().filter(|l| l.stratum == stratum) {
+            l.repeats = 0;
+        }
+    }
+
+    /// Put a stratum's route on a loop with a slimo (it is checked eligible by the caller), or take it off with None.
+    pub fn set_loop(&mut self, stratum: u8, slimo: Option<u32>) -> Result<(), String> {
+        self.loops.retain(|l| l.stratum != stratum);
+        let Some(slimo) = slimo else { return Ok(()) };
+        if !self.progress.tech.flag("route_loops") {
+            return Err("needs Route automation researched".into());
+        }
+        if self.homes_from(stratum) < LOOP_AFTER {
+            return Err(format!("come home from this route {LOOP_AFTER} times first"));
+        }
+        if self.loops.iter().any(|l| l.slimo == slimo) {
+            return Err("already on a loop".into());
+        }
+        self.loops.push(RouteLoop { stratum, slimo, repeats: 0 });
+        Ok(())
+    }
+
+    /// A Shrine's Nerve rules (Full Design v3.18, Nerve logic).
+    pub fn rules_of(&self, shrine: u32) -> &[NerveRule] {
+        self.nerves.iter().find(|n| n.0 == shrine).map_or(&[], |n| n.1.as_slice())
+    }
+
+    /// Set a Shrine's rule `k` (0-3), or clear it with None: once Nerve logic stands, on a built Shrine.
+    pub fn set_rule(&mut self, defs: &StructureFile, shrine: u32, k: usize, rule: Option<NerveRule>) -> Result<(), String> {
+        if !self.progress.tech.flag("nerve_logic") {
+            return Err("needs Nerve logic researched".into());
+        }
+        let ok = self.get(shrine).is_some_and(|s| s.built && defs.structure[s.def].id == "shrine");
+        if !ok || k >= NERVE_RULES {
+            return Err("not a Shrine's rule".into());
+        }
+        let i = match self.nerves.iter().position(|n| n.0 == shrine) {
+            Some(i) => i,
+            None => {
+                self.nerves.push((shrine, Vec::new()));
+                self.nerves.len() - 1
+            }
+        };
+        let rules = &mut self.nerves[i].1;
+        match rule {
+            Some(r) if k < rules.len() => rules[k] = r,
+            Some(r) => rules.push(r),
+            None if k < rules.len() => {
+                rules.remove(k);
+            }
+            None => {}
+        }
+        Ok(())
     }
 
     /// The Mat's own (Full Design v3.18, Organs): a Brood Knot, a Sphincter, a Maw or a Venom Gland stands as a
@@ -996,6 +1195,7 @@ impl Colony {
         let s = self.get(id)?;
         let d = &defs.structure[s.def];
         match d.id.as_str() {
+            "heart" | "pit" if self.nerve.quota_off.contains(&id) => Some((0.0, 1, QuotaFrom::Set)),
             "heart" | "pit" => {
                 // the Heart set: the Heart's Pit holds half again (Full Design v3.18, Collections)
                 let heart_set = d.id == "heart" && self.progress.collections.set_flag("heart_set");
@@ -1209,7 +1409,7 @@ impl Colony {
         let mut v: Vec<(i32, i32, i32)> = self
             .structures
             .iter()
-            .filter(|s| s.built && !self.dimmed.contains(&s.id))
+            .filter(|s| s.built && !self.dimmed.contains(&s.id) && !self.nerve.dim.contains(&s.id))
             .filter_map(|s| {
                 let d = &defs.structure[s.def];
                 let mut r = d.light_at(s.tier);
@@ -1233,7 +1433,7 @@ impl Colony {
             let r = (1.0 + 6.0 * mat.genome.0[mat::genome::LUME]) as i32;
             for o in mat.organs_of(bulb) {
                 let (x, y) = ((o.i as usize % mat.w) as u16, (o.i as usize / mat.w) as u16);
-                if self.dark_bulbs.contains(&o.i) || self.occupied(defs, x, y).is_some() {
+                if self.dark_bulbs.contains(&o.i) || self.nerve.dark_bulbs.contains(&o.i) || self.occupied(defs, x, y).is_some() {
                     continue;
                 }
                 v.push((x as i32, y as i32, r));

@@ -38,6 +38,7 @@ func _shot(name: String) -> void:
 var t0 := 0
 var runner_id := -1
 var mend_id := -1
+var shrine_id := -1
 
 func _hp(id: int) -> int:
 	for st in sim.ensure().structures():
@@ -385,6 +386,111 @@ func _process(_delta: float) -> bool:
 		27:
 			if t % 10 == 5:
 				_shot("21_strainbook")
+				# a long campaign's Bench (development: every node), a Hive strain: a Relay Shrine on a Node, built
+				var rs: RoseSim = sim.ensure()
+				rs.debug_tech_all()
+				rs.debug_gene(6, 0.7)
+				rs.debug_gene(8, 0.7)
+				sim.end_shift()
+				sim.day += 1
+				print("[play] Hive held: %s" % str(rs.strain().classes.filter(func(c): return String(c.id) == "hive")[0].held))
+				screens.show_screen("colony")
+				scr = screens.current
+				var heart: Dictionary = rs.structures()[0]
+				# the Shrine's Parts and Chrome, as the Stash holds them
+				var st0: RoseStash = sim.ensure_stash()
+				for k in 6:
+					st0.add(RoseItems.new().find("prt_pipe"), 70, true)
+				for k in 2:
+					st0.add(RoseItems.new().find("chr_optic_slag"), 70, true)
+				sim.build_tool = "shrine"
+				shrine_id = -1
+				for r in range(2, 14):
+					if shrine_id >= 0:
+						break
+					for dy in range(-r, r + 1):
+						if shrine_id >= 0:
+							break
+						for dx in range(-r, r + 1):
+							if absi(dx) != r and absi(dy) != r:
+								continue
+							var x := int(heart.x) + 1 + dx
+							var y := int(heart.y) + 1 + dy
+							if String(rs.tile_info(x, y).get("mat", "")) == "node":
+								shrine_id = scr.place_ghost(x, y)
+								if shrine_id >= 0:
+									break
+				sim.build_tool = ""
+				scr.tool = ""
+				var shifts := 0
+				while shifts < 8:
+					var built := false
+					for st in rs.structures():
+						if int(st.id) == shrine_id and bool(st.built):
+							built = true
+					if built:
+						break
+					sim.end_shift()
+					sim.day += 1
+					shifts += 1
+				print("[play] the Relay Shrine on a Node (%d) built after %d shifts" % [shrine_id, shifts])
+				# its rules, as the card's words set them: when signal > 0 then dim; when white light < 8 shut gates
+				rs.set_nerve_rule(shrine_id, 0, 0, true, 0.0, 5)
+				rs.set_nerve_rule(shrine_id, 1, 5, false, 8.0, 1)
+				for k in 20:
+					rs.step()
+				for st in rs.structures():
+					if int(st.id) == shrine_id:
+						scr.set_view(0)
+						scr.cam.position = Vector2(int(st.x) * 32 + 16, int(st.y) * 32 + 48)
+				scr.selected = {"kind": "structure", "id": shrine_id}
+				scr.card_sig = ""
+				scr._draw_card()
+				phase = 28
+		28:
+			if t % 10 == 5:
+				_shot("22_nerve")
+				var n: Dictionary = sim.ensure().nerve_rules(shrine_id)
+				print("[play] the Shrine's rules: %s" % str(n.rules.map(func(r): return "%s %s %s" % [String(r.reading_name), String(r.action_name), "holds" if bool(r.held) else "-"])))
+				# a route loop: the play's run came home once; the Board shows it, a second run home, then LOOP IT
+				print("[play] S1 runs home: %d" % int((sim.ensure().route_loops().homes as Dictionary).get(1, 0)))
+				sim.ensure().note_route_home(1)
+				screens.show_screen("route")
+				scr = screens.current
+				phase = 29
+		29:
+			if t % 10 == 5:
+				var why: String = sim.ensure().set_route_loop(sim.ensure_people(), 1, scr.runner_id)
+				print("[play] loop with %s: %s" % [sim.slimo_name(scr.runner_id), "set" if why == "" else why])
+				scr._refresh_cards()
+				phase = 30
+		30:
+			if t % 10 == 5:
+				_shot("23_loop")
+				sim.end_shift()
+				sim.day += 1
+				for l in sim.people_lines:
+					if String(l).contains("loop"):
+						print("[play] %s" % String(l))
+				# the handoff: a bred strain's proposal round a jam, on the Stack view
+				var rs: RoseSim = sim.ensure()
+				rs.debug_gene(9, 0.75)
+				print("[play] the Mat proposes %d tiles" % rs.debug_proposal())
+				screens.show_screen("colony")
+				scr = screens.current
+				var p: Dictionary = rs.proposal()
+				var tiles: PackedInt32Array = p.tiles
+				if tiles.size() > 0:
+					var w: int = rs.width()
+					scr.set_view(0)
+					scr.cam.position = Vector2((tiles[0] % w) * 32 + 16, (tiles[0] / w) * 32 + 48)
+					scr.selected = {"kind": "tile", "x": tiles[0] % w, "y": tiles[0] / w}
+					scr.card_sig = ""
+					scr._draw_card()
+				phase = 31
+		31:
+			if t % 10 == 5:
+				_shot("24_handoff")
 				print("[play] %d frames, %d shots -> %s" % [t, shots, out_dir])
 				quit(0)
 				return true

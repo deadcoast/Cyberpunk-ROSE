@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, under way (PAC-060 done: Attention, Patrols, Sweeps, Cleansings, Blooms, Floods and raiders; PAC-061 done: the surface's factions, their streets, demand, reputation, stock tiers, services and contract chains; PAC-062 done: the Market screen; PAC-063 done: mending; Phase D's rows are done, Phase E's progression is next).
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, closed (PAC-060–063 done: the threats, the surface's factions and the Market, mending); Phase E, progression, under way (PAC-080 done: the tech tree, the organs, the strain classes, the Strainbook, Nerve logic, route loops, the handoff, Authority's deeds, the city tiers and the collections; PAC-081, the chapters, is next).
 
     ./run.sh /path/to/godot4.5
 
@@ -19,7 +19,7 @@ Layout
     game/              Godot 4.5 project: Main, autoloads (Assets, Screens, Sim), ui/, modes/<screen>/, tests/
     game/assets/       palette/ manifest/ placeholders/ anchors/ art/   (read as files at runtime; .gdignore)
     data/              items.toml (164 items), chunks.toml (19 run chunks), loot.toml, creatures.toml, recipes.toml (60), traits.toml (40), names.toml, structures.toml (25), laws.toml (8), strings.toml
-    docs/              design · art bible · research/ (01-17) · telemetry/ · pixellab-prompts.md · shots/ · todo.PACER.csv · VERIFICATION-*
+    docs/              design · art bible · research/ (01-21) · telemetry/ · pixellab-prompts.md · shots/ · todo.PACER.csv · VERIFICATION-*
     src/, history/     the Python prototypes and the M1 archive
 
 Where things come from

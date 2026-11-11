@@ -622,6 +622,8 @@ func _card_structure(info: Dictionary) -> void:
 		_card_quota(id, info.q)
 	elif bool(s.store):
 		_card_stockpile(info)
+	elif String(s.def) == "shrine" and bool(s.built):
+		_card_nerves(id)
 	# the upgrade, the ghost's cancel
 	if not bool(s.built):
 		if not bool(s.paid):
@@ -712,6 +714,60 @@ const ORGAN_RULES := {
 	"sac": {"names": ["RELEASE", "HOLD"]},
 }
 
+## A clickable word on a card: a label with a flat button over it.
+func _word(text: String, pos: Vector2, color: Color, on_press: Callable) -> void:
+	var l := make_label(card, text, pos, color)
+	var b := Button.new()
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	b.position = pos
+	b.size = Vector2(text.length() * 4 + 4, 10)
+	b.pressed.connect(on_press)
+	card.add_child(b)
+	l.z_index = 1
+
+## A Relay Shrine's four Nerve rules (Full Design v3.18, Nerve logic): when [reading] [< or >] [value] then
+## [action]; each word cycles on a click, X clears a rule, + RULE adds one.
+func _card_nerves(id: int) -> void:
+	var sim: RoseSim = Sim.ensure()
+	var n: Dictionary = sim.nerve_rules(id)
+	if not bool(n.researched):
+		make_label(card, "NERVE RULES: research Nerve logic at the Bench", Vector2(6, 28), UiTheme.DUST)
+		return
+	var rules: Array = n.rules
+	var steps: Array = n.steps
+	var y := 26
+	for k in rules.size():
+		var r: Dictionary = rules[k]
+		var kk := k
+		var rd := int(r.reading)
+		var vals: PackedFloat32Array = steps[rd]
+		var set_rule := func(reading: int, above: bool, value: float, action: int):
+			var why: String = sim.set_nerve_rule(id, kk, reading, above, value, action)
+			_say(why, "")
+			card_sig = ""
+		make_label(card, "%d WHEN" % (k + 1), Vector2(6, y), UiTheme.DUST)
+		_word(String(r.reading_name).to_upper(), Vector2(44, y), UiTheme.CYAN, func():
+			var nr := (rd + 1) % 7
+			var nv: PackedFloat32Array = steps[nr]
+			set_rule.call(nr, bool(r.above), nv[nv.size() / 2], int(r.action)))
+		_word(">" if bool(r.above) else "<", Vector2(112, y), UiTheme.CYAN, func(): set_rule.call(rd, not bool(r.above), float(r.value), int(r.action)))
+		_word(("%.1f" % float(r.value)) if float(r.value) < 1.01 and rd <= 1 else str(int(r.value)), Vector2(124, y), UiTheme.CYAN, func():
+			var at := 0
+			for j in vals.size():
+				if absf(vals[j] - float(r.value)) < 0.001:
+					at = j
+			set_rule.call(rd, bool(r.above), vals[(at + 1) % vals.size()], int(r.action)))
+		make_label(card, "THEN", Vector2(152, y), UiTheme.DUST)
+		_word(String(r.action_name).to_upper(), Vector2(176, y), UiTheme.ACID, func(): set_rule.call(rd, bool(r.above), float(r.value), (int(r.action) + 1) % 7))
+		make_label(card, "HOLDS" if bool(r.held) else "", Vector2(236, y), UiTheme.OOZE_GLOW)
+		_word("X", Vector2(286, y), UiTheme.HOT_PINK, func(): set_rule.call(-1, false, 0.0, 0))
+		y += 10
+	if rules.size() < 4:
+		_word("+ RULE", Vector2(6, y), UiTheme.ACID, func():
+			sim.set_nerve_rule(id, rules.size(), 0, false, 0.3, 1)
+			card_sig = "")
+
 ## An organ on a card: what it does by itself, and its rule once Organ rules stands (Full Design v3.18, Organs).
 func _organ_block(t: Dictionary, top: int) -> void:
 	var sim: RoseSim = Sim.ensure()
@@ -761,6 +817,21 @@ func _card_tile(info: Dictionary) -> void:
 	make_label(card, "   ".join(marks), Vector2(6, 26), UiTheme.DUST)
 	if String(t.get("organ", "")) != "":
 		_organ_block(t, 37)
+	# the handoff (Full Design v3.18): the Mat's proposed bypass, confirmed or severed here
+	if bool(t.get("proposal", false)):
+		if bool(t.proposal_confirmed):
+			make_label(card, "THE MAT LAYS ITS BYPASS: %d TILES TO GO" % int(t.proposal_tiles), Vector2(6, 37), UiTheme.OOZE_GLOW)
+		else:
+			var n := int(t.proposal_tiles)
+			make_label(card, "THE MAT PROPOSES A CORD OF %d TILE%s ROUND THE JAM" % [n, "" if n == 1 else "S"], Vector2(6, 37), UiTheme.OOZE_GLOW)
+			make_button(card, "CONFIRM", Vector2(6, 50), func():
+				sim.answer_proposal(true)
+				card_sig = ""
+				world.redraw_city())
+			make_button(card, "SEVER", Vector2(70, 50), func():
+				sim.answer_proposal(false)
+				card_sig = ""
+				world.redraw_city())
 	if bool(t.cut):
 		make_button(card, "UNMARK", Vector2(6, 68), func():
 			sim.unmark_cut(x, y)

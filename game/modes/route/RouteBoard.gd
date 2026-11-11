@@ -148,6 +148,44 @@ func _fill_card(f: Panel, r: Dictionary, i: int) -> void:
 	pick.size = Vector2(CARD_W, CARD_H)
 	pick.pressed.connect(func(): _select(i))
 	f.add_child(pick)
+	# route loops (Full Design v3.18, Route loops): a route come home from twice runs every shift with one slimo
+	var lp: Dictionary = Sim.ensure().route_loops()
+	if bool(lp.researched):
+		var st := int(r.stratum)
+		var homes := int((lp.homes as Dictionary).get(st, 0))
+		var mine := {}
+		for l in lp.loops:
+			if int(l.stratum) == st:
+				mine = l
+		if not mine.is_empty():
+			make_label(f, "LOOP: %s, %d REPEATS" % [_crew_name(int(mine.slimo)).to_upper(), int(mine.repeats)], Vector2(6, 84), UiTheme.OOZE_GLOW)
+			_card_word(f, "END", Vector2(180, 84), UiTheme.HOT_PINK, func():
+				Sim.ensure().set_route_loop(Sim.ensure_people(), st, -1)
+				_refresh_cards())
+		elif homes >= int(lp.after) and runner_id >= 0:
+			_card_word(f, "LOOP IT WITH %s" % _crew_name(runner_id).to_upper(), Vector2(6, 84), UiTheme.ACID, func():
+				var why: String = Sim.ensure().set_route_loop(Sim.ensure_people(), st, runner_id)
+				depart_note.text = why
+				_refresh_cards())
+		else:
+			make_label(f, "LOOP: %d OF %d RUNS HOME" % [homes, int(lp.after)], Vector2(6, 84), UiTheme.DUST)
+
+## A clickable word on a card, over the card's own pick.
+func _card_word(f: Control, text: String, pos: Vector2, color: Color, on_press: Callable) -> void:
+	make_label(f, text, pos, color)
+	var b := Button.new()
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	b.position = pos
+	b.size = Vector2(text.length() * 4 + 4, 10)
+	b.pressed.connect(on_press)
+	f.add_child(b)
+
+func _refresh_cards() -> void:
+	for i in card_frames.size():
+		for ch in card_frames[i].get_children():
+			ch.queue_free()
+		_fill_card(card_frames[i], routes[i], i)
 
 func _crew_name(id: int) -> String:
 	return Sim.slimo_name(id)
@@ -216,6 +254,8 @@ func _make_runner(id: int) -> void:
 	runner_id = id
 	_draw_crew()
 	_redraw_rig()
+	_refresh_cards()
+	_select(selected)
 
 func _select(i: int) -> void:
 	if routes.is_empty():

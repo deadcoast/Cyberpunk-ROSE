@@ -152,7 +152,10 @@ impl World {
     pub fn tick(&mut self) {
         self.city.step();
         self.jam_since = if self.city.last_jam > 0 { Some(self.jam_since.unwrap_or(self.city.tick)) } else { None };
+        crate::handoff::tick(&mut self.city, &mut self.colony, self.jam_since, self.day, &mut self.log);
         if self.city.tick.is_multiple_of(logistics::city::REBUILD_EVERY) {
+            // the Nerve rules read and act on the cargo field's beat (Full Design v3.18)
+            crate::nerve::beat(&self.city, &mut self.colony, &self.defs, Some(&self.threats), &mut self.stash, &mut self.ledger, &self.table, &mut self.log);
             cargo::refresh_demands(&self.colony, &self.defs, &mut self.city, &self.stash, &self.ledger, &self.table);
         }
         let landed = cargo::land(&mut self.city, &mut self.colony, &self.defs, &mut self.stash, &mut self.ledger, &self.table, &mut self.log);
@@ -169,15 +172,17 @@ impl World {
         shift::run_home(&mut folk, &mut self.stash, &self.table, report, haul)
     }
 
-    /// The shift ends; the next one's plan goes to the movers.
+    /// The shift ends; the next one's plan goes to the movers. The route loops run first (Full Design v3.18).
     pub fn end_shift(&mut self) -> Shift {
+        let mut folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
+        let loop_lines = crate::loops::play(&mut self.colony, &mut folk, &mut self.stash, &self.table, Some(&self.threats), &self.city.sim, self.threats.seed, self.day, self.city.tick, &mut self.log);
         let town = Town { city: &mut self.city, colony: &mut self.colony, defs: &self.defs };
         let store = Store { stash: &mut self.stash, ledger: &mut self.ledger, bench: &mut self.bench, table: &self.table, recipes: &self.recipes };
         let folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
-        let s = shift::end_shift(town, store, folk, self.day, &mut self.log);
+        let mut s = shift::end_shift(town, store, folk, self.day, &mut self.log);
+        s.people_lines.splice(0..0, loop_lines);
         self.last = Some(s.outcome.clone());
         self.pressure_end(&s.outcome);
-        let mut s = s;
         // the headless city's runs carry no bodies: a recover link here is laid nowhere
         let (lines, _) = crate::trade::end_shift(&mut self.economy, &mut self.ledger, &mut self.stash, &self.table, &mut self.city, &mut self.colony, &mut self.roster, &self.traits, &self.names, Some(&mut self.threats), None, &s.closed.report.to_faction, self.day, self.raiders, &mut self.log);
         s.stash_lines.extend(lines);

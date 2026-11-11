@@ -163,11 +163,14 @@ impl RoseSim {
                 e.set("organ_id", d.id.as_str());
                 e.set("organ_text", d.text.as_str());
                 e.set("organ_rule", rule as i64);
-                e.set("organ_dark", self.colony.dark_bulbs.contains(&(i as u32)));
+                e.set("organ_dark", self.colony.dark_bulbs.contains(&(i as u32)) || self.colony.nerve.dark_bulbs.contains(&(i as u32)));
             }
             None => e.set("organ", ""),
         }
         e.set("organ_rules", self.colony.progress.tech.flag("organ_rules"));
+        e.set("proposal", self.colony.proposal.contains(&(i as u32)));
+        e.set("proposal_tiles", self.colony.proposal.len() as i64);
+        e.set("proposal_confirmed", self.colony.proposal_confirmed);
         e
     }
 

@@ -30,6 +30,12 @@ pub const JAM_ALERT_TICKS: u64 = 120;
 pub fn current(colony: &Colony, defs: &StructureFile, city: &City, roster: &Roster, stash: &Stash, ledger: &Ledger, last: Option<&ShiftOutcome>, jam_since: Option<u64>, threats: Option<&threat::Threats>, economy: Option<&economy::Economy>) -> Vec<Alert> {
     let mut v = Vec::new();
     let w = city.sim.w;
+    // the handoff (Full Design v3.18): the Mat's proposal is a decision
+    if let Some(&first) = colony.proposal.first() {
+        if !colony.proposal_confirmed {
+            v.push(Alert { level: Level::Yellow, key: "handoff".into(), text: format!("the Mat proposes a cord of {} tile{}", colony.proposal.len(), if colony.proposal.len() == 1 { "" } else { "s" }), cell: Some(first as usize) });
+        }
+    }
     let hub_cell = |d: &colony::District| Some(d.hub.1 as usize * w + d.hub.0 as usize);
     // red: loss in progress
     for d in colony.districts.iter().filter(|d| d.strike) {
