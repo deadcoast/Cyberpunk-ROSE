@@ -638,6 +638,10 @@ func _card_structure(info: Dictionary) -> void:
 				world.redraw_city())
 		else:
 			make_label(card, "upgrade: %s" % String(s.upgrade), Vector2(6, 72), UiTheme.DUST)
+	# the organ under it: the Mat's own, or a housing's (Full Design v3.18, Organs)
+	var t: Dictionary = sim.tile_info(int(s.x), int(s.y))
+	if String(t.get("organ", "")) != "" and not info.has("q") and not bool(s.store):
+		_organ_block(t, 26)
 
 ## A Pit's or Still's quota (Full Design v3.11, Quotas), on its card.
 func _card_quota(id: int, q: Dictionary) -> void:
@@ -701,6 +705,42 @@ func _card_stockpile(info: Dictionary) -> void:
 		sim.set_zone_filter(zid, cats, (int(z.min_tier) + 1) % 5, int(z.min_condition))
 		card_sig = "")
 
+## The organs that keep a rule and its settings by number (Pass 2's defaults first).
+const ORGAN_RULES := {
+	"bulb": {"names": ["DARK OVER ATTENTION 50", "DARK OVER 25", "DARK OVER 75", "NEVER DARK"]},
+	"sphincter": {"names": ["SHUT AT LIGHT IN 8", "SHUT AT LIGHT IN 4", "SHUT AT LIGHT IN 12", "ALWAYS SHUT", "ALWAYS OPEN"]},
+	"sac": {"names": ["RELEASE", "HOLD"]},
+}
+
+## An organ on a card: what it does by itself, and its rule once Organ rules stands (Full Design v3.18, Organs).
+func _organ_block(t: Dictionary, top: int) -> void:
+	var sim: RoseSim = Sim.ensure()
+	var x := int(t.x)
+	var y := int(t.y)
+	make_label(card, String(t.organ).to_upper() + ("   DARK" if bool(t.get("organ_dark", false)) else ""), Vector2(6, top), UiTheme.OOZE_GLOW)
+	# what it does, in two lines broken at a space
+	var text := String(t.organ_text)
+	var cut := text.length()
+	if cut > 64:
+		cut = text.rfind(" ", 64)
+	make_label(card, text.left(cut), Vector2(6, top + 10), UiTheme.DUST)
+	if cut < text.length():
+		make_label(card, text.substr(cut + 1).left(64), Vector2(6, top + 19), UiTheme.DUST)
+	top += 8
+	var rules: Dictionary = ORGAN_RULES.get(String(t.organ_id), {})
+	if rules.is_empty():
+		return
+	var r := int(t.organ_rule)
+	var names: Array = rules.names
+	var line := "RULE: %s" % names[mini(r, names.size() - 1)]
+	if bool(t.organ_rules):
+		make_button(card, line, Vector2(6, top + 21), func():
+			sim.organ_rule(y * sim.width() + x, (r + 1) % names.size())
+			card_sig = ""
+			world.redraw_city())
+	else:
+		make_label(card, line + "   (Organ rules sets it)", Vector2(6, top + 22), UiTheme.DUST)
+
 func _card_tile(info: Dictionary) -> void:
 	var t: Dictionary = info.t
 	if t.is_empty():
@@ -719,6 +759,8 @@ func _card_tile(info: Dictionary) -> void:
 	if bool(t.cut):
 		marks.append("marked to be cut")
 	make_label(card, "   ".join(marks), Vector2(6, 26), UiTheme.DUST)
+	if String(t.get("organ", "")) != "":
+		_organ_block(t, 37)
 	if bool(t.cut):
 		make_button(card, "UNMARK", Vector2(6, 68), func():
 			sim.unmark_cut(x, y)

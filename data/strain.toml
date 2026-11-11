@@ -1,0 +1,278 @@
+# The strain's progression (Full Design v3.18, Progression: Organs, Strain classes, The Strainbook; Pass 1's Genome;
+# Pass 2's Pillar 6). Genes by name: vigor branching thrift appetite lume toxicity chrome feral conductance plasticity.
+# An organ grows by itself at a Node once its gene crosses its line; site is where (any, water, passage, far, deposit,
+# junction, feral, trunk); cap: the strain holds at most 1 + Nodes / 30 of an organ. pass1: true where Pass 1 names it.
+
+organ_spacing = 3
+organ_per_nodes = 30
+# three classes are held only within this many shifts of a Relic fed (Pass 2: the Relic state)
+relic_state_shifts = 10
+
+[[organ]]
+id = "bulb"
+name = "Lume Bulb"
+gene = "lume"
+line = 0.6
+site = "any"
+housing = "lume_farm"
+text = "Light 1 + 6 x Lume tiles; +1 Attention a shift at a grate within 10; dark while its zone's Attention is over its line."
+art = "mat.organ.bulb"
+pass1 = true
+
+[[organ]]
+id = "lung"
+name = "Filter Lung"
+gene = "thrift"
+line = 0.55
+site = "water"
+housing = "lung"
+text = "Homes within 6 are dry; a Flood rises a tile less within 12."
+art = "mat.organ.lung"
+pass1 = true
+
+[[organ]]
+id = "sphincter"
+name = "Sphincter"
+gene = "chrome"
+line = 0.5
+site = "passage"
+housing = "gate"
+text = "A gate of 100 HP, shut to Oathkeepers, creatures and the Flood, open to slimos; shut while white light is near."
+art = "mat.organ.sphincter"
+pass1 = true
+
+[[organ]]
+id = "ganglion"
+name = "Nerve Ganglion"
+gene = "conductance"
+line = 0.65
+site = "far"
+housing = "shrine"
+text = "A signal source, as a Relay: the Mat grows its own."
+art = "mat.organ.ganglion"
+pass1 = true
+
+[[organ]]
+id = "sac"
+name = "Spore Sac"
+gene = "feral"
+line = 0.7
+site = "any"
+text = "In a Bloom, a crawler every 4 shifts; in a Bramble strain, a tamed sewerat to a Pen within 8."
+art = "mat.organ.sac"
+pass1 = true
+
+[[organ]]
+id = "spur"
+name = "Root Spur"
+gene = "vigor"
+line = 0.65
+site = "deposit"
+text = "The Deposit it grips feeds the Mat twice."
+art = "mat.organ.spur"
+pass1 = false
+
+[[organ]]
+id = "knot"
+name = "Brood Knot"
+gene = "branching"
+line = 0.65
+site = "junction"
+text = "Two beds; Rest +20 asleep in Dark."
+art = "mat.organ.knot"
+pass1 = false
+
+[[organ]]
+id = "maw"
+name = "Maw"
+gene = "appetite"
+line = 0.7
+site = "any"
+text = "Strikes a creature, raider or Oathkeeper within 2 tiles for 4."
+art = "mat.organ.maw"
+pass1 = false
+
+[[organ]]
+id = "gland"
+name = "Venom Gland"
+gene = "toxicity"
+line = 0.6
+site = "any"
+text = "Strikes Oathkeepers within 4 tiles for 2 + 4 x Toxicity."
+art = "mat.organ.gland"
+pass1 = false
+
+[[organ]]
+id = "cyst"
+name = "Chrome Cyst"
+gene = "chrome"
+line = 0.75
+site = "any"
+text = "Tissue within 4 tiles holds twice its armour against white light and bleach."
+art = "mat.organ.cyst"
+pass1 = false
+
+[[organ]]
+id = "graft"
+name = "Graft Bud"
+gene = "plasticity"
+line = 0.7
+site = "feral"
+text = "Feral tissue within 6 joins the city's strain at the shift's end."
+art = "mat.organ.graft"
+pass1 = false
+
+[[organ]]
+id = "bellows"
+name = "Bellows"
+gene = "conductance"
+line = 0.75
+site = "trunk"
+text = "Cords within 6 hold 8 packets a tile, not 4."
+art = "mat.organ.bellows"
+pass1 = false
+
+# ---------------------------------------------------------------- classes (Pass 2)
+
+
+[[class]]
+id = "garden"
+name = "Garden"
+genes = ["lume", "thrift"]
+line = 0.65
+text = "Lume Bulbs and Lume Farms within 3 tiles of a Filter Lung raise no Attention."
+
+[[class]]
+id = "hive"
+name = "Hive"
+genes = ["chrome", "conductance"]
+line = 0.65
+text = "Cords are walls and wires: tissue holds twice its armour; a structure needs 0.1 less signal."
+
+[[class]]
+id = "runner"
+name = "Runner"
+genes = ["vigor", "conductance"]
+line = 0.65
+text = "Tips extend two tiles a step."
+
+[[class]]
+id = "bramble"
+name = "Bramble"
+genes = ["branching", "appetite"]
+line = 0.65
+text = "Spore Sacs tame themselves within Pen range."
+
+[[class]]
+id = "world_eater"
+name = "World-Eater"
+genes = ["appetite", "feral"]
+line = 0.75
+text = "The Mat digests Oathkeepers standing on it, and the city's own structures at half rate."
+
+# ---------------------------------------------------------------- the Strainbook's other cards
+
+[[card]]
+id = "relic_state"
+name = "The Relic state"
+text = "Three classes held at once: only within ten shifts of a Relic fed."
+
+[[card]]
+id = "reflect_vigor"
+name = "Vigor reflects"
+text = "A feed carried Vigor past 1.0 and it came back."
+
+[[card]]
+id = "reflect_branching"
+name = "Branching reflects"
+text = "A feed carried Branching past 1.0 and it came back."
+
+[[card]]
+id = "reflect_thrift"
+name = "Thrift reflects"
+text = "A feed carried Thrift past 1.0 and it came back."
+
+[[card]]
+id = "reflect_appetite"
+name = "Appetite reflects"
+text = "A feed carried Appetite past 1.0 and it came back."
+
+[[card]]
+id = "reflect_lume"
+name = "Lume reflects"
+text = "A feed carried Lume past 1.0 and it came back."
+
+[[card]]
+id = "reflect_toxicity"
+name = "Toxicity reflects"
+text = "A feed carried Toxicity past 1.0 and it came back."
+
+[[card]]
+id = "reflect_chrome"
+name = "Chrome Affinity reflects"
+text = "A feed carried Chrome Affinity past 1.0 and it came back."
+
+[[card]]
+id = "reflect_feral"
+name = "Feral Drive reflects"
+text = "A feed carried Feral Drive past 1.0 and it came back."
+
+[[card]]
+id = "reflect_conductance"
+name = "Conductance reflects"
+text = "A feed carried Conductance past 1.0 and it came back."
+
+[[card]]
+id = "reflect_plasticity"
+name = "Plasticity reflects"
+text = "A feed carried Plasticity past 1.0 and it came back."
+
+[[card]]
+id = "floor"
+name = "Off the floor"
+text = "A gene pushed under 0 came back up."
+
+[[card]]
+id = "merge_shock"
+name = "Merge shock"
+text = "Feral tissue joined the city's strain again."
+
+[[card]]
+id = "relic_fed"
+name = "Relic fed"
+text = "A lunar fragment went into a Pit."
+
+[[card]]
+id = "two_classes"
+name = "Two classes"
+text = "The strain held two classes at once."
+
+[[card]]
+id = "class_lost"
+name = "Class lost"
+text = "A class the strain held slipped under its line."
+
+[[card]]
+id = "first_bloom"
+name = "The first Bloom"
+text = "Tissue cut off from the city went feral and bloomed."
+
+[[card]]
+id = "swing"
+name = "The swing"
+text = "One shift's feed moved a gene 0.1 or more."
+
+[[card]]
+id = "monoculture"
+name = "Monoculture"
+text = "A gene stood at 0.9 or more."
+
+[[card]]
+id = "wide"
+name = "Two thousand cells"
+text = "The Mat grew to 2,000 hyphal cells."
+
+[[card]]
+id = "handoff"
+name = "The handoff"
+text = "The Mat proposed a cord of its own."

@@ -11,6 +11,7 @@ use mat::MatSim;
 mod cargo_bridge;
 mod hud_bridge;
 mod market_bridge;
+mod progress_bridge;
 mod colony_bridge;
 mod people;
 
@@ -218,6 +219,41 @@ impl RoseSim {
         self.run_kills += oathkeepers.max(0) as u32;
         if let Some(e) = self.economy.as_mut() {
             e.raider_kills(raiders.max(0) as u32);
+        }
+    }
+
+    /// What the run killed, by creature id: the first of each is a trophy (Full Design v3.18, Collections).
+    #[func]
+    fn add_run_trophies(&mut self, killed: PackedStringArray, day: i64) -> PackedStringArray {
+        let mut won = PackedStringArray::new();
+        for k in killed.as_slice() {
+            if let Some(name) = self.colony.progress.collections.trophy("kill", &k.to_string(), day.max(1) as u32) {
+                self.log.push(self.city.as_ref().map_or(0, |c| c.tick), game::Class::Landing, format!("Trophy: {name}"));
+                won.push(name.as_str());
+            }
+        }
+        won
+    }
+
+    /// The run's flags from the city (Full Design v3.18, Scav yield): the curio sets' and Conscription's cost.
+    #[func]
+    fn run_flags(&self) -> PackedStringArray {
+        let Some(city) = self.city.as_ref() else { return PackedStringArray::new() };
+        let mut a = PackedStringArray::new();
+        for f in game::grow::run_flags(&self.colony, self.threats.as_ref(), &city.sim) {
+            a.push(f.as_str());
+        }
+        a
+    }
+
+    /// Development only (the shots and the play script): set a gene, as a run of feeds would leave it.
+    #[func]
+    fn debug_gene(&mut self, gene: i64, value: f64) {
+        if let Some(c) = self.city.as_mut() {
+            if (0..10).contains(&gene) {
+                c.sim.genome.0[gene as usize] = value.clamp(0.0, 1.0) as f32;
+                c.sim.p = c.sim.genome.params();
+            }
         }
     }
 
@@ -516,7 +552,17 @@ impl RoseSim {
     #[func]
     fn structure_defs(&mut self) -> VarArray {
         let defs = self.defs().clone();
-        colony_bridge::defs_array(&defs)
+        let mut a = colony_bridge::defs_array(&defs);
+        // what the tree and the organs ask of each (Full Design v3.18): the node it waits on, the organ it stands on
+        let f = progress::StrainFile::shipped();
+        for (k, d) in defs.structure.iter().enumerate() {
+            let mut e: VarDictionary = a.at(k).to();
+            e.set("locked", self.colony.progress.tech.structure_locked(&d.id).map_or("", |n| n.name.as_str()));
+            e.set("organ", f.organ.iter().find(|o| o.id == d.organ).map_or("", |o| o.name.as_str()));
+            e.set("free_on", f.organ.iter().find(|o| o.id == d.free_on).map_or("", |o| o.name.as_str()));
+            a.set(k, &e.to_variant());
+        }
+        a
     }
 
     /// Every placed structure, ghosts included.
@@ -813,7 +859,7 @@ impl RoseSim {
             if let Some(e) = self.economy.as_mut() {
                 let lib = run::ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
                 let board = game::trade::Board { lib: &lib, city_seed: e.s.seed, strata: self.strata.max(1) };
-                let (lines, l) = game::trade::end_shift(e, &mut st.ledger, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), city, &mut p.roster, &traits, &names, self.threats.as_mut(), Some(&board), &shift.closed.report.to_faction, day.max(1) as u32, self.raiders, &mut self.log);
+                let (lines, l) = game::trade::end_shift(e, &mut st.ledger, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), city, &mut self.colony, &mut p.roster, &traits, &names, self.threats.as_mut(), Some(&board), &shift.closed.report.to_faction, day.max(1) as u32, self.raiders, &mut self.log);
                 shift.stash_lines.extend(lines);
                 laid = l;
             }
@@ -1014,8 +1060,8 @@ impl RoseItems {
 #[class(base=RefCounted, init)]
 pub struct RoseStash {
     base: Base<RefCounted>,
-    table: Option<ItemTable>,
-    stash: Option<Stash>,
+    pub(crate) table: Option<ItemTable>,
+    pub(crate) stash: Option<Stash>,
     pub(crate) ledger: inventory::Ledger,
     recipes: Option<bench::RecipeFile>,
     bench: bench::BenchQueue,
@@ -2025,6 +2071,11 @@ impl RoseRun {
         d.set("kills", o.kills as i64);
         d.set("oath_kills", o.oath_kills as i64);
         d.set("raider_kills", o.raider_kills as i64);
+        let mut killed = PackedStringArray::new();
+        for k in &o.killed {
+            killed.push(k.as_str());
+        }
+        d.set("killed", &killed);
         d.set("chunks_seen", o.chunks_seen as i64);
         d.set("blind_value", o.blind_value as i64);
         d.set("route_memory", &PackedByteArray::from(o.route_memory.as_slice()));

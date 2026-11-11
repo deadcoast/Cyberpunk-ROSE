@@ -19,6 +19,7 @@ save = { path = "../../core/crates/save" }
 run = { path = "../../core/crates/run" }
 people = { path = "../../core/crates/people" }
 colony = { path = "../../core/crates/colony" }
+progress = { path = "../../core/crates/progress" }
 game = { path = "../../core/crates/game" }
 threat = { path = "../../core/crates/threat" }
 economy = { path = "../../core/crates/economy" }

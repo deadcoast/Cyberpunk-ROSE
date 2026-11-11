@@ -119,6 +119,7 @@ impl World {
             raiders: crate::trade::raiders_walk(1),
             sales: Vec::new(),
         };
+        crate::grow::refresh_mat(&mut w.city, &w.colony);
         let notes = w.threats.start_shift(&mut w.city, &mut w.colony, &w.defs, 1, shift::shift_of_day(1) == 2);
         w.note(notes);
         w.publish();
@@ -178,7 +179,7 @@ impl World {
         self.pressure_end(&s.outcome);
         let mut s = s;
         // the headless city's runs carry no bodies: a recover link here is laid nowhere
-        let (lines, _) = crate::trade::end_shift(&mut self.economy, &mut self.ledger, &mut self.stash, &self.table, &mut self.city, &mut self.roster, &self.traits, &self.names, Some(&mut self.threats), None, &s.closed.report.to_faction, self.day, self.raiders, &mut self.log);
+        let (lines, _) = crate::trade::end_shift(&mut self.economy, &mut self.ledger, &mut self.stash, &self.table, &mut self.city, &mut self.colony, &mut self.roster, &self.traits, &self.names, Some(&mut self.threats), None, &s.closed.report.to_faction, self.day, self.raiders, &mut self.log);
         s.stash_lines.extend(lines);
         self.day += 1;
         let notes = self.threats.start_shift(&mut self.city, &mut self.colony, &self.defs, self.day, shift::shift_of_day(self.day) == 2);

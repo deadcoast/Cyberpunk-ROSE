@@ -24,6 +24,9 @@ pub mod state {
 
 /// Packets per tile before it slows to half speed and takes no more.
 pub const CORD_CAPACITY: u8 = 4;
+/// A Bellows doubles the cords within its reach (Full Design v3.18, Organs).
+pub const BELLOWS_CAPACITY: u8 = 8;
+pub const BELLOWS_REACH: i32 = 6;
 /// Ticks between field rebuilds (Pass 2: every 20 ticks from the Mat's current shape).
 pub const REBUILD_EVERY: u64 = 20;
 /// Ticks per Mat step in the game: 125 steps in a 12.5-minute shift at 2 Hz (research 16).
@@ -124,6 +127,8 @@ pub struct City {
     pub sim: MatSim,
     pub rng: Pcg32,
     pub markets: Vec<usize>,
+    /// the Bellows' tiles (Full Design v3.18, Organs), set by the game at each shift's end
+    pub bellows: Vec<usize>,
     /// the Mat cell each market takes its cargo at; None while the Mat does not reach its grate
     pub market_cells: Vec<Option<usize>>,
     pub pits: Vec<usize>,
@@ -186,6 +191,7 @@ impl City {
             sim,
             rng,
             markets: Vec::new(),
+            bellows: Vec::new(),
             market_cells: Vec::new(),
             pits: Vec::new(),
             consumers: Vec::new(),
@@ -311,6 +317,20 @@ impl City {
     pub fn set_consumers(&mut self, consumers: Vec<Consumer>) {
         self.consumers = consumers;
         self.rebuild_fields();
+    }
+
+    /// Packets a tile holds: 4, 8 within a Bellows' reach.
+    pub fn cap_at(&self, i: usize) -> u8 {
+        if self.bellows.is_empty() {
+            return CORD_CAPACITY;
+        }
+        let w = self.sim.w;
+        let (x, y) = ((i % w) as i32, (i / w) as i32);
+        if self.bellows.iter().any(|&b| ((b % w) as i32 - x).abs().max(((b / w) as i32 - y).abs()) <= BELLOWS_REACH) {
+            BELLOWS_CAPACITY
+        } else {
+            CORD_CAPACITY
+        }
     }
 
     /// A grate's number on the stratum, west to east from 1 (the threats' zones and every line of the log name grates so).
@@ -615,7 +635,7 @@ impl City {
             };
             let on_mat = self.mat_mask.get(p.at).copied().unwrap_or(false);
             match cell {
-                Some(cell) if on_mat && self.load[p.at] < CORD_CAPACITY => {
+                Some(cell) if on_mat && self.load[p.at] < self.cap_at(p.at) => {
                     self.pk_pos.push(p.at as u32);
                     self.pk_cargo.push(p.cargo);
                     self.pk_kind.push(p.kind);
@@ -624,7 +644,7 @@ impl City {
                     self.load[p.at] += 1;
                 }
                 _ => {
-                    if on_mat && self.load[p.at] >= CORD_CAPACITY {
+                    if on_mat && self.load[p.at] >= self.cap_at(p.at) {
                         self.jam_now[p.at] = true;
                     }
                     keep.push(p)
@@ -655,7 +675,7 @@ impl City {
             let p = self.pk_pos[k] as usize;
             // the tile stopped being Mat: step onto Mat beside it, or spill
             if !self.mat_mask[p] {
-                let side = [1i32, -1, w as i32, -(w as i32)].iter().map(|d| p as i32 + d).find(|&j| j >= 0 && (j as usize) < self.mat_mask.len() && self.mat_mask[j as usize] && self.load[j as usize] < CORD_CAPACITY);
+                let side = [1i32, -1, w as i32, -(w as i32)].iter().map(|d| p as i32 + d).find(|&j| j >= 0 && (j as usize) < self.mat_mask.len() && self.mat_mask[j as usize] && self.load[j as usize] < self.cap_at(j as usize));
                 match side {
                     Some(j) => {
                         self.load[p] = self.load[p].saturating_sub(1);
@@ -687,7 +707,7 @@ impl City {
                 keep.push(k);
                 continue;
             }
-            if self.load[nxt] >= CORD_CAPACITY {
+            if self.load[nxt] >= self.cap_at(nxt) {
                 // one coming the other way trades tiles with it
                 let other = by_tile.get(&(nxt as u32)).and_then(|v| {
                     v.iter().copied().find(|&j| {

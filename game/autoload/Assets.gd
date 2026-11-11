@@ -42,6 +42,12 @@ func frame(slot_id: String, frame_w: int, frame_h: int, index: int, state: Strin
 	at.region = Rect2((index % frames) * frame_w, 0, frame_w, frame_h)
 	return at
 
+## The state an organ's sprite is drawn in where none is asked: the Sphincter's open ring (its slot has two states).
+func organ_state(slot_id: String, shut: bool = false) -> String:
+	if slot_id == "mat.organ.sphincter":
+		return "closed" if shut else "open"
+	return ""
+
 func missing() -> Array:
 	return _missing.duplicate()
 

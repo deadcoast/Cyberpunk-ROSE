@@ -355,6 +355,8 @@ pub struct Creature {
     pub looted: u32,
     /// index into Stimuli.targets of whoever this creature hunts
     pub target: usize,
+    /// tiles nearer a Runner must be for this creature to notice them (the Feral set's 1 for sewerats; v3.18)
+    pub notice_cut: i32,
     /// cached distance field to the current target tile
     field_target: Option<(i32, i32)>,
     field: Vec<u16>,
@@ -409,6 +411,7 @@ impl Creature {
             target: 0,
             field_target: None,
             field: Vec::new(),
+            notice_cut: 0,
         }
     }
 
@@ -639,7 +642,7 @@ pub fn update(c: &mut Creature, def: &CreatureDef, aw: &Awareness, map: &RouteMa
                 continue;
             }
             let d2 = (t.tile.0 - me.0).pow(2) + (t.tile.1 - me.1).pow(2);
-            if best.is_none_or(|(_, bd)| d2 < bd) && can_see(map, me, t.tile, t.notice_range, facing) {
+            if best.is_none_or(|(_, bd)| d2 < bd) && can_see(map, me, t.tile, (t.notice_range - c.notice_cut).max(1), facing) {
                 best = Some((i, d2));
             }
         }

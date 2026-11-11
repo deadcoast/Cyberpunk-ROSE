@@ -15,3 +15,6 @@ threat = { path = "../threat" }
 economy = { path = "../economy" }
 serde.workspace = true
 postcard.workspace = true
+
+[dev-dependencies]
+progress = { path = "../progress" }

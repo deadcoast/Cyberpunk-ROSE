@@ -154,11 +154,21 @@ pub fn land(city: &mut City, colony: &mut Colony, defs: &StructureFile, stash: &
                     let w = city.sim.w;
                     city.sim.feed(cell % w, cell / w, nutrient);
                 }
-                city.sim.drift_genome(drift);
+                if let Some((item, _, _)) = riding {
+                    crate::grow::fed(city, colony, table, item, drift);
+                } else {
+                    city.sim.drift_genome(drift);
+                }
                 log.push(tick, Class::Landing, format!("{name} fed to {}", if pit == 0 { "the Heart".to_string() } else { format!("Pit {pit}") }));
             }
             Some(Landing::Sold { market, eddies, faction, blackline }) => {
                 let (item, condition, blind) = riding.unwrap_or((items::ItemId(0), 0, false));
+                // the Leak set: Seep Market sales +5 % (Full Design v3.18, Collections)
+                if colony.progress.collections.set_flag("leak_sales") {
+                    let extra = (eddies + 10) / 20;
+                    ledger.eddies += extra;
+                    ledger.lifetime_earned += extra;
+                }
                 out.sold.push(Sale { market, eddies, faction, item, condition, blind });
                 if blackline {
                     out.blackline.push(market);

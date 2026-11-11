@@ -114,6 +114,62 @@ mat.toml
 - prompt: a Spore Sac organ: a dark violet pod with pink spots, twitching, something moving inside
 - negative: green, outline
 
+### mat.organ.ganglion
+
+- kind sprite · one frame 32x32 · 4 frames · states single
+- anchor `anchor.tile` · ramp ooze · status placeholder
+- prompt: a Nerve Ganglion organ: a knot of violet nerve threads around a pale node that pulses outward, the Mat's own relay, 4 frames
+- negative: green, outline
+
+### mat.organ.spur
+
+- kind sprite · one frame 32x32 · 4 frames · states single
+- anchor `anchor.tile` · ramp ooze · status placeholder
+- prompt: a Root Spur organ: violet roots gripping a scrap deposit, drawing it up in slow pulses, 4 frames
+- negative: green, outline
+
+### mat.organ.knot
+
+- kind sprite · one frame 32x32 · 4 frames · states single
+- anchor `anchor.tile` · ramp ooze · status placeholder
+- prompt: a Brood Knot organ: a hollow violet knot of cords big enough for two sleepers, warm pink inside, 4 frames
+- negative: green, outline
+
+### mat.organ.maw
+
+- kind sprite · one frame 32x32 · 4 frames · states single
+- anchor `anchor.tile` · ramp ooze · status placeholder
+- prompt: a Maw organ: a ring of chrome teeth in violet flesh at a junction, opening and snapping, 4 frames
+- negative: green, outline
+
+### mat.organ.gland
+
+- kind sprite · one frame 32x32 · 4 frames · states single
+- anchor `anchor.tile` · ramp ooze · status placeholder
+- prompt: a Venom Gland organ: a swollen violet gland with an acid-yellow bead at its tip, spitting, 4 frames
+- negative: green, outline
+
+### mat.organ.cyst
+
+- kind sprite · one frame 32x32 · 4 frames · states single
+- anchor `anchor.tile` · ramp ooze · status placeholder
+- prompt: a Chrome Cyst organ: a hard violet nodule plated with grown chrome scales, 4 frames
+- negative: green, outline
+
+### mat.organ.graft
+
+- kind sprite · one frame 32x32 · 4 frames · states single
+- anchor `anchor.tile` · ramp ooze · status placeholder
+- prompt: a Graft Bud organ: a pale violet bud with thin seeking threads reaching toward bruised feral tissue, 4 frames
+- negative: green, outline
+
+### mat.organ.bellows
+
+- kind sprite · one frame 32x32 · 4 frames · states single
+- anchor `anchor.tile` · ramp ooze · status placeholder
+- prompt: a Bellows organ: a ribbed violet bladder on a trunk cord, pumping cargo pulses along it, 4 frames
+- negative: green, outline
+
 people.toml
 -----------
 

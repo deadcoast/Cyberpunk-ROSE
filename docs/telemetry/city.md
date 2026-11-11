@@ -8,27 +8,27 @@ Written by `rose city --seed 11 --shifts 20` on 2026-11-11 (Full Design v3.13, T
 
 | shift | day | runner | run | length | run landings | city landings | run gap | merged gap | population | Stash | in stockpiles | on the Heart's floor | e (+earned −spent) | paste meals | Mat cells | Mat nutrient | late cargo | first grate | built |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 1 | Nia 'Oathless' | extracted | 3:31 | 29 | 5 | 8.0 s | 8.0 s | 7 | 28 | 0 | 0 | 0 (+0 −0) | 0 | 255 | 198.8 | 0 | held | Hab-Pod |
-| 2 | 2 | Nia 'Oathless' | extracted | 3:17 | 28 | 15 | 7.7 s | 7.5 s | 7 | 41 | 0 | 0 | 82 (+83 −1) | 0 | 263 | 231.1 | 0 | held | Lantern Post |
-| 3 | 3 | Nia 'Oathless' | extracted | 3:11 | 27 | 13 | 7.9 s | 7.5 s | 7 | 51 | 0 | 0 | 93 (+12 −1) | 0 | 276 | 262.1 | 0 | held | Stockpile Rack |
-| 4 | 4 | Nia 'Oathless' | extracted | 3:14 | 27 | 16 | 7.9 s | 7.5 s | 7 | 56 | 0 | 0 | 130 (+38 −1) | 0 | 293 | 293.2 | 0 | held | Hab-Pod |
-| 5 | 5 | Nia 'Oathless' | extracted | 3:25 | 31 | 17 | 7.7 s | 7.5 s | 7 | 66 | 0 | 0 | 145 (+16 −1) | 0 | 293 | 326.9 | 0 | held | - |
-| 6 | 6 | Nia 'Oathless' | extracted | 2:58 | 24 | 15 | 8.8 s | 7.7 s | 7 | 71 | 0 | 0 | 159 (+15 −1) | 0 | 295 | 346.1 | 0 | held | Bunkhouse |
-| 7 | 7 | Nia 'Oathless' | extracted | 3:24 | 31 | 21 | 7.5 s | 6.6 s | 7 | 72 | 0 | 0 | 177 (+19 −1) | 0 | 298 | 378.3 | 0 | held | Charter Board |
-| 8 | 8 | Nia 'Oathless' | extracted | 3:35 | 32 | 27 | 7.7 s | 7.5 s | 9 | 83 | 7 | 0 | 201 (+25 −1) | 0 | 298 | 412.0 | 0 | held | Salt Works |
-| 9 | 9 | Nia 'Oathless' | extracted | 3:15 | 27 | 19 | 7.9 s | 7.5 s | 9 | 98 | 8 | 6 | 219 (+19 −1) | 0 | 298 | 442.3 | 0 | held | - |
-| 10 | 10 | Nia 'Oathless' | extracted | 3:00 | 25 | 14 | 8.8 s | 7.7 s | 9 | 112 | 8 | 20 | 248 (+30 −1) | 0 | 303 | 468.8 | 0 | held | - |
-| 11 | 11 | Nia 'Oathless' | extracted | 3:19 | 29 | 18 | 7.7 s | 7.5 s | 9 | 126 | 8 | 30 | 269 (+22 −1) | 0 | 303 | 499.0 | 0 | held | - |
-| 12 | 12 | Nia 'Oathless' | extracted | 4:00 | 37 | 18 | 8.0 s | 7.7 s | 9 | 142 | 8 | 46 | 304 (+36 −1) | 0 | 303 | 520.7 | 0 | held | - |
-| 13 | 13 | Nia 'Oathless' | extracted | 3:47 | 35 | 16 | 7.9 s | 7.5 s | 9 | 162 | 8 | 61 | 313 (+10 −1) | 0 | 303 | 554.4 | 0 | held | - |
-| 14 | 14 | Nia 'Oathless' | extracted | 3:44 | 34 | 15 | 7.9 s | 7.5 s | 9 | 176 | 8 | 76 | 343 (+31 −1) | 0 | 303 | 585.8 | 0 | held | - |
-| 15 | 15 | Nia 'Oathless' | extracted | 3:36 | 34 | 19 | 7.5 s | 7.5 s | 9 | 191 | 8 | 91 | 369 (+27 −1) | 0 | 344 | 604.5 | 0 | held | - |
-| 16 | 16 | Nia 'Oathless' | extracted | 3:19 | 27 | 14 | 9.7 s | 7.9 s | 9 | 206 | 8 | 103 | 399 (+31 −1) | 0 | 344 | 628.4 | 0 | held | - |
-| 17 | 17 | Nia 'Oathless' | extracted | 2:57 | 26 | 16 | 7.9 s | 7.4 s | 9 | 218 | 8 | 115 | 419 (+21 −1) | 0 | 347 | 650.7 | 0 | held | - |
-| 18 | 18 | Nia 'Oathless' | extracted | 3:20 | 29 | 16 | 7.7 s | 7.5 s | 9 | 238 | 8 | 135 | 441 (+23 −1) | 0 | 350 | 664.5 | 0 | held | - |
-| 19 | 19 | Nia 'Oathless' | extracted | 3:16 | 26 | 14 | 7.9 s | 7.5 s | 9 | 245 | 8 | 142 | 469 (+29 −1) | 0 | 350 | 689.1 | 0 | held | - |
-| 20 | 20 | Nia 'Oathless' | extracted | 3:12 | 27 | 22 | 7.7 s | 7.5 s | 9 | 255 | 8 | 151 | 488 (+20 −1) | 0 | 351 | 713.2 | 0 | held | - |
+| 1 | 1 | Nia 'Oathless' | extracted | 3:31 | 29 | 6 | 8.0 s | 8.0 s | 7 | 28 | 0 | 0 | 0 (+0 −0) | 0 | 208 | 188.1 | 0 | held | Hab-Pod |
+| 2 | 2 | Nia 'Oathless' | extracted | 3:17 | 28 | 15 | 7.7 s | 7.5 s | 7 | 41 | 0 | 0 | 82 (+83 −1) | 0 | 214 | 219.9 | 0 | held | Lantern Post |
+| 3 | 3 | Nia 'Oathless' | extracted | 3:11 | 27 | 13 | 7.9 s | 7.5 s | 7 | 51 | 0 | 0 | 93 (+12 −1) | 0 | 216 | 251.3 | 0 | held | Stockpile Rack |
+| 4 | 4 | Nia 'Oathless' | extracted | 3:14 | 27 | 16 | 7.9 s | 7.5 s | 7 | 56 | 0 | 0 | 130 (+38 −1) | 0 | 220 | 283.2 | 0 | held | Hab-Pod |
+| 5 | 5 | Nia 'Oathless' | extracted | 3:25 | 31 | 17 | 7.7 s | 7.3 s | 7 | 66 | 0 | 0 | 142 (+13 −1) | 0 | 224 | 318.0 | 0 | held | - |
+| 6 | 6 | Nia 'Oathless' | extracted | 2:07 | 17 | 16 | 10.6 s | 8.6 s | 7 | 71 | 0 | 0 | 156 (+15 −1) | 0 | 226 | 332.6 | 0 | held | Bunkhouse |
+| 7 | 7 | Nia 'Oathless' | extracted | 3:47 | 33 | 23 | 7.9 s | 7.5 s | 7 | 77 | 0 | 0 | 174 (+19 −1) | 0 | 228 | 370.0 | 0 | held | Charter Board |
+| 8 | 8 | Nia 'Oathless' | extracted | 2:34 | 22 | 22 | 8.2 s | 7.5 s | 9 | 77 | 4 | 0 | 190 (+17 −1) | 0 | 230 | 395.5 | 0 | held | Salt Works |
+| 9 | 9 | Nia 'Oathless' | extracted | 2:58 | 26 | 26 | 7.9 s | 7.5 s | 9 | 93 | 7 | 3 | 214 (+25 −1) | 0 | 232 | 424.5 | 0 | held | - |
+| 10 | 10 | Nia 'Oathless' | extracted | 3:01 | 25 | 13 | 8.0 s | 7.7 s | 9 | 105 | 8 | 12 | 228 (+15 −1) | 0 | 235 | 453.1 | 0 | held | - |
+| 11 | 11 | Nia 'Oathless' | extracted | 3:03 | 28 | 19 | 7.9 s | 7.5 s | 9 | 115 | 7 | 23 | 256 (+29 −1) | 0 | 239 | 481.8 | 0 | held | - |
+| 12 | 12 | Nia 'Oathless' | extracted | 2:50 | 23 | 20 | 8.1 s | 7.9 s | 9 | 129 | 8 | 33 | 291 (+36 −1) | 0 | 239 | 500.1 | 0 | held | - |
+| 13 | 13 | Nia 'Oathless' | extracted | 3:20 | 31 | 13 | 7.7 s | 7.5 s | 9 | 145 | 8 | 45 | 303 (+13 −1) | 0 | 242 | 530.5 | 0 | held | - |
+| 14 | 14 | Nia 'Oathless' | extracted | 2:49 | 25 | 17 | 7.9 s | 7.4 s | 9 | 162 | 8 | 60 | 331 (+29 −1) | 0 | 245 | 556.6 | 0 | held | - |
+| 15 | 15 | Nia 'Oathless' | extracted | 3:44 | 31 | 15 | 8.0 s | 7.7 s | 9 | 177 | 8 | 75 | 336 (+6 −1) | 0 | 246 | 590.5 | 0 | held | - |
+| 16 | 16 | Nia 'Oathless' | extracted | 3:24 | 27 | 16 | 7.7 s | 7.5 s | 9 | 187 | 8 | 85 | 347 (+12 −1) | 0 | 246 | 621.0 | 0 | held | - |
+| 17 | 17 | Nia 'Oathless' | extracted | 3:23 | 31 | 17 | 7.9 s | 7.5 s | 9 | 205 | 8 | 103 | 386 (+40 −1) | 0 | 246 | 650.4 | 0 | held | - |
+| 18 | 18 | Nia 'Oathless' | extracted | 3:45 | 35 | 14 | 7.9 s | 7.5 s | 9 | 215 | 8 | 113 | 394 (+9 −1) | 0 | 246 | 671.5 | 0 | held | - |
+| 19 | 19 | Nia 'Oathless' | extracted | 2:56 | 24 | 21 | 8.0 s | 7.7 s | 9 | 226 | 8 | 124 | 412 (+19 −1) | 0 | 246 | 697.4 | 0 | held | - |
+| 20 | 20 | Nia 'Oathless' | extracted | 3:35 | 31 | 15 | 7.7 s | 7.4 s | 9 | 244 | 8 | 142 | 420 (+9 −1) | 0 | 246 | 727.8 | 0 | held | - |
 
-**Alerts standing at the last shift's end**: the Flood is up 3 tiles; 151 on the Heart's floor: no room in the grid
+**Alerts standing at the last shift's end**: the Flood is up 2 tiles; 142 on the Heart's floor: no room in the grid
 
 The merged log, every run and city event on one clock, is `out/city.log` (not committed).

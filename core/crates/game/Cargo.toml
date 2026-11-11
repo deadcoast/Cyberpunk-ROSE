@@ -13,6 +13,7 @@ inventory = { path = "../inventory" }
 bench = { path = "../bench" }
 people = { path = "../people" }
 colony = { path = "../colony" }
+progress = { path = "../progress" }
 threat = { path = "../threat" }
 economy = { path = "../economy" }
 run = { path = "../run" }

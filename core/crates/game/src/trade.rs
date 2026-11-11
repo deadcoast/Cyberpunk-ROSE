@@ -93,7 +93,7 @@ fn facts(city: &City, threats: Option<&Threats>, roster: &Roster, raiders: bool)
     let mut alive: Vec<u32> = roster.records.iter().map(|r| r.id).collect();
     let here = alive.clone();
     alive.extend(roster.waiting.iter().map(|(r, _)| r.id));
-    ShiftFacts { sold: Vec::new(), bloom, attention, hosts_here: here, hosts_alive: alive, reached: reached(city), raiders }
+    ShiftFacts { sold: Vec::new(), bloom, attention, hosts_here: here, hosts_alive: alive, reached: reached(city), raiders, road_favour: false }
 }
 
 /// A shift begins: on the first shift of a day the surface's clock moves (demand walks, events roll, the stock
@@ -249,7 +249,7 @@ pub fn home_from(ledger: &mut Ledger, city: &mut City, market: u8, item: ItemIns
 /// day a double flush comes down; a recover link begun now has its body laid. Returns the lines for the report and
 /// the bodies laid.
 #[allow(clippy::too_many_arguments)]
-pub fn end_shift(econ: &mut Economy, ledger: &mut Ledger, stash: &mut Stash, table: &ItemTable, city: &mut City, roster: &mut Roster, traits: &TraitFile, names: &NameFile, threats: Option<&mut Threats>, board: Option<&Board>, sold: &[(u8, u32, u32)], shift: u32, raiders: bool, log: &mut CityLog) -> (Vec<String>, Vec<Laid>) {
+pub fn end_shift(econ: &mut Economy, ledger: &mut Ledger, stash: &mut Stash, table: &ItemTable, city: &mut City, colony: &mut colony::Colony, roster: &mut Roster, traits: &TraitFile, names: &NameFile, threats: Option<&mut Threats>, board: Option<&Board>, sold: &[(u8, u32, u32)], shift: u32, raiders: bool, log: &mut CityLog) -> (Vec<String>, Vec<Laid>) {
     let tick = city.tick;
     let mut lines = Vec::new();
     // the services bought last shift run down; then the orders
@@ -282,8 +282,14 @@ pub fn end_shift(econ: &mut Economy, ledger: &mut Ledger, stash: &mut Stash, tab
     // contracts, levers, services
     let mut f = facts(city, threats.as_deref(), roster, raiders);
     f.sold = sold.to_vec();
+    f.road_favour = colony.progress.collections.set_flag("road_favour");
     let ended = econ.end_shift(shift, &f, &mut ledger.eddies, table);
     ledger.lifetime_earned += ended.paid;
+    // a chain finished is a deed (Full Design v3.18, Authority)
+    if ended.chains_done > 0 {
+        colony.charter.earn(ended.chains_done);
+        log.push(tick, Class::Landing, format!("a contract chain finished: Authority +{}", ended.chains_done));
+    }
     for it in ended.uniques {
         let name = table.def(it.def).name.clone();
         stash.place_or_floor(table, it);

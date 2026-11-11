@@ -110,3 +110,116 @@ anchor = "anchor.tile"
 prompt = "a Spore Sac organ: a dark violet pod with pink spots, twitching, something moving inside"
 negative = "green, outline"
 status = "placeholder"
+
+[[slot]]
+id = "mat.organ.ganglion"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "disc"
+tag = "GNG"
+anchor = "anchor.tile"
+prompt = "a Nerve Ganglion organ: a knot of violet nerve threads around a pale node that pulses outward, the Mat's own relay, 4 frames"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.organ.spur"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "strip"
+tag = "SPR"
+anchor = "anchor.tile"
+prompt = "a Root Spur organ: violet roots gripping a scrap deposit, drawing it up in slow pulses, 4 frames"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.organ.knot"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "capsule"
+tag = "KNT"
+anchor = "anchor.tile"
+prompt = "a Brood Knot organ: a hollow violet knot of cords big enough for two sleepers, warm pink inside, 4 frames"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.organ.maw"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "disc"
+tag = "MAW"
+anchor = "anchor.tile"
+prompt = "a Maw organ: a ring of chrome teeth in violet flesh at a junction, opening and snapping, 4 frames"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.organ.gland"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "disc"
+tag = "GLD"
+anchor = "anchor.tile"
+prompt = "a Venom Gland organ: a swollen violet gland with an acid-yellow bead at its tip, spitting, 4 frames"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.organ.cyst"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "rect"
+tag = "CYS"
+anchor = "anchor.tile"
+prompt = "a Chrome Cyst organ: a hard violet nodule plated with grown chrome scales, 4 frames"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.organ.graft"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "disc"
+tag = "GRF"
+anchor = "anchor.tile"
+prompt = "a Graft Bud organ: a pale violet bud with thin seeking threads reaching toward bruised feral tissue, 4 frames"
+negative = "green, outline"
+status = "placeholder"
+
+[[slot]]
+id = "mat.organ.bellows"
+kind = "sprite"
+size = [32, 32]
+frames = 4
+states = [""]
+ramp = "ooze"
+silhouette = "capsule"
+tag = "BLW"
+anchor = "anchor.tile"
+prompt = "a Bellows organ: a ribbed violet bladder on a trunk cord, pumping cargo pulses along it, 4 frames"
+negative = "green, outline"
+status = "placeholder"
+

@@ -39,6 +39,12 @@ func _process(_delta: float) -> bool:
 		var scr: Node = screens.current
 		var rs: RoseSim = sim.ensure()
 		var heart: Dictionary = rs.structures()[0]
+		# the genome as a Garden-leaning feed plan would leave it: the shift's end grows its organs (Full Design
+		# v3.18, Organs) for the Strain Lab and the Codex
+		rs.debug_gene(4, 0.7)
+		rs.debug_gene(2, 0.7)
+		rs.debug_gene(1, 0.7)
+		rs.debug_gene(6, 0.56)
 		sim.build_tool = "pod"
 		scr.tool = "build"
 		var placed := -1
@@ -189,6 +195,19 @@ func _process(_delta: float) -> bool:
 			if not scr.filled.has(int(h)):
 				scr._fill(int(h))
 				break
+	if frames_on_screen == 14 and screen_i >= 0 and screen_ids[screen_i] == "bench":
+		# the Research tab: a Blueprint I studied (Chrome tier 2's), the Sphincter housing picked on the tree
+		var st: RoseStash = sim.ensure_stash()
+		st.add(RoseItems.new().find("tec_blueprint_chrome1"), 80, true)
+		st.add(RoseItems.new().find("tec_blueprint_myc2"), 80, true)
+		sim.ensure().research_pick("study", "tec_blueprint_chrome1")
+		var scr: Node = screens.current
+		scr.picked_node = "c2_gate"
+		scr._set_tab("research")
+	if frames_on_screen == 18 and screen_i >= 0 and screen_ids[screen_i] == "bench":
+		var img: Image = root.get_viewport().get_texture().get_image()
+		img.save_png(out_dir + "/bench_research.png")
+		screens.current._set_tab("craft")
 	if frames_on_screen == 12 and screen_i >= 0:
 		var id: String = screen_ids[screen_i]
 		var img: Image = root.get_viewport().get_texture().get_image()
@@ -279,7 +298,7 @@ func _process(_delta: float) -> bool:
 	if frames_on_screen == 19 and screen_i >= 0 and screen_ids[screen_i] == "run":
 		var img: Image = root.get_viewport().get_texture().get_image()
 		img.save_png(out_dir + "/run_pressure.png")
-	if frames_on_screen >= (24 if screen_i >= 0 and screen_ids[screen_i] in ["colony", "run"] else 18):
+	if frames_on_screen >= (24 if screen_i >= 0 and screen_ids[screen_i] in ["colony", "run", "bench"] else 18):
 		screen_i += 1
 		frames_on_screen = 0
 		if screen_i < screen_ids.size():

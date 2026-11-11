@@ -349,7 +349,12 @@ func _slot_frame(parent: Control, pos: Vector2, handle: int, key: String, on_cli
 	f.add_child(b)
 
 func _runner_setup() -> Dictionary:
-	return people.runner_setup(runner_id) if runner_id >= 0 else RosePeople.plain_runner(5)
+	var rs: Dictionary = people.runner_setup(runner_id) if runner_id >= 0 else RosePeople.plain_runner(5)
+	# the city's flags (Full Design v3.18, Scav yield): the curio sets, Conscription's cost during an alarm
+	var flags: PackedStringArray = rs.get("flags", PackedStringArray())
+	flags.append_array(Sim.ensure().run_flags())
+	rs["flags"] = flags
+	return rs
 
 func _redraw_rig() -> void:
 	for ch in rig_row.get_children():

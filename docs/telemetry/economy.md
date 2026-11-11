@@ -23,32 +23,32 @@ Written by `rose economy --seed 11 --shifts 30` on 2026-11-11 (Full Design v3.15
 | 2 | 1 | 1 | 3 | 83 | 82 | 0.06 |
 | 3 | 1 | 1 | 7 | 28 | 109 | 0.09 |
 | 4 | 2 | 1 | 13 | 49 | 157 | 0.09 |
-| 5 | 2 | 1 | 12 | 27 | 183 | 0.09 |
-| 6 | 2 | 1 | 13 | 27 | 209 | 0.13 |
-| 7 | 3 | 1 | 17 | 26 | 234 | 0.13 |
-| 8 | 3 | 1 | 13 | 33 | 266 | 0.13 |
-| 9 | 3 | 1 | 12 | 28 | 293 | 0.13 |
-| 10 | 4 | 0 | 14 | 35 | 327 | 0.13 |
-| 11 | 4 | 0 | 0 | 0 | 326 | 0.13 |
-| 12 | 4 | 0 | 0 | 0 | 323 | 0.14 |
-| 13 | 5 | 0 | 0 | 0 | 320 | 0.14 |
-| 14 | 5 | 0 | 0 | 0 | 319 | 0.14 |
-| 15 | 5 | 0 | 0 | 0 | 318 | 0.16 |
-| 16 | 6 | 0 | 0 | 0 | 317 | 0.16 |
-| 17 | 6 | 0 | 0 | 0 | 316 | 0.16 |
-| 18 | 6 | 0 | 0 | 0 | 315 | 0.12 |
-| 19 | 7 | 1 | 0 | 0 | 314 | 0.12 |
-| 20 | 7 | 1 | 0 | 0 | 313 | 0.12 |
-| 21 | 7 | 1 | 25 | 137 | 449 | 0.13 |
-| 22 | 8 | 1 | 23 | 93 | 541 | 0.13 |
-| 23 | 8 | 1 | 20 | 48 | 588 | 0.13 |
-| 24 | 8 | 1 | 22 | 47 | 634 | 0.10 |
-| 25 | 9 | 1 | 21 | 50 | 683 | 0.10 |
-| 26 | 9 | 1 | 20 | 33 | 715 | 0.10 |
-| 27 | 9 | 1 | 21 | 35 | 749 | 0.10 |
-| 28 | 10 | 1 | 20 | 27 | 775 | 0.10 |
-| 29 | 10 | 1 | 19 | 41 | 835 | 0.10 |
-| 30 | 10 | 1 | 17 | 36 | 870 | 0.12 |
+| 5 | 2 | 1 | 11 | 24 | 180 | 0.09 |
+| 6 | 2 | 1 | 13 | 27 | 206 | 0.13 |
+| 7 | 3 | 1 | 17 | 26 | 231 | 0.13 |
+| 8 | 3 | 1 | 11 | 25 | 255 | 0.13 |
+| 9 | 3 | 1 | 18 | 34 | 288 | 0.13 |
+| 10 | 4 | 1 | 11 | 22 | 309 | 0.13 |
+| 11 | 4 | 1 | 15 | 49 | 357 | 0.13 |
+| 12 | 4 | 1 | 13 | 30 | 386 | 0.14 |
+| 13 | 5 | 1 | 12 | 22 | 407 | 0.14 |
+| 14 | 5 | 1 | 11 | 34 | 440 | 0.14 |
+| 15 | 5 | 1 | 9 | 11 | 450 | 0.16 |
+| 16 | 6 | 1 | 11 | 18 | 467 | 0.16 |
+| 17 | 6 | 1 | 14 | 46 | 512 | 0.16 |
+| 18 | 6 | 1 | 10 | 15 | 526 | 0.12 |
+| 19 | 7 | 1 | 14 | 24 | 549 | 0.12 |
+| 20 | 7 | 1 | 10 | 15 | 563 | 0.12 |
+| 21 | 7 | 1 | 9 | 41 | 603 | 0.13 |
+| 22 | 8 | 1 | 13 | 25 | 627 | 0.13 |
+| 23 | 8 | 1 | 9 | 21 | 647 | 0.13 |
+| 24 | 8 | 1 | 9 | 22 | 668 | 0.10 |
+| 25 | 9 | 1 | 5 | 5 | 672 | 0.10 |
+| 26 | 9 | 1 | 11 | 25 | 696 | 0.10 |
+| 27 | 9 | 1 | 16 | 31 | 726 | 0.10 |
+| 28 | 10 | 1 | 12 | 27 | 752 | 0.10 |
+| 29 | 10 | 1 | 11 | 30 | 821 | 0.10 |
+| 30 | 10 | 1 | 11 | 35 | 855 | 0.12 |
 
 ## What sold, against its base
 
@@ -56,41 +56,44 @@ Realised price over base × condition (× 0.4 for an item sold blind), by the fa
 
 | faction | category | sold | blind | eddies | of base |
 |---|---|---|---|---|---|
-| Nomads | chrome | 88 | 87 | 188 | 95 % |
-| Nomads | contraband | 18 | 18 | 161 | 130 % |
-| Nomads | curio | 69 | 68 | 134 | 79 % |
-| Nomads | gear | 64 | 63 | 209 | 82 % |
-| Nomads | tech | 73 | 72 | 191 | 76 % |
+| Corpo remnants | curio | 2 | 2 | 7 | 137 % |
+| Corpo remnants | tech | 6 | 6 | 19 | 224 % |
+| Gangs | gear | 2 | 2 | 15 | 134 % |
+| Nomads | chrome | 138 | 137 | 199 | 87 % |
+| Nomads | contraband | 12 | 12 | 141 | 149 % |
+| Nomads | curio | 65 | 64 | 149 | 102 % |
+| Nomads | gear | 55 | 54 | 179 | 105 % |
+| Nomads | tech | 49 | 48 | 135 | 84 % |
 
 ## Standing at the end
 
 | faction | reputation | favour | traded | tier open |
 |---|---|---|---|---|
-| Nomads | +1 | 1 | 883 e | 3 |
-| Gangs | +0 | 0 | 0 e | 1 |
-| Corpo remnants | +0 | -2 | 0 e | 1 |
+| Nomads | +2 | 6 | 803 e | 3 |
+| Gangs | +0 | 0 | 15 e | 1 |
+| Corpo remnants | +0 | -2 | 26 e | 1 |
 | Badges | +0 | 0 | 0 e | 1 |
 | Oathkeepers | +0 | 0 | 0 e | 1 |
 
 ## Contracts
 
-- took Nomads 1/3: deliver 4 organic at 20+ (0/4), 20 e by shift 31
-- the Nomads' link 1/3 done: 20 e
+- took Nomads 1/3: shelter Sorrel five shifts, 40 e by shift 29
+- the Nomads' link 1/3 done: 40 e
 
-In hand at the end: Nomads 2/3: shelter Kett five shifts, 62 e by shift 34.
+In hand at the end: Nomads 2/3: shelter Sorrel five shifts, 62 e by shift 34.
 
 ## Trading against feeding
 
 | | the nearer grate reached | shifts with no market | eddies at the end | sold | Chrome fed to the Heart |
 |---|---|---|---|---|---|
-| trading | not in 30 shifts | 9 | 870 | 312 | 32 |
-| feeding | not in 30 shifts | 0 | 833 | 245 | 182 |
+| trading | not in 30 shifts | 0 | 855 | 329 | 55 |
+| feeding | not in 30 shifts | 0 | 654 | 194 | 208 |
 
 ## Services
 
-Trading: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 1, hire 0 (0 hired).
+Trading: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 3, hire 0 (0 hired).
 
-Feeding: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 2, hire 0 (0 hired).
+Feeding: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 1, hire 0 (0 hired).
 
 ## Topside
 

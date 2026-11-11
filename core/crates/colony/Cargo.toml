@@ -8,5 +8,6 @@ license.workspace = true
 [dependencies]
 mat = { path = "../mat" }
 people = { path = "../people" }
+progress = { path = "../progress" }
 serde.workspace = true
 toml.workspace = true

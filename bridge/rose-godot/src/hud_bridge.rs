@@ -87,7 +87,7 @@ impl RoseSim {
                 }
             }
             "light" => {
-                let lit = self.colony.lit_cells(&defs, w, h, true);
+                let lit = self.colony.lit_cells(&defs, &c.sim, true);
                 for (i, l) in lit.iter().enumerate() {
                     if *l {
                         put(i, ACID, 90);
@@ -155,6 +155,19 @@ impl RoseSim {
         e.set("zone", z.map_or(-1, |z| z.id as i64));
         e.set("zone_kind", z.map_or("", |z| z.kind.name()));
         e.set("cut", self.colony.cuts.iter().any(|k| k.x as i64 == x && k.y as i64 == y));
+        // the organ on it (Full Design v3.18, Organs) and whether its rule can be set
+        let f = progress::StrainFile::shipped();
+        match c.sim.organ_at(i).and_then(|o| f.organ.get(o.kind as usize).map(|d| (d, o.rule))) {
+            Some((d, rule)) => {
+                e.set("organ", d.name.as_str());
+                e.set("organ_id", d.id.as_str());
+                e.set("organ_text", d.text.as_str());
+                e.set("organ_rule", rule as i64);
+                e.set("organ_dark", self.colony.dark_bulbs.contains(&(i as u32)));
+            }
+            None => e.set("organ", ""),
+        }
+        e.set("organ_rules", self.colony.progress.tech.flag("organ_rules"));
         e
     }
 
@@ -179,10 +192,12 @@ impl RoseSim {
         e.set("need", d.build_at(s.upgrading_to.unwrap_or(1)) as i64);
         e.set("upgrading_to", s.upgrading_to.map_or(0, |t| t as i64));
         e.set("hp", s.hp as i64);
-        e.set("hp_max", d.hp_at(s.tier) as i64);
+        e.set("hp_max", self.colony.hp_max(&defs, &s) as i64);
         let ai = s.y as usize * c.sim.w + s.x as usize;
         e.set("sigma", c.sim.sig.get(ai).copied().unwrap_or(0.0) as f64);
-        e.set("sigma_need", d.sigma as f64);
+        e.set("sigma_need", self.colony.sigma_need(d) as f64);
+        e.set("x", s.x as i64);
+        e.set("y", s.y as i64);
         e.set("dark", s.dark);
         e.set("drowned", s.drowned);
         e.set("hosts", d.hosts.as_str());

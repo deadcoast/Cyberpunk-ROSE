@@ -81,7 +81,7 @@ pub fn structures_array(colony: &Colony, defs: &StructureFile) -> VarArray {
         e.set("tier", s.tier as i64);
         e.set("tiers", d.tiers as i64);
         e.set("hp", s.hp as i64);
-        e.set("hp_max", d.hp_at(s.tier) as i64);
+        e.set("hp_max", colony.hp_max(defs, s) as i64);
         e.set("built", s.built);
         e.set("progress", s.progress as i64);
         e.set("build_total", d.build_at(s.upgrading_to.unwrap_or(1)) as i64);

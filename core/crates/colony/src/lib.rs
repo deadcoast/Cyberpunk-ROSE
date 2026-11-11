@@ -153,6 +153,18 @@ pub struct StructureDef {
     pub crew: Vec<i32>,
     #[serde(default)]
     pub stash_grid: Vec<[u8; 2]>,
+    /// the organ the anchor must stand on: a housing (Full Design v3.18, Organs)
+    #[serde(default)]
+    pub organ: String,
+    /// an organ the anchor may stand on to cost nothing (the Sphincter Gate on a Sphincter)
+    #[serde(default)]
+    pub free_on: String,
+    /// a gate to bodies and water
+    #[serde(default)]
+    pub shuts: bool,
+    /// strikes Oathkeepers only
+    #[serde(default)]
+    pub oath_only: bool,
     pub text: String,
     pub art: String,
 }
@@ -259,8 +271,9 @@ pub struct StructureFile {
 impl StructureFile {
     pub fn from_toml(s: &str) -> Result<Self, String> {
         let f: StructureFile = toml::from_str(s).map_err(|e| e.to_string())?;
-        if f.structure.len() != 25 {
-            return Err(format!("{} structures, the design has 25", f.structure.len()));
+        let built = f.structure.iter().filter(|d| d.category != "organ").count();
+        if built != 25 {
+            return Err(format!("{built} structures, the design has 25"));
         }
         let mut ids = std::collections::HashSet::new();
         for d in &f.structure {
@@ -276,6 +289,9 @@ impl StructureFile {
             if !d.hosts.is_empty() && d.slots.is_empty() {
                 return Err(format!("{}: hosts {} with no slots", d.id, d.hosts));
             }
+            if d.category == "organ" && (!d.prebuilt || d.organ.is_empty()) {
+                return Err(format!("{}: the Mat's own stands prebuilt on its organ", d.id));
+            }
             if !d.prebuilt && d.cost.is_zero() {
                 return Err(format!("{}: free to build", d.id));
             }
@@ -285,7 +301,7 @@ impl StructureFile {
             if d.tiers < 1 || d.tiers > 4 {
                 return Err(format!("{}: {} tiers", d.id, d.tiers));
             }
-            if !["city", "homes", "work", "mat", "stores", "order"].contains(&d.category.as_str()) {
+            if !["city", "homes", "work", "mat", "stores", "order", "organ"].contains(&d.category.as_str()) {
                 return Err(format!("{}: category '{}'", d.id, d.category));
             }
         }
@@ -528,6 +544,14 @@ pub enum PlaceError {
     NeedsRelay,
     Overlaps(u32),
     HeartTier(u8),
+    /// the tree's node it waits on (Full Design v3.18, Research)
+    Locked(String),
+    /// the organ a housing stands on
+    NeedsOrgan(String),
+    /// a grate holds one Seep Market, two from the Quarter
+    MarketCap(u8),
+    /// the Mat's own: it grows, it is never placed
+    Grown,
     Unknown,
 }
 
@@ -542,6 +566,10 @@ impl std::fmt::Display for PlaceError {
             PlaceError::NeedsRelay => write!(f, "needs a Relay under it"),
             PlaceError::Overlaps(id) => write!(f, "overlaps structure #{id}"),
             PlaceError::HeartTier(t) => write!(f, "needs the Heart at tier {t}"),
+            PlaceError::Locked(n) => write!(f, "needs {n} researched"),
+            PlaceError::NeedsOrgan(o) => write!(f, "needs a {o} under it"),
+            PlaceError::MarketCap(n) => write!(f, "this grate holds {n} market{}", if *n == 1 { "" } else { "s" }),
+            PlaceError::Grown => write!(f, "the Mat grows it"),
             PlaceError::Unknown => write!(f, "no such structure"),
         }
     }
@@ -562,6 +590,9 @@ pub struct ShiftOutcome {
     pub waiting: Vec<(u32, Cost)>,
     /// Bench jobs the Tweak slots advance
     pub bench_slots: u32,
+    /// Research points the shift made (each researcher's Tweak) and what they finished (Full Design v3.18)
+    pub research_points: u32,
+    pub research_done: Option<progress::Done>,
     /// items the Appraise slots identify
     pub identifies: u32,
     /// salt made, doses made, brine made; the Still per Cook slot that worked, the Salt Works and what it made
@@ -626,6 +657,17 @@ pub struct Colony {
     /// slimo -> structure: worked the next shift over its priorities, spent with the shift (v3.12)
     #[serde(default)]
     pub orders: HashMap<u32, u32>,
+    /// the tree, the strain's classes and Strainbook, the collections (Full Design v3.18, Progression; save v14)
+    #[serde(default)]
+    pub progress: progress::Progress,
+    /// structures a Nerve rule dims, and Lume Bulbs dark by their rule or a Nerve rule (tiles), set by the game
+    #[serde(skip)]
+    pub dimmed: HashSet<u32>,
+    #[serde(skip)]
+    pub dark_bulbs: HashSet<u32>,
+    /// what the shift's feeds did to the genome, gathered for the Strainbook at the shift's end
+    #[serde(skip)]
+    pub strain_shift: progress::StrainShift,
     /// cord distance from the Heart per tile, refreshed each shift
     #[serde(skip)]
     pub heart_dist: Vec<u32>,
@@ -644,6 +686,20 @@ pub const DISTRICT_NAMES: [&str; 20] = [
     "Sump Row", "Grate Nine", "the Culvert", "Brine Steps", "Lamp Cut", "the Outfall", "Rebar Lane", "Dimmers' Reach", "the Pipeworks", "Saltline",
     "Low Drain", "the Wick", "Ninth Chamber", "Cord End", "the Shallows", "Rust Gate", "Flicker Row", "the Long Pipe", "Crawlspace", "Heart Ward",
 ];
+
+/// Tiles a Filter Lung keeps dry round it (Pass 1).
+pub const LUNG_DRY: i32 = 6;
+
+/// Research slots a Tweaker Bench opens by its tier while a project stands (Full Design v3.18, Research).
+pub fn research_slots(tier: u8) -> u8 {
+    if tier >= 3 { 2 } else { 1 }
+}
+
+/// Whether an organ of a kind (by its id in `data/strain.toml`) stands on a tile.
+pub fn organ_at(mat: &MatSim, i: usize, id: &str) -> bool {
+    let Some(k) = progress::StrainFile::shipped().organ_index(id) else { return false };
+    mat.organs.iter().any(|o| o.kind == k && o.i as usize == i)
+}
 
 fn cheb(a: (i32, i32), b: (i32, i32)) -> i32 {
     (a.0 - b.0).abs().max((a.1 - b.1).abs())
@@ -665,6 +721,10 @@ impl Colony {
             cuts: Vec::new(),
             salt_left: 0,
             orders: HashMap::new(),
+            progress: progress::Progress::default(),
+            dimmed: HashSet::new(),
+            dark_bulbs: HashSet::new(),
+            strain_shift: progress::StrainShift::default(),
             heart_dist: Vec::new(),
             wave: HashMap::new(),
         }
@@ -685,6 +745,34 @@ impl Colony {
         let hi = defs.index("heart")?;
         self.structures.iter().find(|s| s.def == hi)
     }
+    /// A structure's HP at a tier with what the tree adds (Full Design v3.18, Research): Armoured Pods double the
+    /// homes', Chrome plating gives every structure half again.
+    pub fn hp_max_of(&self, defs: &StructureFile, def: usize, tier: u8) -> i32 {
+        let d = &defs.structure[def];
+        let mut hp = d.hp_at(tier);
+        let t = &self.progress.tech;
+        if matches!(d.id.as_str(), "pod" | "bunkhouse") && t.flag("homes_hp_x2") {
+            hp *= 2;
+        }
+        if t.flag("hp_x1_5") {
+            hp = hp * 3 / 2;
+        }
+        hp
+    }
+
+    pub fn hp_max(&self, defs: &StructureFile, s: &Structure) -> i32 {
+        self.hp_max_of(defs, s.def, s.tier)
+    }
+
+    /// The signal a structure's anchor needs: its own, 0.1 less in a Hive strain (Full Design v3.18, Strain classes).
+    pub fn sigma_need(&self, def: &StructureDef) -> f32 {
+        if def.sigma > 0.0 && self.progress.strain.holds("hive") {
+            (def.sigma - 0.1).max(0.05)
+        } else {
+            def.sigma
+        }
+    }
+
     pub fn heart_tier(&self, defs: &StructureFile) -> u8 {
         self.heart(defs).map(|h| h.tier).unwrap_or(1)
     }
@@ -720,6 +808,12 @@ impl Colony {
     pub fn can_place_r(&self, defs: &StructureFile, mat: &MatSim, def_id: &str, x: u16, y: u16, rotated: bool) -> Result<(), PlaceError> {
         let di = defs.index(def_id).ok_or(PlaceError::Unknown)?;
         let def = &defs.structure[di];
+        if def.category == "organ" {
+            return Err(PlaceError::Grown);
+        }
+        if let Some(n) = self.progress.tech.structure_locked(def_id) {
+            return Err(PlaceError::Locked(n.name.clone()));
+        }
         if def.heart_tier > 0 && self.heart_tier(defs) < def.heart_tier {
             return Err(PlaceError::HeartTier(def.heart_tier));
         }
@@ -733,7 +827,7 @@ impl Colony {
         if mat.hy[ai] != hy::CORD && mat.hy[ai] != hy::NODE {
             return Err(PlaceError::NotMat(x, y));
         }
-        if mat.sig[ai] < def.sigma {
+        if mat.sig[ai] < self.sigma_need(def) {
             return Err(PlaceError::Signal(x, y));
         }
         for (cx, cy) in Self::footprint_r(def, x, y, rotated) {
@@ -750,8 +844,19 @@ impl Colony {
         if def.node && mat.hy[ai] != hy::NODE {
             return Err(PlaceError::NeedsNode);
         }
-        if def.relay && !mat.relays.contains(&(x as usize, y as usize)) {
+        if def.relay && !mat.relays.contains(&(x as usize, y as usize)) && !organ_at(mat, ai, "ganglion") {
             return Err(PlaceError::NeedsRelay);
+        }
+        if !def.organ.is_empty() && !organ_at(mat, ai, &def.organ) {
+            let name = progress::StrainFile::shipped().organ.iter().find(|o| o.id == def.organ).map_or(def.organ.clone(), |o| o.name.clone());
+            return Err(PlaceError::NeedsOrgan(name));
+        }
+        if def.id == "market" {
+            let cap = if self.heart_tier(defs) >= 2 { 2 } else { 1 };
+            let here = self.structures.iter().filter(|s| defs.structure[s.def].id == "market" && cheb((s.x as i32, s.y as i32), (x as i32, y as i32)) <= 4).count();
+            if here >= cap {
+                return Err(PlaceError::MarketCap(cap as u8));
+            }
         }
         if def.grate {
             let mut near = false;
@@ -781,7 +886,10 @@ impl Colony {
         let di = defs.index(def_id).ok_or(PlaceError::Unknown)?;
         let id = self.next_id;
         self.next_id += 1;
-        self.structures.push(Structure { id, def: di, x, y, tier: 1, hp: defs.structure[di].hp_at(1), built: false, progress: 0, paid: false, upgrading_to: None, district: None, quota: None, rotated, drowned: false, dark: false });
+        // a Sphincter Gate on a Sphincter costs nothing (Pass 1)
+        let free = !defs.structure[di].free_on.is_empty() && organ_at(mat, y as usize * mat.w + x as usize, &defs.structure[di].free_on);
+        let hp = self.hp_max_of(defs, di, 1);
+        self.structures.push(Structure { id, def: di, x, y, tier: 1, hp, built: false, progress: 0, paid: free, upgrading_to: None, district: None, quota: None, rotated, drowned: false, dark: false });
         Ok(id)
     }
 
@@ -792,7 +900,9 @@ impl Colony {
         s.built = true;
         s.paid = true;
         s.tier = tier.max(1);
-        s.hp = defs.structure[s.def].hp_at(s.tier);
+        let (def, t) = (s.def, s.tier);
+        let hp = self.hp_max_of(defs, def, t);
+        self.get_mut(id).unwrap().hp = hp;
         Ok(id)
     }
 
@@ -804,6 +914,16 @@ impl Colony {
         self.homes.retain(|_, h| *h != id);
         self.orders.retain(|_, sid| *sid != id);
         Some(s)
+    }
+
+    /// The Mat's own (Full Design v3.18, Organs): a Brood Knot, a Sphincter, a Maw or a Venom Gland stands as a
+    /// built structure on its organ's tile the shift the organ grows. Returns its id.
+    pub fn stand_own(&mut self, defs: &StructureFile, def: usize, x: u16, y: u16) -> u32 {
+        let id = self.next_id;
+        self.next_id += 1;
+        let hp = self.hp_max_of(defs, def, 1);
+        self.structures.push(Structure { id, def, x, y, tier: 1, hp, built: true, progress: 0, paid: true, upgrading_to: None, district: None, quota: None, rotated: false, drowned: false, dark: false });
+        id
     }
 
     /// Cancel a ghost (built structures leave by `ruin`). Returns the cost to refund when it was paid.
@@ -824,6 +944,9 @@ impl Colony {
             return Err("already upgrading".into());
         }
         let to = s.tier + 1;
+        if d.category == "organ" {
+            return Err("the Mat grows it".into());
+        }
         if to > d.tiers {
             return Err("at its top tier".into());
         }
@@ -874,7 +997,9 @@ impl Colony {
         let d = &defs.structure[s.def];
         match d.id.as_str() {
             "heart" | "pit" => {
-                let cap = d.stock_at(s.tier).max(0) as f32;
+                // the Heart set: the Heart's Pit holds half again (Full Design v3.18, Collections)
+                let heart_set = d.id == "heart" && self.progress.collections.set_flag("heart_set");
+                let cap = d.stock_at(s.tier).max(0) as f32 * if heart_set { 1.5 } else { 1.0 };
                 if let Some(q) = s.quota {
                     return Some((q.target.clamp(0.0, cap), q.ceiling.min(4), QuotaFrom::Set));
                 }
@@ -1075,31 +1200,57 @@ impl Colony {
 
     // ------------------------------------------------------------ light, water, signal
 
-    /// Light radius sources: (x, y, radius) of every built Lume Farm, Lantern Post and the Heart.
-    fn lights(&self, defs: &StructureFile, lanterns_lit: bool) -> Vec<(i32, i32, i32)> {
-        self.structures
+    /// Light radius sources: (x, y, radius) of every built Lume Farm, Lantern Post and the Heart, and every Lume
+    /// Bulb out of a housing and not dark (Full Design v3.18, Organs: light 1 + 6 x Lume). Lamp capture lights a
+    /// Lantern Post 5 tiles without oil; the Heart set lights the Heart 2 tiles farther.
+    fn lights(&self, defs: &StructureFile, mat: &MatSim, lanterns_lit: bool) -> Vec<(i32, i32, i32)> {
+        let lamps = self.progress.tech.flag("lamp_capture");
+        let heart_set = self.progress.collections.set_flag("heart_set");
+        let mut v: Vec<(i32, i32, i32)> = self
+            .structures
             .iter()
-            .filter(|s| s.built)
+            .filter(|s| s.built && !self.dimmed.contains(&s.id))
             .filter_map(|s| {
                 let d = &defs.structure[s.def];
-                let r = d.light_at(s.tier);
-                if r == 0 || (d.id == "lantern" && !lanterns_lit) {
+                let mut r = d.light_at(s.tier);
+                if d.id == "lantern" && lamps {
+                    r = 5;
+                } else if d.id == "lantern" && !lanterns_lit {
+                    return None;
+                }
+                if d.id == "heart" && heart_set {
+                    r += 2;
+                }
+                if r == 0 {
                     None
                 } else {
                     let (w, h) = s.dims(d);
                     Some((s.x as i32 + w as i32 / 2, s.y as i32 + h as i32 / 2, r))
                 }
             })
-            .collect()
+            .collect();
+        if let Some(bulb) = progress::StrainFile::shipped().organ_index("bulb") {
+            let r = (1.0 + 6.0 * mat.genome.0[mat::genome::LUME]) as i32;
+            for o in mat.organs_of(bulb) {
+                let (x, y) = ((o.i as usize % mat.w) as u16, (o.i as usize / mat.w) as u16);
+                if self.dark_bulbs.contains(&o.i) || self.occupied(defs, x, y).is_some() {
+                    continue;
+                }
+                v.push((x as i32, y as i32, r));
+            }
+        }
+        v
     }
 
     fn lit_at(lights: &[(i32, i32, i32)], x: i32, y: i32) -> bool {
         lights.iter().any(|&(lx, ly, r)| cheb((lx, ly), (x, y)) <= r)
     }
 
-    /// Every tile's light for the overlay: the Heart's, the Lantern Posts' (while there is oil) and the Lume Farms'.
-    pub fn lit_cells(&self, defs: &StructureFile, w: usize, h: usize, lanterns_lit: bool) -> Vec<bool> {
-        let lights = self.lights(defs, lanterns_lit);
+    /// Every tile's light for the overlay: the Heart's, the Lantern Posts' (while there is oil), the Lume Farms' and
+    /// the Lume Bulbs'.
+    pub fn lit_cells(&self, defs: &StructureFile, mat: &MatSim, lanterns_lit: bool) -> Vec<bool> {
+        let (w, h) = (mat.w, mat.h);
+        let lights = self.lights(defs, mat, lanterns_lit);
         (0..w * h).map(|i| Self::lit_at(&lights, (i % w) as i32, (i / w) as i32)).collect()
     }
 
@@ -1108,11 +1259,13 @@ impl Colony {
         if mat.sub[i] != sub::WATER {
             return true;
         }
-        self.structures.iter().filter(|s| s.built).any(|s| {
+        let housed = self.structures.iter().filter(|s| s.built).any(|s| {
             let d = &defs.structure[s.def];
             let r = d.value_at("dry_radius", s.tier);
             r > 0 && cheb((s.x as i32, s.y as i32), (x, y)) <= r
-        })
+        });
+        // a Filter Lung keeps the homes within 6 dry by itself (Pass 1)
+        housed || progress::StrainFile::shipped().organ_index("lung").is_some_and(|k| mat.organs_of(k).any(|o| cheb(((o.i as usize % mat.w) as i32, (o.i as usize / mat.w) as i32), (x, y)) <= LUNG_DRY))
     }
 
     /// Where a slimo stands this shift: its bed, or the Heart's edge when it has none.
@@ -1542,6 +1695,14 @@ impl Colony {
                 v.push((Job::Build, id));
             }
         }
+        // Research slots on every working Tweaker Bench while a project stands: 1 / 1 / 2 by its tier (v3.18)
+        if self.progress.tech.project.is_some() {
+            for s in self.structures.iter().filter(|s| s.built && s.upgrading_to.is_none() && !s.drowned && !s.dark && defs.structure[s.def].id == "bench") {
+                for _ in 0..research_slots(s.tier) {
+                    v.push((Job::Research, s.id));
+                }
+            }
+        }
         v
     }
 
@@ -1558,7 +1719,7 @@ impl Colony {
 
     /// A built structure under its HP, and not being upgraded (an upgrade raises it to the new tier's HP).
     pub fn damaged(&self, defs: &StructureFile, s: &Structure) -> bool {
-        s.built && s.upgrading_to.is_none() && s.hp < defs.structure[s.def].hp_at(s.tier)
+        s.built && s.upgrading_to.is_none() && s.hp < self.hp_max(defs, s)
     }
 
     /// Hand the open slots to the highest utilities (Full Design, Jobs by utility): one slot per slimo on duty this
@@ -1653,10 +1814,12 @@ impl Colony {
         // the shift's end does no work this shift and takes none the next — the white light, the bleach and die-back
         // cut power by killing the cord under it
         let heart = defs.index("heart");
+        let hive = self.progress.strain.holds("hive");
         for s in self.structures.iter_mut().filter(|s| s.built && Some(s.def) != heart) {
             let d = &defs.structure[s.def];
             let i = s.y as usize * mat.w + s.x as usize;
-            let dark = !((mat.hy[i] == hy::CORD || mat.hy[i] == hy::NODE) && mat.sig[i] >= d.sigma);
+            let need = if hive && d.sigma > 0.0 { (d.sigma - 0.1).max(0.05) } else { d.sigma };
+            let dark = !((mat.hy[i] == hy::CORD || mat.hy[i] == hy::NODE) && mat.sig[i] >= need);
             if dark != s.dark && d.job().is_some() {
                 out.lines.push(if dark { format!("{} at {},{} is dark: its cord carries no power", d.name, s.x, s.y) } else { format!("{} at {},{} has power again", d.name, s.x, s.y) });
                 out.power.push((s.id, dark));
@@ -1678,6 +1841,7 @@ impl Colony {
             // a dark structure does no work of its own; building on it goes on
             if job == Job::Build {
                 builders.entry(sid).or_default().push((r.stat(Stat::Hands), s.district.is_some_and(|dd| forge_districts.contains(&dd))));
+                out.work.build_by.push(slimo);
                 continue;
             }
             if s.dark {
@@ -1689,6 +1853,10 @@ impl Colony {
                 Job::Tweak => {
                     out.bench_slots += 1;
                     out.work.crafts_by.push(slimo);
+                }
+                Job::Research => {
+                    out.research_points += r.skill(people::Skill::Tweak) as u32;
+                    out.work.research_by.push(slimo);
                 }
                 Job::Appraise => {
                     out.identifies += d.value_at("identify", s.tier).max(0) as u32;
@@ -1720,6 +1888,29 @@ impl Colony {
             }
             if d.id == "lung" {
                 out.brine += d.value_at("brine", s.tier).max(0) as u32;
+            }
+        }
+        // Research: the points go to the project standing (Full Design v3.18)
+        if out.research_points > 0 {
+            if let Some(done) = self.progress.tech.work(out.research_points, self.shift) {
+                // a node that raises HP raises what stands at once (Full Design v3.18, Research)
+                if let progress::Done::Node(id) = &done {
+                    let flags = progress::TechFile::shipped().get(id).map(|n| n.flags.clone()).unwrap_or_default();
+                    for s in self.structures.iter_mut() {
+                        let home = matches!(defs.structure[s.def].id.as_str(), "pod" | "bunkhouse");
+                        if flags.iter().any(|f| f == "homes_hp_x2") && home {
+                            s.hp *= 2;
+                        }
+                        if flags.iter().any(|f| f == "hp_x1_5") {
+                            s.hp = s.hp * 3 / 2;
+                        }
+                    }
+                }
+                out.lines.push(match &done {
+                    progress::Done::Node(id) => format!("researched: {}", progress::TechFile::shipped().get(id).map_or(id.as_str(), |n| n.name.as_str())),
+                    progress::Done::Opened(b, t) => format!("{} tier {t} is open", progress::tech::BRANCH_NAMES[*b]),
+                });
+                out.research_done = Some(done);
             }
         }
         // the Medic slots treat: each treats one patient, the most injured member first
@@ -1759,8 +1950,8 @@ impl Colony {
             // mending: 2 x Hands a builder (doubled by a Forge in the district), up to the structure's HP; what is
             // left of the crew goes on to the next work
             if self.damaged(defs, &self.structures[idx]) {
+                let max = self.hp_max(defs, &self.structures[idx]);
                 let s = &mut self.structures[idx];
-                let max = def.hp_at(s.tier);
                 let mut gave = 0;
                 for (h, forge) in crew {
                     if s.hp >= max {
@@ -1789,18 +1980,19 @@ impl Colony {
                 }
             }
             let points: i32 = crew.iter().map(|(h, forge)| if *forge { h * 2 } else { *h }).sum();
+            let (hp_to, hp_one) = (self.hp_max_of(defs, self.structures[idx].def, to), self.hp_max_of(defs, self.structures[idx].def, 1));
             let s = &mut self.structures[idx];
             s.progress += points.max(0) as u32;
             if s.progress >= def.build_at(to) {
                 if s.built {
                     s.tier = to;
                     s.upgrading_to = None;
-                    s.hp = def.hp_at(to);
+                    s.hp = hp_to;
                     out.upgraded.push(sid);
                     out.lines.push(format!("{} upgraded to tier {}", def.name, to));
                 } else {
                     s.built = true;
-                    s.hp = def.hp_at(1);
+                    s.hp = hp_one;
                     out.built.push(sid);
                     out.lines.push(format!("{} built at {},{}", def.name, s.x, s.y));
                     // a Relay raised is a nerve: a signal source that never starves
@@ -1823,14 +2015,14 @@ impl Colony {
             let mut spent = 0;
             loop {
                 let worst = self.structures.iter().enumerate().filter(|(_, s)| s.district == Some(did) && self.damaged(defs, s)).min_by(|a, b| {
-                    let f = |s: &Structure| s.hp as f32 / defs.structure[s.def].hp_at(s.tier) as f32;
+                    let f = |s: &Structure| s.hp as f32 / self.hp_max(defs, s) as f32;
                     f(a.1).total_cmp(&f(b.1)).then(a.1.id.cmp(&b.1.id))
                 });
                 let Some((i, _)) = worst else { break };
                 if self.districts[k].cut == 0 {
                     break;
                 }
-                let max = defs.structure[self.structures[i].def].hp_at(self.structures[i].tier);
+                let max = self.hp_max(defs, &self.structures[i]);
                 let m = STOCK_MEND.min(max - self.structures[i].hp);
                 self.structures[i].hp += m;
                 self.districts[k].cut -= 1;
@@ -1842,14 +2034,17 @@ impl Colony {
             }
         }
         // lanterns burn oil
-        let lanterns = self.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "lantern").map(|s| defs.structure[s.def].value_at("upkeep", s.tier).max(0) as u32).sum::<u32>();
+        // lamp capture: captured lamps burn no oil (Full Design v3.18, Research)
+        let lanterns = if self.progress.tech.flag("lamp_capture") { 0 } else { self.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "lantern").map(|s| defs.structure[s.def].value_at("upkeep", s.tier).max(0) as u32).sum::<u32>() };
         let lanterns_lit = lanterns <= eddies_left;
         if lanterns_lit {
             eddies_left -= lanterns;
             out.upkeep = lanterns;
         }
         // the contexts: where each slimo stands, what the Mat gives it
-        let lights = self.lights(defs, lanterns_lit);
+        let lights = self.lights(defs, mat, lanterns_lit);
+        let t = &self.progress.tech;
+        let (memorial_wall, schools, field_medicine, rest_rotation) = (t.flag("memorial_wall"), t.flag("schools"), t.flag("field_medicine"), t.flag("rest_rotation"));
         let dark = shift_of_day == 1;
         let working: std::collections::HashSet<u32> = jobs.iter().map(|j| j.0).collect();
         let heart_tier = self.heart_tier(defs);
@@ -1912,7 +2107,11 @@ impl Colony {
             if self.charter.dissolution_hit {
                 extra += charter::DISSOLUTION_HIT;
             }
-            if let Some(d) = self.district_of(r.id) {
+            let has = |d: &District, id: &str| d.structures.iter().any(|sid| self.get(*sid).is_some_and(|s| s.built && defs.structure[s.def].id == id));
+            let district = self.district_of(r.id);
+            let memorial = memorial_wall || district.is_some_and(|d| has(d, "memorial"));
+            let school = schools && district.is_some_and(|d| has(d, "charter_board"));
+            if let Some(d) = district {
                 if d.boon_shifts > 0 {
                     extra += 10;
                 }
@@ -1946,6 +2145,10 @@ impl Colony {
                     narrow: false,
                     death_voice: 0,
                     extra_target: extra,
+                    memorial,
+                    field_medicine,
+                    rest_rotation,
+                    school,
                 },
             );
         }
@@ -1995,10 +2198,11 @@ impl Colony {
         // the orders are spent with the shift; the Heart's tier is the city's
         self.orders.clear();
         if let Some(hi) = defs.index("heart") {
+            let hp = self.hp_max_of(defs, hi, city_tier);
             if let Some(h) = self.structures.iter_mut().find(|s| s.def == hi) {
                 if h.tier < city_tier {
                     h.tier = city_tier;
-                    h.hp = defs.structure[hi].hp_at(city_tier);
+                    h.hp = hp;
                     out.lines.push(format!("the Heart is a {} now", CITY_TIER_NAMES[(city_tier as usize - 1).min(3)]));
                 }
             }
@@ -2134,6 +2338,8 @@ mod tests {
         let mat = grown();
         let mut c = Colony::new();
         c.found(&defs, &mat).unwrap();
+        // the tests reach every structure and law the tree gates (none of its numbers): its locks are tested apart
+        c.progress.tech = progress::Tech::every_structure();
         let t = TraitFile::shipped();
         let mut r = Roster::new();
         r.found(&t, &NameFile::shipped(), 3, 1);
@@ -2394,7 +2600,8 @@ mod tests {
     #[test]
     fn the_twenty_five_load_and_the_founding_stands_a_heart_a_board_a_bench_and_pits() {
         let (c, defs, mat, _, _) = city();
-        assert_eq!(defs.structure.len(), 25);
+        assert_eq!(defs.structure.iter().filter(|d| d.category != "organ").count(), 25);
+        assert_eq!(defs.structure.iter().filter(|d| d.category == "organ").count(), 4, "the Mat's own: Knot, Sphincter, Maw, Gland");
         let names: Vec<&str> = c.structures.iter().map(|s| defs.structure[s.def].id.as_str()).collect();
         assert_eq!(names[..3], ["heart", "route_board", "bench"]);
         assert_eq!(names.iter().filter(|n| **n == "pit").count(), mat.relays.len());

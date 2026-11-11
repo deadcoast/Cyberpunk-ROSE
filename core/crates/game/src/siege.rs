@@ -44,7 +44,7 @@ pub struct Siege {
 }
 
 fn short_of(w: &World) -> i32 {
-    w.colony.structures.iter().filter(|s| s.built).map(|s| (w.defs.structure[s.def].hp_at(s.tier) - s.hp).max(0)).sum()
+    w.colony.structures.iter().filter(|s| s.built).map(|s| (w.colony.hp_max(&w.defs, s) - s.hp).max(0)).sum()
 }
 
 fn tally(w: &World) -> Tally {
@@ -243,6 +243,8 @@ pub fn cleansing(seed: u64, shifts: u32, defended: bool) -> Siege {
     let mut out = Siege { defended, before: tally(&w), ..Default::default() };
     let gx = city::first_grate(&w).map(|g| g.0 as usize).unwrap_or(0);
     if defended {
+        // the defence stands on the tree's structures (Gates, Turrets) and none of its numbers (Full Design v3.18)
+        w.colony.progress.tech = progress::Tech::every_structure();
         out.defence = defend(&mut w, gx);
         out.closed = heart_field(&w, true)[gx] == u16::MAX;
         w.publish();

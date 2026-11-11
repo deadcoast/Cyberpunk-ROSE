@@ -988,7 +988,7 @@ size = [2, 1]
 weight = 0.2
 value = 30
 feed = 0.0
-codex = "scrap forge tolerances"
+codex = "opens Chrome tier 2: vaults, gate housings, turrets"
 
 [[item]]
 id = "tec_blueprint_chrome2"
@@ -999,7 +999,7 @@ size = [2, 1]
 weight = 0.2
 value = 90
 feed = 0.0
-codex = "vault doors and gate housings"
+codex = "opens Chrome tier 3: plate, Blackline arms, lamp capture"
 
 [[item]]
 id = "tec_blueprint_chrome3"
@@ -1010,7 +1010,7 @@ size = [2, 1]
 weight = 0.2
 value = 260
 feed = 0.0
-codex = "lamp capture"
+codex = "opens Chrome tier 4: containment, the conduit, plating"
 
 [[item]]
 id = "tec_blueprint_flesh1"
@@ -1021,7 +1021,7 @@ size = [2, 1]
 weight = 0.2
 value = 30
 feed = 0.0
-codex = "pod ventilation"
+codex = "opens Flesh tier 2: the Still, Mod-Depth medicine"
 
 [[item]]
 id = "tec_blueprint_flesh2"
@@ -1032,7 +1032,7 @@ size = [2, 1]
 weight = 0.2
 value = 90
 feed = 0.0
-codex = "the Still"
+codex = "opens Flesh tier 3: shepherds, foreman schools"
 
 [[item]]
 id = "tec_blueprint_flesh3"
@@ -1043,7 +1043,7 @@ size = [2, 1]
 weight = 0.2
 value = 260
 feed = 0.0
-codex = "shepherd training"
+codex = "opens Flesh tier 4: the Rite, the wall, the census"
 
 [[item]]
 id = "tec_blueprint_myc1"
@@ -1054,7 +1054,7 @@ size = [2, 1]
 weight = 0.2
 value = 30
 feed = 0.0
-codex = "pits and bait"
+codex = "opens Mycelium tier 2: the housings, route loops"
 
 [[item]]
 id = "tec_blueprint_myc2"
@@ -1065,7 +1065,7 @@ size = [2, 1]
 weight = 0.2
 value = 90
 feed = 0.0
-codex = "quotas and housings"
+codex = "opens Mycelium tier 3: nerve logic, organ rules, grafting"
 
 [[item]]
 id = "tec_blueprint_myc3"
@@ -1076,7 +1076,7 @@ size = [2, 1]
 weight = 0.2
 value = 260
 feed = 0.0
-codex = "nerve logic"
+codex = "opens Mycelium tier 4: the deep pump, steering, deep tissue"
 
 [[item]]
 id = "tec_map_s2"

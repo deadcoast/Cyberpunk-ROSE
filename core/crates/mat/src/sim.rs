@@ -51,6 +51,30 @@ pub struct Stats {
     pub reach: u32,
 }
 
+/// What the tree and the classes change of the Mat's step (Full Design v3.18, Progression): the game sets them each
+/// shift from what stands.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Mods {
+    /// the signal range's multiplier (the Hive conduit: 1.5 with Chrome Affinity at 0.6 or more)
+    pub range: f32,
+    /// the upkeep's (deep tissue: 0.75)
+    pub maint: f32,
+    /// a Pit's release (the deep pump: 1.5)
+    pub release: f32,
+    /// Runner class: tips extend two tiles a step
+    pub runner: bool,
+    /// Hive class: tissue holds twice its armour
+    pub hive: bool,
+    /// Strain grafting: the city's signal runs into a Bloom's tissue and takes it back
+    pub grafting: bool,
+}
+
+impl Default for Mods {
+    fn default() -> Self {
+        Mods { range: 1.0, maint: 1.0, release: 1.0, runner: false, hive: false, grafting: false }
+    }
+}
+
 /// One stratum (or a stack of them) of the Mat.
 #[derive(Clone)]
 pub struct MatSim {
@@ -79,6 +103,22 @@ pub struct MatSim {
     pub heart_lost: bool,
     pub relays: Vec<(usize, usize)>,
     pub pits: HashMap<(usize, usize), f32>,
+    /// a tended Pit releases x (1 + Shepherd / 10), x (1 + Shepherd / 5) with Shepherd training: by its cell, set
+    /// from the shift's plan (Full Design: The 25 structures, the Pit)
+    pub pit_boost: HashMap<(usize, usize), f32>,
+    /// the organs grown (Full Design v3.18, Organs)
+    pub organs: Vec<crate::organ::Organ>,
+    /// which organ kinds the step reads (by their index in the defs)
+    pub kinds: crate::organ::Kinds,
+    /// what the tree, the classes and the organs change of the step (set by the game each shift)
+    pub mods: Mods,
+    /// Deposits a Root Spur grips, tissue a Chrome Cyst guards (the organ caches)
+    pub spur_boost: Vec<bool>,
+    pub cyst_guard: Vec<bool>,
+    /// Nerve Ganglia: signal sources the Mat grew
+    pub ganglia: Vec<(usize, usize)>,
+    /// feral tiles taken back into the city's strain since the counter was read (a merge shock)
+    pub reclaimed: u32,
     pub tick: u64,
     /// cell indices whose hyphal state changed this tick (for the renderer)
     pub changed: Vec<u32>,
@@ -123,6 +163,14 @@ impl MatSim {
             heart_lost: false,
             relays: Vec::new(),
             pits: HashMap::new(),
+            pit_boost: HashMap::new(),
+            organs: Vec::new(),
+            kinds: crate::organ::Kinds::default(),
+            mods: Mods::default(),
+            spur_boost: vec![false; n],
+            cyst_guard: vec![false; n],
+            ganglia: Vec::new(),
+            reclaimed: 0,
             tick: 0,
             changed: Vec::new(),
             d: 0.11,
@@ -206,6 +254,24 @@ impl MatSim {
         1.0 + 9.0 * self.genome.0[crate::genome::CHROME]
     }
 
+    /// A tile's armour with what guards it: twice in a Hive strain, twice again within a Chrome Cyst's reach
+    /// (Full Design v3.18).
+    pub fn armour_at(&self, i: usize) -> f32 {
+        let mut a = self.armour();
+        if self.mods.hive {
+            a *= 2.0;
+        }
+        if self.cyst_guard.get(i).copied().unwrap_or(false) {
+            a *= 2.0;
+        }
+        a
+    }
+
+    /// The signal range in cord steps: the strain's (24 + 32 x Conductance) and the conduit's.
+    pub fn range(&self) -> f32 {
+        self.p.heart_range * self.mods.range
+    }
+
     /// White light, bleach underfoot or flame on a tile: `dmg` against its armour; at none left it dies to necrosis.
     /// The Heart and the Relays never die this way. True when the tile died.
     pub fn burn(&mut self, i: usize, dmg: f32) -> bool {
@@ -218,7 +284,7 @@ impl MatSim {
             return false;
         }
         self.wear[i] += dmg;
-        if self.wear[i] >= self.armour() {
+        if self.wear[i] >= self.armour_at(i) {
             self.set_hy(i, hy::NECRO);
             self.age[i] = 0;
             self.starve[i] = 0;
@@ -287,13 +353,24 @@ impl MatSim {
         *self.pits.entry((x, y)).or_insert(0.0) += amount;
     }
 
-    /// Fed Chrome drifts the genome: each gene moves by the delivered bias × tier drift, clamped to 0..1, and the
-    /// CA parameters follow the new genome at once.
-    pub fn drift_genome(&mut self, drift: [f32; 10]) {
+    /// Fed Chrome drifts the genome: each gene moves by the delivered bias × tier drift and reflects at 0 and 1
+    /// (Pass 1: a feed that would carry a gene to 1.08 lands it at 0.92), and the CA parameters follow the new genome
+    /// at once. Returns the genes that reflected: (gene, off the ceiling).
+    pub fn drift_genome(&mut self, drift: [f32; 10]) -> Vec<(usize, bool)> {
+        let mut bounced = Vec::new();
         for g in 0..10 {
-            self.genome.0[g] = (self.genome.0[g] + drift[g]).clamp(0.0, 1.0);
+            let mut v = self.genome.0[g] + drift[g];
+            if v > 1.0 {
+                v = 2.0 - v;
+                bounced.push((g, true));
+            } else if v < 0.0 {
+                v = -v;
+                bounced.push((g, false));
+            }
+            self.genome.0[g] = v.clamp(0.0, 1.0);
         }
         self.p = self.genome.params();
+        bounced
     }
 
     /// Cells of growth one unit of nutrient buys (the Stash's "feed now"): a sprout spends grow_cost + tip_starter
@@ -329,7 +406,7 @@ impl MatSim {
         for v in self.sig.iter_mut() {
             *v = 0.0;
         }
-        let r = self.p.heart_range;
+        let r = self.range();
         let mut dist = std::mem::take(&mut self.scratch);
         for v in dist.iter_mut() {
             *v = -1.0;
@@ -348,6 +425,8 @@ impl MatSim {
             sources.push(hh);
         }
         sources.extend(self.relays.iter().copied());
+        sources.extend(self.ganglia.iter().copied());
+        let graft = self.mods.grafting;
         for (x, y) in sources {
             let i = self.idx(x, y);
             if is_hyphal(self.hy[i]) {
@@ -360,7 +439,7 @@ impl MatSim {
             for d in 0..4 {
                 if let Some(j) = self.nb(i, d) {
                     // the city's signal runs along its own strain, never into a Bloom
-                    if is_hyphal(self.hy[j]) && !(bloom && self.ferality[j] >= 1.0) {
+                    if is_hyphal(self.hy[j]) && (graft || !(bloom && self.ferality[j] >= 1.0)) {
                         let nd = d0 + self.cost[j];
                         if nd < r && (dist[j] < 0.0 || nd < dist[j]) {
                             dist[j] = nd;
@@ -389,6 +468,7 @@ impl MatSim {
                 continue;
             }
             // footprint 3x3; each cell wants min(pit_rate, 1 - N)
+            let boost = self.pit_boost.get(&(x, y)).copied().unwrap_or(1.0);
             let mut cells: Vec<(usize, f32)> = Vec::with_capacity(9);
             let mut want = 0.0f32;
             for dy in -1i32..=1 {
@@ -400,7 +480,7 @@ impl MatSim {
                     }
                     let i = yy as usize * self.w + xx as usize;
                     if sub::COND[self.sub[i] as usize] > 0.0 {
-                        let room = self.pit_rate.min(1.0 - self.n[i]).max(0.0);
+                        let room = (self.pit_rate * self.mods.release * boost).min(1.0 - self.n[i]).max(0.0);
                         want += room;
                         cells.push((i, room));
                     }
@@ -516,7 +596,7 @@ impl MatSim {
         self.scratch2 = snap;
 
         // 4. upkeep, decay, deposits, recycled necrosis, rock, clamp
-        let maint = self.p.maint;
+        let maint = self.p.maint * self.mods.maint;
         let theta_starve = self.p.theta_starve;
         let bloom = self.blooms();
         for i in 0..len {
@@ -546,7 +626,8 @@ impl MatSim {
             }
             v -= self.decay * v;
             if self.sub[i] == sub::DEPOSIT {
-                v += 0.004;
+                // a Root Spur's Deposit feeds the Mat twice (Full Design v3.18, Organs)
+                v += if self.spur_boost[i] { 0.008 } else { 0.004 };
             }
             v += self.release[i];
             self.release[i] = 0.0;
@@ -560,13 +641,13 @@ impl MatSim {
 
     // ------------------------------------------------------------ hyphae
     /// Place a new tip in a growable empty neighbour of `c`; the target may touch at most `max_nbrs` hyphae.
-    fn try_sprout(&mut self, c: usize, max_nbrs: u8, ncount: &[u8], occupied: &mut [bool]) -> bool {
+    fn try_sprout(&mut self, c: usize, max_nbrs: u8, ncount: &[u8], occupied: &mut [bool]) -> Option<usize> {
         let need = self.p.theta_grow + self.grow_cost + self.tip_starter;
         if self.n[c] < need {
-            return false;
+            return None;
         }
         if self.rng.f32() > 0.7 {
-            return false;
+            return None;
         }
         let mut cands: [(usize, f32); 4] = [(0, 0.0); 4];
         let mut k = 0usize;
@@ -590,7 +671,7 @@ impl MatSim {
             }
         }
         if k == 0 {
-            return false;
+            return None;
         }
         let mut r = self.rng.f32() * wsum;
         let mut pick = cands[k - 1].0;
@@ -609,7 +690,7 @@ impl MatSim {
         occupied[pick] = true;
         self.n[c] -= self.grow_cost + self.tip_starter;
         self.n[pick] = (self.n[pick] + self.tip_starter).min(1.0);
-        true
+        Some(pick)
     }
 
     fn step_hyphae(&mut self) {
@@ -656,6 +737,11 @@ impl MatSim {
                 continue;
             }
             if self.sig[i] > 0.0 {
+                // a Bloom's tissue taken back is a merge shock; feral tissue of a strain that does not bloom was
+                // never another strain
+                if self.ferality[i] >= 1.0 && self.blooms() {
+                    self.reclaimed += 1;
+                }
                 self.ferality[i] = 0.0;
             } else {
                 self.ferality[i] = (self.ferality[i] + feral_rate).min(1.0);
@@ -703,7 +789,7 @@ impl MatSim {
         let lat_p = self.p.branch_p * 0.05;
         for i in 0..len {
             if old[i] == hy::CORD && ncount[i] == 2 && self.rng.f32() < lat_p {
-                self.try_sprout(i, 1, &ncount, &mut occupied);
+                let _ = self.try_sprout(i, 1, &ncount, &mut occupied);
             }
         }
 
@@ -711,8 +797,14 @@ impl MatSim {
         let mut tips: Vec<usize> = (0..len).filter(|&i| old[i] == hy::TIP && !fused[i] && self.hy[i] == hy::TIP).collect();
         self.rng.shuffle(&mut tips);
         let branch_p = self.p.branch_p;
+        let runner = self.mods.runner;
         for t in tips {
-            if self.try_sprout(t, 2, &ncount, &mut occupied) {
+            if let Some(p) = self.try_sprout(t, 2, &ncount, &mut occupied) {
+                // a Runner strain's tip extends two tiles a step (Pass 2): the new tip goes on at once
+                if runner && self.try_sprout(p, 2, &ncount, &mut occupied).is_some() {
+                    self.set_hy(p, hy::CORD);
+                    self.age[p] = 0;
+                }
                 if self.rng.f32() > branch_p {
                     self.set_hy(t, hy::CORD); // parent matures unless it forks and stays a tip
                     self.age[t] = 0;

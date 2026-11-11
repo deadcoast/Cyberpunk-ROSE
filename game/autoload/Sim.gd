@@ -112,6 +112,8 @@ var last_shift := {}
 ## The last shift's report from the ledger ({sold, earned, fed, eddies, deliveries}), shown once on the Stash.
 var shift_report := {}
 ## The item the Stash sent to the Bench with Craft (a RoseStash.items() entry), consumed by the Bench screen.
+var bench_tab := ""
+var codex_tab := ""
 var bench_slot := {}
 
 ## Market sites: the grates the Mat has reached (a grate once reached keeps its number), as tile indices.
@@ -248,6 +250,7 @@ func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Diction
 	# Oathkeepers the run killed: their Attention lands in the Heart's zone at the shift's end; raiders count toward
 	# the clear-raiders contracts
 	ensure().add_run_kills(int(o.get("oath_kills", 0)), int(o.get("raider_kills", 0)))
+	ensure().add_run_trophies(o.get("killed", PackedStringArray()), day)
 	launch = {}
 	end_shift()
 	day += 1

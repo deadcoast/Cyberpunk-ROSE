@@ -96,9 +96,13 @@ func _draw_list() -> void:
 		list_frame.add_child(row)
 		_thumb(row, String(d.art), "t1", Vector2(6, 0), Vector2(24, 30))
 		var n := _count(id)
-		make_label(row, String(d.name).to_upper(), Vector2(36, 1), UiTheme.CYAN if id == chosen else UiTheme.CHALK)
+		var locked := String(d.get("locked", ""))
+		make_label(row, String(d.name).to_upper(), Vector2(36, 1), UiTheme.CYAN if id == chosen else (UiTheme.DUST if locked != "" else UiTheme.CHALK))
 		make_label(row, "%dx%d   %d pts" % [int(d.w), int(d.h), int(d.build)], Vector2(36, 11), UiTheme.DUST)
-		_cost_label(row, d.cost, Vector2(110, 11))
+		if locked != "":
+			make_label(row, "RESEARCH " + locked.to_upper(), Vector2(110, 11), UiTheme.HOT_PINK)
+		else:
+			_cost_label(row, d.cost, Vector2(110, 11))
 		var have := []
 		if n[0] > 0:
 			have.append("%d built" % n[0])
@@ -165,8 +169,10 @@ func _draw_card() -> void:
 	var stands := "stands on %dx%d: anchor on Cord or Node" % [int(d.w), int(d.h)]
 	if bool(d.node):
 		stands = "stands on %dx%d: anchor on a Node" % [int(d.w), int(d.h)]
+	if String(d.get("organ", "")) != "":
+		stands = "stands on a %s" % String(d.organ)
 	if bool(d.relay):
-		stands = "stands on a Relay"
+		stands = "stands on a Relay or a Nerve Ganglion"
 	if bool(d.grate):
 		stands += ", a grate within 2"
 	if float(d.sigma) > 0.0:
@@ -183,6 +189,13 @@ func _draw_card() -> void:
 	y += 11
 	if int(d.heart_tier) > 0:
 		make_label(card_frame, "needs the Heart at tier %d" % int(d.heart_tier), Vector2(8, y), UiTheme.HOT_PINK)
+		y += 11
+	if String(d.get("free_on", "")) != "":
+		make_label(card_frame, "costs nothing on a %s" % String(d.free_on), Vector2(8, y), UiTheme.OOZE_GLOW)
+		y += 11
+	var locked := String(d.get("locked", ""))
+	if locked != "":
+		make_label(card_frame, "needs %s researched at the Bench" % locked, Vector2(8, y), UiTheme.HOT_PINK)
 		y += 11
 	if String(d.hosts) != "":
 		var slots: PackedInt32Array = d.slots
@@ -201,7 +214,7 @@ func _draw_card() -> void:
 		y += 10
 	var n := _count(chosen)
 	make_label(card_frame, "in the city: %d built, %d ghost%s" % [n[0], n[1], "" if n[1] == 1 else "s"], Vector2(8, 260), UiTheme.OOZE_GLOW)
-	if not bool(d.prebuilt):
+	if not bool(d.prebuilt) and locked == "":
 		make_button(card_frame, "PLACE ON THE COLONY (R TURNS)", Vector2(160, 282), func():
 			Sim.build_tool = chosen
 			Screens.show_screen("colony"))

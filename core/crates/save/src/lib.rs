@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 13;
+pub const SAVE_VERSION: u16 = 14;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -94,7 +94,8 @@ pub struct SaveFile {
     /// the slimos: records, the memorial (v6)
     pub roster: people::Roster,
     /// the city: structures, zones, districts, homes (v7); the Charter, unrest, barred hubs (v8); quotas, the foreman's
-    /// cut (v9); cuts, salt, orders, zone priorities, turned footprints (v10). The ledger carries what is on the Mat, the Stills'
+    /// cut (v9); cuts, salt, orders, zone priorities, turned footprints (v10); the progression — the tree, the strain's
+    /// classes, Strainbook and lineage, the collections (v14). The ledger carries what is on the Mat, the Stills'
     /// stores and what waits at the Heart (v9); the Stash its stockpile rooms (v10)
     pub colony: colony::Colony,
     /// the threats: each grate's Attention, the bodies and events down, what is due, the Flood's water (v12, Pressure)
@@ -326,7 +327,15 @@ mod tests {
         econ.favour(0, 7);
         save.economy = econ.save();
         save.ledger.glut_by = vec![[1.5; 9]];
+        // the progression (v14): a study standing, a card, an entry, a trophy
+        save.colony.progress.tech.pick(progress::Project::Study("tec_blueprint_chrome1".into())).unwrap();
+        save.colony.progress.tech.got = 4;
+        save.colony.progress.strain.book.push(("bulb".into(), 3));
+        save.colony.progress.strain.lineage.push((3, [0.5; 10]));
+        save.colony.progress.collections.scrapdex.push(("chr_street_eye".into(), 2));
+        save.colony.progress.collections.trophies.push(("lived_flood".into(), 4));
         let back = SaveFile::decode(&save.encode()).unwrap();
+        assert_eq!(back.colony.progress, save.colony.progress);
         assert_eq!(back.economy, save.economy);
         assert_eq!(back.ledger.glut_by, save.ledger.glut_by);
         assert_eq!(back.ledger.in_flight, save.ledger.in_flight);

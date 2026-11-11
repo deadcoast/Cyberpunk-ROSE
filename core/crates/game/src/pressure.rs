@@ -46,11 +46,14 @@ pub fn tick(threats: &mut Threats, city: &mut City, colony: &mut Colony, defs: &
 #[allow(clippy::too_many_arguments)]
 pub fn end(threats: &mut Threats, city: &mut City, colony: &mut Colony, defs: &StructureFile, roster: &mut Roster, stash: &mut Stash, table: &ItemTable, log: &mut CityLog, died: &mut Vec<Record>, o: &ShiftOutcome, day: u32, run_kills: u32) {
     let tick = city.tick;
-    let shown = threat::Shown { exposed: stash.exposed_contraband(table) as u32, run_kills };
+    // Relic containment: what the Stash holds counts as vaulted (Full Design v3.18, Research)
+    let exposed = if colony.progress.tech.flag("stash_vaulted") { 0 } else { stash.exposed_contraband(table) as u32 };
+    let shown = threat::Shown { exposed, run_kills };
     let open = colony.charter.flag_at("attention_x1_5", 0);
     let curfew = colony.charter.flag_at("curfew", 0);
     let quarantine = colony.charter.flag_at("relay_auto_sever", 0);
     let ended = threats.end_shift(city, colony, defs, &shown, open, curfew, quarantine);
+    deeds(colony, &ended, day, tick, log);
     note(log, tick, ended.notes);
     // salvage: Blackline and Relics, the first of their tier the seed picks
     let mut r = mat::rng::Pcg32::new(threats.seed ^ 0x5A1_0000 ^ day as u64);
@@ -130,5 +133,37 @@ pub fn end(threats: &mut Threats, city: &mut City, colony: &mut Colony, defs: &S
                 threats.zones[z].attention = (threats.zones[z].attention + add).min(threats.rules.attention.max);
             }
         }
+    }
+}
+
+/// Authority's deeds and the trophies from the threats' shift (Full Design v3.18, Authority, Collections): a Patrol
+/// repelled +1, a Sweep +2, a Cleansing +3; the first of each body down, each hazard lived through.
+pub fn deeds(colony: &mut Colony, ended: &threat::Ended, day: u32, tick: u64, log: &mut CityLog) {
+    for st in &ended.repelled {
+        let n = repel_authority(st);
+        if n > 0 {
+            colony.charter.earn(n);
+            log.push(tick, Class::Landing, format!("the {st} repelled: Authority +{n}"));
+        }
+    }
+    for k in &ended.killed {
+        if let Some(name) = colony.progress.collections.trophy("kill", k, day) {
+            log.push(tick, Class::Landing, format!("Trophy: {name}"));
+        }
+    }
+    for k in &ended.lived {
+        if let Some(name) = colony.progress.collections.trophy("hazard", k, day) {
+            log.push(tick, Class::Landing, format!("Trophy: {name}"));
+        }
+    }
+}
+
+/// Authority a stage repelled is worth (Full Design v3.18, Authority).
+pub fn repel_authority(stage: &str) -> u32 {
+    match stage {
+        "patrol" => 1,
+        "sweep" => 2,
+        "cleansing" => 3,
+        _ => 0,
     }
 }

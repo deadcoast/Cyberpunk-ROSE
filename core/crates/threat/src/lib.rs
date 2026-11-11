@@ -352,6 +352,11 @@ pub struct Ended {
     pub relics: u32,
     /// structures the shift's flood drowned (they lost HP and worked nothing)
     pub drowned: Vec<u32>,
+    /// bodies that fell (role keys), stages repelled (stage ids), hazards lived through (flood, bloom, sweep,
+    /// cleansing) this shift
+    pub killed: Vec<String>,
+    pub repelled: Vec<String>,
+    pub lived: Vec<String>,
 }
 
 /// The shift's own numbers the gauge reads (Full Design, Pressure: Attention).
@@ -430,6 +435,11 @@ pub struct Threats {
     fields_at: u64,
     /// salvage owed when events end
     pub owed: (u32, u32),
+    /// what fell, what was repelled and what the city lived through since the last shift end (Full Design v3.18:
+    /// the trophies and Authority's deeds)
+    pub killed: Vec<String>,
+    pub repelled: Vec<String>,
+    pub lived: Vec<String>,
 }
 
 const NONE16: u16 = u16::MAX;
@@ -442,6 +452,29 @@ fn walkable_sub(s: u8) -> bool {
 /// threads there are no tunnel.
 pub fn walkable(sim: &MatSim, i: usize) -> bool {
     walkable_sub(sim.sub[i])
+}
+
+/// The Filter Lungs the strain holds (Full Design v3.18, Organs): each holds the Flood a tile lower.
+pub fn lung_organs(sim: &MatSim) -> usize {
+    progress::StrainFile::shipped().organ_index("lung").map_or(0, |k| sim.organs_of(k).count())
+}
+
+/// Attention a Lume Bulb out of a housing adds at a grate within reach a shift (Full Design v3.18, Organs).
+pub const BULB_ATTENTION: f32 = 1.0;
+
+/// A Garden strain's Lung quiets the light within 3 tiles of it (Pass 2).
+fn garden_quiet(sim: &MatSim, garden: bool, t: (i32, i32)) -> bool {
+    garden && progress::StrainFile::shipped().organ_index("lung").is_some_and(|k| sim.organs_of(k).any(|o| ((o.i as usize % sim.w) as i32 - t.0).abs().max((o.i as usize / sim.w) as i32 - t.1).abs() <= 3))
+}
+
+/// A Lume Bulb's Attention line by its rule (Pass 2: 50; Organ rules: 25, 75, never).
+pub fn bulb_line(rule: u8) -> f32 {
+    match rule {
+        1 => 25.0,
+        2 => 75.0,
+        3 => f32::INFINITY,
+        _ => 50.0,
+    }
 }
 
 fn dist2(a: (u16, u16), b: (u16, u16)) -> i32 {
@@ -484,6 +517,9 @@ impl Threats {
             fields: HashMap::new(),
             fields_at: 0,
             owed: (0, 0),
+            killed: Vec::new(),
+            repelled: Vec::new(),
+            lived: Vec::new(),
         };
         t.rezone(sim);
         t
@@ -585,14 +621,17 @@ impl Threats {
         let mut notes = Vec::new();
         self.hurt.clear();
         self.panicked.clear();
-        let lungs = colony.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "lung").count() as i32;
+        // every Filter Lung holds the water a tile lower; a Lung Housing stands on one (Full Design v3.18, Organs)
+        let lungs = lung_organs(&city.sim) as i32;
         self.flood.roll = flood_shift.then(|| self.roll_for(shift));
         let level = self.flood.roll.map_or(0, |roll| (roll as i32 - lungs).max(0) as u8);
         self.flood.level = level;
         self.reflood(city, colony, defs);
         if flood_shift {
             notes.push(if level > 0 { Note::loss(format!("Flood shift: the water rises {level} tile{}", if level == 1 { "" } else { "s" })) } else { Note::landing("Flood shift: the water holds".into()) });
-            let drowns: Vec<usize> = self.rules.flood.drowns.iter().filter_map(|d| defs.index(d)).collect();
+            // Armoured Pods: the homes do not drown (Full Design v3.18, Research)
+            let dry_homes = colony.progress.tech.flag("homes_dont_drown");
+            let drowns: Vec<usize> = self.rules.flood.drowns.iter().filter(|d| !(dry_homes && matches!(d.as_str(), "pod" | "bunkhouse"))).filter_map(|d| defs.index(d)).collect();
             for s in colony.structures.iter_mut().filter(|s| s.built && drowns.contains(&s.def)) {
                 let d = &defs.structure[s.def];
                 let wet = s.tiles(d).iter().any(|&(x, y)| city.sim.sub[y as usize * city.sim.w + x as usize] == sub::WATER);
@@ -639,8 +678,8 @@ impl Threats {
         }
         let Some(surface) = (0..w * h).filter(|&i| body[i]).map(|i| i / w).min() else { return };
         let line = surface.saturating_sub(rise);
-        let gate = defs.index("gate");
-        let gated = |x: usize, y: usize| colony.structures.iter().any(|s| s.built && Some(s.def) == gate && s.covers(&defs.structure[s.def], x as u16, y as u16));
+        // Gates and Sphincters hold the water (a Sphincter always does: Full Design v3.18, Organs)
+        let gated = |x: usize, y: usize| colony.structures.iter().any(|s| s.built && defs.structure[s.def].shuts && s.covers(&defs.structure[s.def], x as u16, y as u16));
         let mut q: VecDeque<usize> = (0..w * h).filter(|&i| body[i]).collect();
         let mut seen = body;
         while let Some(i) = q.pop_front() {
@@ -708,6 +747,9 @@ impl Threats {
                 out.notes.push(Note::loss(format!("{} at {},{} ruined by the water", defs.structure[s.def].name, s.x, s.y)));
             }
         }
+        if self.flood.level > 0 && !city.sim.heart_lost {
+            self.lived.push("flood".into());
+        }
         self.flood.level = 0;
         self.reflood(city, colony, defs);
         // the Blooms: crawlers starve without their Bloom; its Nodes spawn
@@ -721,6 +763,9 @@ impl Threats {
             }
             if starved > 0 {
                 out.notes.push(Note::landing(format!("{starved} Bloom crawler{} starved with their Bloom", if starved == 1 { "" } else { "s" })));
+                if !city.sim.heart_lost {
+                    self.lived.push("bloom".into());
+                }
             }
         } else if sim.genome.0[mat::genome::FERAL] > self.rules.bloom.feral_drive {
             let mut spawned = 0;
@@ -738,6 +783,38 @@ impl Threats {
             }
             if spawned > 0 {
                 out.notes.push(Note::loss(format!("a Bloom spawned {spawned} crawler{}", if spawned == 1 { "" } else { "s" })));
+            }
+        }
+        // the Spore Sacs (Full Design v3.18, Organs): every 4 shifts a crawler from each in a Bloom; in a Bramble strain
+        // a tamed sewerat to a Pen within 8 with room, unless its rule holds them
+        if self.shift.is_multiple_of(4) {
+            if let Some(sac) = progress::StrainFile::shipped().organ_index("sac") {
+                let bramble = colony.progress.strain.holds("bramble");
+                let sacs: Vec<(usize, u8)> = city.sim.organs_of(sac).map(|o| (o.i as usize, o.rule)).collect();
+                let pen_def = defs.index("pen");
+                for (i, rule) in sacs {
+                    let (x, y) = ((i % city.sim.w) as u16, (i / city.sim.w) as u16);
+                    let zone = self.zone_at(&city.sim, x, y).unwrap_or(0) as u16;
+                    if city.sim.is_bloom(i) {
+                        let id = self.spawn(Role::Crawler, x, y, 0, zone, Goal::Hunt);
+                        if let Some(b) = self.bodies.iter_mut().find(|b| b.id == id) {
+                            b.home = i;
+                        }
+                        out.notes.push(Note::loss(format!("a Spore Sac at {x},{y} let a crawler out")));
+                    } else if bramble && rule == 0 {
+                        let pen = colony.structures.iter().filter(|st| st.built && Some(st.def) == pen_def && cheb((st.x, st.y), (x, y)) <= 8).find(|st| {
+                            let cap = defs.structure[st.def].value_at("capacity", st.tier) as usize;
+                            self.bodies.iter().filter(|b| b.pen == Some(st.id) && !b.dead).count() < cap
+                        }).map(|st| st.id);
+                        if let Some(pen) = pen {
+                            let id = self.spawn(Role::Tamed, x, y, 0, zone, Goal::Pen(pen));
+                            if let Some(b) = self.bodies.iter_mut().find(|b| b.id == id) {
+                                b.pen = Some(pen);
+                            }
+                            out.notes.push(Note::landing(format!("a Spore Sac at {x},{y} tamed a sewerat into the Pen")));
+                        }
+                    }
+                }
             }
         }
         // Quarantine Protocol: Mat with no signal at enough shift ends running is severed
@@ -758,6 +835,10 @@ impl Threats {
         // the gauge
         let sim = &city.sim;
         let heart_zone = self.heart_zone(sim);
+        let garden = colony.progress.strain.holds("garden");
+        let bulb_kind = progress::StrainFile::shipped().organ_index("bulb");
+        let bulbs: Vec<(usize, u8)> = bulb_kind.map(|k| sim.organs_of(k).map(|o| (o.i as usize, o.rule)).collect()).unwrap_or_default();
+        let reliquary = colony.progress.collections.set_flag("attention_decay_plus_1");
         let lume = sim.genome.0[mat::genome::LUME];
         let near = self.rules.attention.near;
         let near_defs: Vec<usize> = self.rules.attention.near_grate.iter().filter_map(|d| defs.index(d)).collect();
@@ -773,15 +854,28 @@ impl Threats {
                     }
                 }
             }
-            for s in colony.structures.iter().filter(|s| s.built) {
+            for s in colony.structures.iter().filter(|s| s.built && !colony.dimmed.contains(&s.id)) {
                 let a = defs.structure[s.def].value_at("attention", s.tier) as f32;
                 if a <= 0.0 {
+                    continue;
+                }
+                if defs.structure[s.def].id == "lume_farm" && garden_quiet(sim, garden, (s.x as i32, s.y as i32)) {
                     continue;
                 }
                 let near_it = near_defs.contains(&s.def) && (s.x as i32 - g.0 as i32).abs() + s.y as i32 <= near;
                 let in_it = zone_defs.contains(&s.def) && self.zone_at(sim, s.x, s.y) == Some(k);
                 if near_it || in_it {
                     gain += a;
+                }
+            }
+            // a Lume Bulb out of a housing: +1 at a grate within reach, unless dark or a Garden's Lung quiets it
+            for &(bi, _) in &bulbs {
+                let t = ((bi % sim.w) as i32, (bi / sim.w) as i32);
+                if colony.dark_bulbs.contains(&(bi as u32)) || colony.occupied(defs, t.0 as u16, t.1 as u16).is_some() || garden_quiet(sim, garden, t) {
+                    continue;
+                }
+                if (t.0 - g.0 as i32).abs() + t.1 <= near {
+                    gain += BULB_ATTENTION;
                 }
             }
             gain += (self.zones[k].sold / self.rules.attention.per_eddies.max(1)) as f32;
@@ -796,10 +890,24 @@ impl Threats {
             }
             let z = &mut self.zones[k];
             z.gained = gain;
-            z.attention = (z.attention + gain - self.rules.attention.decay).clamp(0.0, self.rules.attention.max);
+            let decay = self.rules.attention.decay + if reliquary { 1.0 } else { 0.0 };
+            z.attention = (z.attention + gain - decay).clamp(0.0, self.rules.attention.max);
             z.sold = 0;
             z.kills = 0;
             z.blackline = 0;
+        }
+        // a Lume Bulb's rule (Pass 2): dark while its zone's Attention is over its line; a Lume Farm on it with it
+        colony.dark_bulbs.clear();
+        colony.dimmed.clear();
+        for &(bi, rule) in &bulbs {
+            let (x, y) = ((bi % sim.w) as u16, (bi / sim.w) as u16);
+            let over = self.zone_at(sim, x, y).is_some_and(|k| self.zones[k].attention > bulb_line(rule));
+            if over {
+                colony.dark_bulbs.insert(bi as u32);
+                if let Some(sid) = colony.occupied(defs, x, y) {
+                    colony.dimmed.insert(sid);
+                }
+            }
         }
         // the next shift's events: the highest stage due in each zone, outside its quiet spells
         self.due.clear();
@@ -824,9 +932,12 @@ impl Threats {
                 out.notes.push(Note { loss: false, decision: true, what: format!("grate {} is loud enough for a {}", k + 1, self.rules.stage[st].name) });
             }
         }
-        // salvage owed
+        // salvage owed; what fell, was repelled and lived through
         out.blackline = std::mem::take(&mut self.owed.0);
         out.relics = std::mem::take(&mut self.owed.1);
+        out.killed = std::mem::take(&mut self.killed);
+        out.repelled = std::mem::take(&mut self.repelled);
+        out.lived = std::mem::take(&mut self.lived);
         self.bodies.retain(|b| !(b.dead || b.gone));
         self.events.retain(|e| e.phase != Phase::Done);
         out
@@ -982,7 +1093,28 @@ impl Threats {
             return notes;
         }
         let gate_def = defs.index("gate");
-        let gates: Vec<usize> = colony.structures.iter().filter(|st| st.built && Some(st.def) == gate_def).flat_map(|st| st.tiles(&defs.structure[st.def])).map(|(x, y)| y as usize * city.sim.w + x as usize).collect();
+        // what shuts: the Sphincter Gates always, a Sphincter while white light is within its rule's reach
+        let lamps: Vec<(u16, u16)> = self.bodies.iter().filter(|b| !b.dead && !b.gone && self.body_def(b.role).lamp > 0).map(|b| (b.x, b.y)).collect();
+        let shut = |st: &colony::Structure| -> bool {
+            let d = &defs.structure[st.def];
+            if !d.shuts {
+                return false;
+            }
+            if d.category != "organ" {
+                return true;
+            }
+            let i = st.y as usize * city.sim.w + st.x as usize;
+            let rule = city.sim.organ_at(i).map_or(0, |o| o.rule);
+            match rule {
+                3 => true,
+                4 => false,
+                r => {
+                    let reach = [8i32, 4, 12][r as usize];
+                    lamps.iter().any(|&l| cheb(l, (st.x, st.y)) <= reach)
+                }
+            }
+        };
+        let gates: Vec<usize> = colony.structures.iter().filter(|st| st.built && shut(st)).flat_map(|st| st.tiles(&defs.structure[st.def])).map(|(x, y)| y as usize * city.sim.w + x as usize).collect();
         let w = city.sim.w;
         let heart = city.sim.heart.map(|(x, y)| (x as u16, y as u16)).unwrap_or((0, 0));
         let slimos: Vec<(u32, (u16, u16))> = city.ids.iter().zip(city.pos.iter()).map(|(&id, &p)| (id, ((p as usize % w) as u16, (p as usize / w) as u16))).collect();
@@ -1189,9 +1321,14 @@ impl Threats {
             }
         }
         // ---- the city's defence: Turrets, Guards on Gates, the militia
-        let turret_def = defs.index("turret");
-        for st in colony.structures.iter().filter(|st| st.built && Some(st.def) == turret_def) {
-            if !posts.guards.iter().any(|g| g.1 == st.id) {
+        // Scrap Turrets with a Guard in the seat; the Maws and Venom Glands by themselves (Full Design v3.18, Organs);
+        // Blackline arms strike 2 harder
+        let blackline = colony.progress.tech.flag("strike_plus_2");
+        let tox = city.sim.genome.0[mat::genome::TOXICITY];
+        for st in colony.structures.iter().filter(|st| st.built && defs.structure[st.def].value_at("damage", st.tier) > 0) {
+            let d = &defs.structure[st.def];
+            let seated = d.hosts == "guard";
+            if seated && !posts.guards.iter().any(|g| g.1 == st.id) {
                 continue;
             }
             let cd = self.cds.entry((st.id, 0)).or_insert(0.0);
@@ -1199,10 +1336,16 @@ impl Threats {
             if *cd > 0.0 {
                 continue;
             }
-            let d = &defs.structure[st.def];
             let r = d.value_at("range", st.tier);
-            let dmg = d.value_at("damage", st.tier) as f32;
-            if let Some(t) = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.hostile() && dist2((st.x, st.y), (o.x, o.y)) <= r * r).min_by_key(|o| (dist2((st.x, st.y), (o.x, o.y)), o.id)) {
+            let mut dmg = d.value_at("damage", st.tier) as f32;
+            if d.id == "gland" {
+                dmg = 2.0 + 4.0 * tox;
+            }
+            if seated && blackline {
+                dmg += 2.0;
+            }
+            let oath_only = d.oath_only;
+            if let Some(t) = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.hostile() && (!oath_only || o.role.oathkeeper()) && dist2((st.x, st.y), (o.x, o.y)) <= r * r).min_by_key(|o| (dist2((st.x, st.y), (o.x, o.y)), o.id)) {
                 let e = body_dmg.entry(t.id).or_insert((0.0, None));
                 e.0 += dmg;
                 e.1 = Some(Foe::Structure(st.id));
@@ -1231,9 +1374,18 @@ impl Threats {
             }
             if let Some(t) = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.hostile() && cheb(at, (o.x, o.y)) <= 1).min_by_key(|o| o.id) {
                 let e = body_dmg.entry(t.id).or_insert((0.0, None));
-                e.0 += (self.rules.defence.guard_strike + fight(id)) as f32;
+                e.0 += (self.rules.defence.guard_strike + fight(id) + if blackline { 2 } else { 0 }) as f32;
                 e.1 = Some(Foe::Slimo(id));
                 *cd = self.rules.defence.guard_s;
+            }
+        }
+        // ---- a World-Eater strain digests the Oathkeepers standing on it, half a point a tick (Pass 2; v3.18)
+        if colony.progress.strain.holds("world_eater") {
+            for o in self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.oathkeeper()) {
+                let i = o.y as usize * w + o.x as usize;
+                if city.sim.is_hyphal_at(i) && !city.sim.is_feral(i) {
+                    body_dmg.entry(o.id).or_insert((0.0, None)).0 += 0.5;
+                }
             }
         }
         // ---- a Mat step: white light, bleach, flame underfoot, Toxicity; the Cleansing's sluice
@@ -1387,6 +1539,9 @@ impl Threats {
             }
             self.bodies[k].dead = true;
             let b = self.bodies[k].clone();
+            if b.role.hostile() {
+                self.killed.push(b.role.key().to_string());
+            }
             if b.role.oathkeeper() {
                 let z = self.zone_at(&city.sim, b.x, b.y).unwrap_or(b.zone as usize);
                 self.zones[z].kills += 1;
@@ -1478,6 +1633,13 @@ impl Threats {
                 }
             }
             if standing == 0 && (st.id != "cleansing" || flamers_out) {
+                // repelled: it left past its break line with the Heart standing (Full Design v3.18, Authority)
+                if st.break_at > 0.0 && fallen as f32 >= st.break_at * sent as f32 && !city.sim.heart_lost {
+                    self.repelled.push(st.id.clone());
+                }
+                if matches!(st.id.as_str(), "sweep" | "cleansing") && !city.sim.heart_lost {
+                    self.lived.push(st.id.clone());
+                }
                 let e = self.events.iter_mut().find(|e| e.id == id).unwrap();
                 e.phase = Phase::Done;
                 if st.salvage_per == "event" && sent > 0 && fallen > 0 {

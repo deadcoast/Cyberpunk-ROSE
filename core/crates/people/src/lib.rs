@@ -287,10 +287,10 @@ impl Job {
             Job::Research => Skill::Tweak,
         }
     }
-    /// Skill gates for the mid-tier jobs (Full Design: Research Tweak 5, the Appraisal Table Appraise 3).
+    /// Skill gates for the mid-tier jobs (Full Design v3.18: Research Tweak 2, the Appraisal Table Appraise 3).
     pub fn gate(self) -> u8 {
         match self {
-            Job::Research => 5,
+            Job::Research => 2,
             Job::Appraise => 3,
             _ => 0,
         }
@@ -729,6 +729,13 @@ pub struct ShiftContext {
     pub death_voice: i32,
     /// the city tier's expectation and the Charter's laws (PAC-041/042)
     pub extra_target: i32,
+    /// a death's Mood hit is halved: a Memorial in the district, or the memorial wall city-wide (v3.18)
+    pub memorial: bool,
+    /// the tree's numbers (Full Design v3.18, Research): Field medicine heals an untreated injury two shifts a shift,
+    /// Shift rotation takes Rest 9 a shift working, Foreman schools give XP x 1.25
+    pub field_medicine: bool,
+    pub rest_rotation: bool,
+    pub school: bool,
 }
 
 pub const MOOD_UP: i32 = 4;
@@ -768,7 +775,7 @@ impl Record {
         } else if ctx.asleep {
             15.0 * self.trait_rate(traits, Need::Rest)
         } else if self.shift_job.is_some() || self.status == Status::OnRun {
-            -12.0
+            if ctx.rest_rotation { -9.0 } else { -12.0 }
         } else {
             -6.0
         };
@@ -831,10 +838,11 @@ impl Record {
         } else if *m > self.mood_target {
             *m = (*m - MOOD_DOWN).max(self.mood_target);
         }
-        // injuries heal (a quarter rate untreated: one shift in four)
+        // injuries heal (a quarter rate untreated: one shift in four; Field medicine half)
+        let heal = if ctx.field_medicine { 2 } else { 1 };
         let mut keep = Vec::new();
         for (inj, left) in self.injuries.drain(..) {
-            let left = if inj == Injury::ChromeShock { left } else { left.saturating_sub(1) };
+            let left = if inj == Injury::ChromeShock { left } else { left.saturating_sub(heal) };
             if left > 0 {
                 keep.push((inj, left));
             }
@@ -928,6 +936,16 @@ pub struct Roster {
     /// the shift of the day count the next flush comes down on (v10; 0 = the end of the first shift)
     #[serde(default)]
     pub next_flush: u32,
+    /// each further grate the Mat reaches keeps its own flush clock: (grate column, the shift it comes down on)
+    /// (Full Design v3.18, City tiers)
+    #[serde(default)]
+    pub grate_flush: Vec<(u16, u32)>,
+    /// the census (Flesh tier 4): the flush every 6-10 shifts, a newcomer waits 4 shifts at its grate
+    #[serde(default)]
+    pub census: bool,
+    /// Mod-Depth medicine (Flesh tier 2): a D4 can go on a run
+    #[serde(default)]
+    pub d4_runs: bool,
 }
 
 /// The flush (Full Design v3.12, Recruitment): a batch of 1–6 every 9–15 shifts; a newcomer not sheltered within
@@ -935,6 +953,9 @@ pub struct Roster {
 pub const FLUSH_SIZE: (u32, u32) = (1, 6);
 pub const FLUSH_EVERY: (u32, u32) = (9, 15);
 pub const FERAL_AFTER: u8 = 2;
+/// The census's (Full Design v3.18, Research: Flesh tier 4).
+pub const CENSUS_EVERY: (u32, u32) = (6, 10);
+pub const CENSUS_WAIT: u8 = 4;
 
 /// What a run tells the roster (Full Design: Skills and XP).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -965,6 +986,9 @@ pub struct ShiftWork {
     pub tend_shifts_by: Vec<u32>,
     /// (slimo, items shelved at a stockpile): Haul trains Scav, 1 XP an item (Full Design v3.12, Stockpiles)
     pub hauls_by: Vec<(u32, u32)>,
+    /// a shift on Research trains Tweak 2, a shift on Build 1 (Full Design v3.18, Skills and XP)
+    pub research_by: Vec<u32>,
+    pub build_by: Vec<u32>,
 }
 
 impl Default for Roster {
@@ -976,7 +1000,7 @@ impl Default for Roster {
 impl Roster {
     /// Empty; ids start at 100 so a record id never reads as a count or an index.
     pub fn new() -> Self {
-        Roster { records: Vec::new(), next_id: 100, memorial: Vec::new(), waiting: Vec::new(), next_flush: 0 }
+        Roster { records: Vec::new(), next_id: 100, memorial: Vec::new(), waiting: Vec::new(), next_flush: 0, grate_flush: Vec::new(), census: false, d4_runs: false }
     }
 
     pub fn get(&self, id: u32) -> Option<&Record> {
@@ -994,8 +1018,35 @@ impl Roster {
         }
         let n = FLUSH_SIZE.0 + rng.below(FLUSH_SIZE.1 - FLUSH_SIZE.0 + 1);
         self.batch(traits, names, rng, day, n);
-        self.next_flush = day + FLUSH_EVERY.0 + rng.below(FLUSH_EVERY.1 - FLUSH_EVERY.0 + 1);
+        self.next_flush = day + self.flush_gap(rng);
         n as usize
+    }
+
+    fn flush_gap(&self, rng: &mut Pcg32) -> u32 {
+        let (lo, hi) = if self.census { CENSUS_EVERY } else { FLUSH_EVERY };
+        lo + rng.below(hi - lo + 1)
+    }
+
+    /// The further grates the Mat reaches (all but the first, whose clock is `next_flush`): each keeps its own clock
+    /// from the shift it is first reached (Full Design v3.18, City tiers). Returns how many came.
+    pub fn flush_grates(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, grates: &[u16]) -> usize {
+        let mut came = 0;
+        for &g in grates {
+            match self.grate_flush.iter().position(|c| c.0 == g) {
+                None => {
+                    let next = day + self.flush_gap(rng);
+                    self.grate_flush.push((g, next));
+                }
+                Some(k) if day >= self.grate_flush[k].1 => {
+                    let n = FLUSH_SIZE.0 + rng.below(FLUSH_SIZE.1 - FLUSH_SIZE.0 + 1);
+                    self.batch(traits, names, rng, day, n);
+                    came += n as usize;
+                    self.grate_flush[k].1 = day + self.flush_gap(rng);
+                }
+                _ => {}
+            }
+        }
+        came
     }
 
     fn batch(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, n: u32) {
@@ -1050,7 +1101,7 @@ impl Roster {
                 free -= 1;
                 joined.push(r.full_name());
                 self.records.push(r);
-            } else if waited + 1 > FERAL_AFTER {
+            } else if waited + 1 > if self.census { CENSUS_WAIT } else { FERAL_AFTER } {
                 feral.push(r.full_name());
             } else {
                 keep.push((r, waited + 1));
@@ -1192,7 +1243,8 @@ impl Roster {
 
     /// Who may go on a run now, Runners first by Scav then Fight.
     pub fn eligible(&self) -> Vec<&Record> {
-        let mut v: Vec<&Record> = self.records.iter().filter(|r| r.can_run()).collect();
+        let d4 = self.d4_runs;
+        let mut v: Vec<&Record> = self.records.iter().filter(|r| r.can_run() || (d4 && r.depth == Depth::D4 && r.is_up() && r.mood() >= 20)).collect();
         v.sort_by_key(|r| std::cmp::Reverse((r.skill(Skill::Scav) as u32 * 2 + r.skill(Skill::Fight) as u32, r.id)));
         v
     }
@@ -1291,36 +1343,57 @@ impl Roster {
     /// Shift end for the city: needs, Mood and XP from the shift's work. `ctx_of` gives each slimo's context.
     pub fn end_shift(&mut self, traits: &TraitFile, work: &ShiftWork, ctx_of: impl Fn(&Record) -> ShiftContext) {
         let teacher_present = self.records.iter().any(|r| r.has_flag(traits, "district_xp_x1_25") && r.is_up());
-        let mult = if teacher_present { 1.25 } else { 1.0 };
+        let base = if teacher_present { 1.25 } else { 1.0 };
+        // Foreman schools: a member of a district with a Charter Board learns x 1.25 (v3.18)
+        let schooled: std::collections::HashSet<u32> = self.records.iter().filter(|r| ctx_of(r).school).map(|r| r.id).collect();
+        let mult_of = |id: u32| base * if schooled.contains(&id) { 1.25 } else { 1.0 };
         for id in &work.crafts_by {
+            let mult = mult_of(*id);
             if let Some(r) = self.get_mut(*id) {
                 r.crafts += 1;
                 r.gain_xp(traits, Skill::Tweak, 4, mult);
             }
         }
         for (id, n) in &work.sales_by {
+            let mult = mult_of(*id);
             if let Some(r) = self.get_mut(*id) {
                 r.gain_xp(traits, Skill::Trade, 2 * n, mult);
             }
         }
         for id in &work.identified_by {
+            let mult = mult_of(*id);
             if let Some(r) = self.get_mut(*id) {
                 r.gain_xp(traits, Skill::Appraise, 3, mult);
             }
         }
         for id in &work.treatments_by {
+            let mult = mult_of(*id);
             if let Some(r) = self.get_mut(*id) {
                 r.gain_xp(traits, Skill::Medic, 3, mult);
             }
         }
         for id in &work.tend_shifts_by {
+            let mult = mult_of(*id);
             if let Some(r) = self.get_mut(*id) {
                 r.gain_xp(traits, Skill::Shepherd, 1, mult);
             }
         }
         for (id, n) in &work.hauls_by {
+            let mult = mult_of(*id);
             if let Some(r) = self.get_mut(*id) {
                 r.gain_xp(traits, Skill::Scav, *n, mult);
+            }
+        }
+        for id in &work.research_by {
+            let mult = mult_of(*id);
+            if let Some(r) = self.get_mut(*id) {
+                r.gain_xp(traits, Skill::Tweak, 2, mult);
+            }
+        }
+        for id in &work.build_by {
+            let mult = mult_of(*id);
+            if let Some(r) = self.get_mut(*id) {
+                r.gain_xp(traits, Skill::Tweak, 1, mult);
             }
         }
         let n = self.records.len();
@@ -1518,8 +1591,9 @@ mod tests {
         rec.needs[Need::Mood.index()] = 15;
         assert!(rec.utility(&t, Job::Scav).is_none(), "a slimo under Mood 20 refuses");
         rec.needs[Need::Mood.index()] = 60;
-        assert!(rec.utility(&t, Job::Research).is_none(), "Research needs Tweak 5");
-        rec.skills[Skill::Tweak.index()] = 5;
+        rec.skills[Skill::Tweak.index()] = 1;
+        assert!(rec.utility(&t, Job::Research).is_none(), "Research needs Tweak 2");
+        rec.skills[Skill::Tweak.index()] = 2;
         assert!(rec.utility(&t, Job::Research).is_some());
     }
 

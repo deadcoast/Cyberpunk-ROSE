@@ -1,0 +1,348 @@
+# The tech tree (Full Design v3.18, Progression: Research; Pass 2's Pillar 6; research 21). Three branches, four tiers,
+# three nodes a tier. Tier 1 is the founding's kit and stands researched. A branch's tiers 2-4 open when its blueprint
+# I-III is studied. A node of an open tier costs its tier's points and Parts and Chrome; slimos on Research at a
+# Tweaker Bench add their Tweak level in points a shift.
+# structures: the structure ids it lets be placed; laws: the law ids it lets be signed; flags: the numbers the crates
+# read. pass2: true where Pass 2 names the node, false where it is this design's.
+
+# points, parts, chrome by tier (index tier - 1; tier 1 is the founding's)
+points = [0, 24, 48, 96]
+parts = [0, 6, 10, 16]
+chrome = [0, 2, 4, 8]
+# studying blueprint I-III (opens tier 2-4)
+study = [8, 16, 32]
+research_gate = 2
+
+[blueprints]
+chrome = ["tec_blueprint_chrome1", "tec_blueprint_chrome2", "tec_blueprint_chrome3"]
+flesh = ["tec_blueprint_flesh1", "tec_blueprint_flesh2", "tec_blueprint_flesh3"]
+mycelium = ["tec_blueprint_myc1", "tec_blueprint_myc2", "tec_blueprint_myc3"]
+
+# ---------------------------------------------------------------- Chrome
+
+[[node]]
+id = "c1_forge"
+branch = "chrome"
+tier = 1
+name = "Scrap Forge"
+structures = ["forge"]
+text = "Build points and mending double in the Forge's district."
+pass2 = true
+
+[[node]]
+id = "c1_bench"
+branch = "chrome"
+tier = 1
+name = "Tweaker Bench"
+structures = ["bench"]
+text = "The Bench and its tier-1 recipes; research is done at it."
+pass2 = true
+
+[[node]]
+id = "c1_arms"
+branch = "chrome"
+tier = 1
+name = "Militia arms"
+structures = ["watch_post"]
+text = "The Watch Post; Conscription's militia."
+pass2 = true
+
+[[node]]
+id = "c2_vault"
+branch = "chrome"
+tier = 2
+name = "Reliquary Vault"
+structures = ["vault"]
+text = "Relics and Blackline kept outside Attention (the Heart at tier 2)."
+pass2 = true
+
+[[node]]
+id = "c2_gate"
+branch = "chrome"
+tier = 2
+name = "Sphincter housing"
+structures = ["gate"]
+text = "The Sphincter Gate; it costs nothing on a Sphincter."
+pass2 = true
+
+[[node]]
+id = "c2_turret"
+branch = "chrome"
+tier = 2
+name = "Scrap Turret"
+structures = ["turret"]
+text = "A mounted scrap gun a Guard works."
+pass2 = true
+
+[[node]]
+id = "c3_plate"
+branch = "chrome"
+tier = 3
+name = "Armoured Pods"
+flags = ["homes_hp_x2", "homes_dont_drown"]
+text = "Hab-Pods and Bunkhouses take twice the HP, and the Flood does not drown them."
+pass2 = true
+
+[[node]]
+id = "c3_blackline"
+branch = "chrome"
+tier = 3
+name = "Blackline arms"
+flags = ["strike_plus_2"]
+text = "Scrap Turrets and Guards in the city strike 2 harder."
+pass2 = true
+
+[[node]]
+id = "c3_lamp"
+branch = "chrome"
+tier = 3
+name = "Lamp capture"
+flags = ["lamp_capture"]
+text = "Lantern Posts burn captured lamps: no oil, light 5 tiles."
+pass2 = true
+
+[[node]]
+id = "c4_relic"
+branch = "chrome"
+tier = 4
+name = "Relic containment"
+flags = ["stash_vaulted"]
+text = "Relics and Blackline in the Stash count as vaulted: no Attention."
+pass2 = true
+
+[[node]]
+id = "c4_conduit"
+branch = "chrome"
+tier = 4
+name = "Hive conduit"
+flags = ["conduit"]
+text = "With Chrome Affinity at 0.6 or more, the signal reaches half as far again."
+pass2 = true
+
+[[node]]
+id = "c4_chrome"
+branch = "chrome"
+tier = 4
+name = "Chrome plating"
+flags = ["hp_x1_5"]
+text = "Every structure takes half again its HP."
+pass2 = false
+
+# ---------------------------------------------------------------- Flesh
+
+[[node]]
+id = "f1_pods"
+branch = "flesh"
+tier = 1
+name = "Hab-Pods"
+structures = ["pod", "bunkhouse"]
+text = "Pods and Bunkhouses: beds are recruitment."
+pass2 = true
+
+[[node]]
+id = "f1_paste"
+branch = "flesh"
+tier = 1
+name = "Paste trade"
+text = "Two eddies of paste feed a slimo the Mat cannot."
+pass2 = true
+
+[[node]]
+id = "f1_pens"
+branch = "flesh"
+tier = 1
+name = "Sewerat Pens"
+structures = ["pen"]
+text = "Tamed sewerats guard the city."
+pass2 = true
+
+[[node]]
+id = "f2_still"
+branch = "flesh"
+tier = 2
+name = "Downer Still"
+structures = ["still"]
+text = "Brine and an Enzyme part into a dose of Downer a shift."
+pass2 = true
+
+[[node]]
+id = "f2_depth"
+branch = "flesh"
+tier = 2
+name = "Mod-Depth medicine"
+flags = ["d4_runs"]
+text = "A D4 can leave the Mat for a run; its Signal falls 40 that shift."
+pass2 = true
+
+[[node]]
+id = "f2_field"
+branch = "flesh"
+tier = 2
+name = "Field medicine"
+flags = ["field_medicine"]
+text = "An untreated injury heals at half rate, not a quarter."
+pass2 = false
+
+[[node]]
+id = "f3_shepherd"
+branch = "flesh"
+tier = 3
+name = "Shepherd training"
+flags = ["shepherd_x2"]
+text = "A tended Pit releases x (1 + Shepherd / 5)."
+pass2 = true
+
+[[node]]
+id = "f3_schools"
+branch = "flesh"
+tier = 3
+name = "Foreman schools"
+flags = ["schools"]
+text = "Members of a district with a Charter Board gain XP x 1.25."
+pass2 = true
+
+[[node]]
+id = "f3_shifts"
+branch = "flesh"
+tier = 3
+name = "Shift rotation"
+flags = ["rest_rotation"]
+text = "Rest falls 9 a shift working, not 12."
+pass2 = false
+
+[[node]]
+id = "f4_rite"
+branch = "flesh"
+tier = 4
+name = "The Rite"
+laws = ["dissolution_rite"]
+text = "The Dissolution Rite can be signed."
+pass2 = true
+
+[[node]]
+id = "f4_wall"
+branch = "flesh"
+tier = 4
+name = "The memorial wall"
+flags = ["memorial_wall"]
+text = "Every death's Mood hit is halved, city-wide."
+pass2 = true
+
+[[node]]
+id = "f4_census"
+branch = "flesh"
+tier = 4
+name = "The census"
+flags = ["census"]
+text = "The flush comes every 6-10 shifts; a newcomer waits 4 shifts at its grate."
+pass2 = true
+
+# ---------------------------------------------------------------- Mycelium
+
+[[node]]
+id = "m1_pits"
+branch = "mycelium"
+tier = 1
+name = "Pits and Bait"
+structures = ["pit"]
+text = "The Mat eats what the city feeds it."
+pass2 = true
+
+[[node]]
+id = "m1_salt"
+branch = "mycelium"
+tier = 1
+name = "Salt"
+structures = ["salt_works"]
+text = "Salt lines the Mat will not cross; the Salt Works."
+pass2 = true
+
+[[node]]
+id = "m1_relays"
+branch = "mycelium"
+tier = 1
+name = "Relays"
+structures = ["relay", "shrine"]
+text = "A signal source that never starves; its Shrine."
+pass2 = true
+
+[[node]]
+id = "m2_bulb"
+branch = "mycelium"
+tier = 2
+name = "Bulb housing"
+structures = ["lume_farm"]
+text = "The Lume Farm, on a Lume Bulb."
+pass2 = true
+
+[[node]]
+id = "m2_lung"
+branch = "mycelium"
+tier = 2
+name = "Lung housing"
+structures = ["lung"]
+text = "The Lung Housing, on a Filter Lung: the clinic and brine."
+pass2 = true
+
+[[node]]
+id = "m2_routes"
+branch = "mycelium"
+tier = 2
+name = "Route automation"
+flags = ["route_loops"]
+text = "A route come home from twice can be put on a loop."
+pass2 = true
+
+[[node]]
+id = "m3_nerve"
+branch = "mycelium"
+tier = 3
+name = "Nerve logic"
+flags = ["nerve_logic"]
+text = "A Relay Shrine takes four when/then rules."
+pass2 = true
+
+[[node]]
+id = "m3_organs"
+branch = "mycelium"
+tier = 3
+name = "Organ rules"
+flags = ["organ_rules"]
+text = "The organs' rules are set on their cards."
+pass2 = true
+
+[[node]]
+id = "m3_graft"
+branch = "mycelium"
+tier = 3
+name = "Strain grafting"
+flags = ["grafting"]
+text = "The city's signal takes a Bloom's tissue back where it touches it."
+pass2 = true
+
+[[node]]
+id = "m4_pump"
+branch = "mycelium"
+tier = 4
+name = "The deep pump"
+flags = ["deep_pump"]
+text = "The Heart's and every Pit's release x 1.5."
+pass2 = false
+
+[[node]]
+id = "m4_steer"
+branch = "mycelium"
+tier = 4
+name = "Steered drift"
+flags = ["steered_drift"]
+text = "Every feed's drift x 1.5 along its bias."
+pass2 = false
+
+[[node]]
+id = "m4_tissue"
+branch = "mycelium"
+tier = 4
+name = "Deep tissue"
+flags = ["deep_tissue"]
+text = "The Mat's upkeep x 0.75."
+pass2 = false

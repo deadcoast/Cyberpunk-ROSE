@@ -375,6 +375,8 @@ pub struct Ended {
     pub paid: u32,
     /// the unique items of finished chains, into the Stash
     pub uniques: Vec<ItemInstance>,
+    /// chains finished at their last link this shift (Authority's deed: Full Design v3.18)
+    pub chains_done: u32,
 }
 
 /// What the city tells the shift's end.
@@ -392,6 +394,8 @@ pub struct ShiftFacts {
     pub hosts_alive: Vec<u32>,
     /// the grates the Mat reaches (columns)
     pub reached: Vec<u16>,
+    /// the Road set holds: +2 favour a unit sold at a Nomad, Badge or Gang stall (Full Design v3.18, Collections)
+    pub road_favour: bool,
     /// raiders can walk the Board's routes (a stratum with raiders is open)
     pub raiders: bool,
 }
@@ -921,6 +925,13 @@ impl Economy {
                 st.traded += e;
             }
         }
+        if facts.road_favour {
+            for &(f, u, _) in &facts.sold {
+                if matches!(self.file.factions.get(f as usize).map(|d| d.id.as_str()), Some("nomads" | "badges" | "gangs")) {
+                    self.favour(f, 2 * u as i32);
+                }
+            }
+        }
         // contracts
         let mut keep = Vec::new();
         for c in std::mem::take(&mut self.s.contracts) {
@@ -943,6 +954,7 @@ impl Economy {
                     out.notes.push(Note::Gain(format!("the {fname} think better of the city: reputation {:+}", self.s.standing[c.faction as usize].rep)));
                 }
                 if c.link >= c.links {
+                    out.chains_done += 1;
                     let next_tier = (self.tier_open(c.faction) + 1).min(4);
                     self.rep_step(c.faction, 1);
                     self.s.standing[c.faction as usize].opened = self.s.standing[c.faction as usize].opened.max(next_tier);

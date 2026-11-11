@@ -1,0 +1,142 @@
+# The collections (Full Design v3.18, Progression: Collections). The Scrapdex is every item but these categories.
+# A curio set's passive holds while three of the set are in the Stash. A trophy is the first kill of a body (by the
+# run crate's creature id or the threat crate's role) or a hazard lived through with the Heart standing.
+
+scrapdex_skip = ["organic"]
+
+[[set]]
+id = "street"
+name = "Street set"
+flag = "scav_yield_plus_1"
+text = "+1 scav yield: every pile dug and container opened rolls one item more."
+design = "v3.0"
+
+[[set]]
+id = "arasaka"
+name = "Arasaka set"
+flag = "locks_open"
+text = "A locked locker opens by hand as an unlocked one: no forcing, no damage."
+design = "v3.0"
+
+[[set]]
+id = "reliquary"
+name = "Reliquary set"
+flag = "attention_decay_plus_1"
+text = "Attention decays 1 more a shift at every grate."
+design = "v3.0"
+
+[[set]]
+id = "feral"
+name = "Feral set"
+flag = "notice_minus_1"
+text = "Sewerats notice a Runner a tile later."
+design = "v3.18"
+
+[[set]]
+id = "road"
+name = "Road set"
+flag = "road_favour"
+text = "+2 reputation favour a sale at a Nomad, Badge or Gang stall."
+design = "v3.18"
+
+[[set]]
+id = "heart"
+name = "Heart set"
+flag = "heart_set"
+text = "The Heart lights 2 tiles farther and its Pit holds half again."
+design = "v3.18"
+
+[[set]]
+id = "leak"
+name = "Leak set"
+flag = "leak_sales"
+text = "Seep Market sales +5 %."
+design = "v3.18"
+
+# ---------------------------------------------------------------- trophies
+# kill keys: the run's creature ids (crawler, burster, maw, scout, raider) and the city's threat roles (crawler, scout,
+# sprayer, carrier, flamer); a key matches either
+
+[[trophy]]
+id = "kill_crawler"
+name = "Crawler"
+kind = "kill"
+key = "crawler"
+text = "The first crawler down."
+
+[[trophy]]
+id = "kill_burster"
+name = "Burster"
+kind = "kill"
+key = "burster"
+text = "The first burster down."
+
+[[trophy]]
+id = "kill_maw"
+name = "Maw"
+kind = "kill"
+key = "maw"
+text = "The first maw down."
+
+[[trophy]]
+id = "kill_scout"
+name = "Scout"
+kind = "kill"
+key = "scout"
+text = "The first Oathkeeper scout down."
+
+[[trophy]]
+id = "kill_sprayer"
+name = "Sprayer"
+kind = "kill"
+key = "sprayer"
+text = "The first bleach sprayer down."
+
+[[trophy]]
+id = "kill_carrier"
+name = "Lamp carrier"
+kind = "kill"
+key = "carrier"
+text = "The first lamp carrier down."
+
+[[trophy]]
+id = "kill_flamer"
+name = "Flamer"
+kind = "kill"
+key = "flamer"
+text = "The first flamer down."
+
+[[trophy]]
+id = "kill_raider"
+name = "Raider"
+kind = "kill"
+key = "raider"
+text = "The first raider down."
+
+[[trophy]]
+id = "lived_flood"
+name = "The Flood"
+kind = "hazard"
+key = "flood"
+text = "A Flood, lived through."
+
+[[trophy]]
+id = "lived_bloom"
+name = "The Bloom"
+kind = "hazard"
+key = "bloom"
+text = "A Bloom, lived through."
+
+[[trophy]]
+id = "lived_sweep"
+name = "The Sweep"
+kind = "hazard"
+key = "sweep"
+text = "A Sweep, lived through."
+
+[[trophy]]
+id = "lived_cleansing"
+name = "The Cleansing"
+kind = "hazard"
+key = "cleansing"
+text = "A Cleansing, lived through."

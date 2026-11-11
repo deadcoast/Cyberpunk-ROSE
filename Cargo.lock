@@ -149,6 +149,7 @@ version = "0.2.0"
 dependencies = [
  "mat",
  "people",
+ "progress",
  "serde",
  "toml",
 ]
@@ -235,6 +236,7 @@ dependencies = [
  "logistics",
  "mat",
  "people",
+ "progress",
  "run",
  "serde",
  "threat",
@@ -505,6 +507,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "progress"
+version = "0.2.0"
+dependencies = [
+ "items",
+ "mat",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -552,6 +564,7 @@ dependencies = [
  "mat",
  "people",
  "postcard",
+ "progress",
  "render",
  "run",
  "save",
@@ -601,6 +614,7 @@ dependencies = [
  "items",
  "people",
  "postcard",
+ "progress",
  "serde",
  "threat",
 ]
@@ -722,6 +736,7 @@ dependencies = [
  "logistics",
  "mat",
  "people",
+ "progress",
  "serde",
  "toml",
 ]

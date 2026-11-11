@@ -253,6 +253,10 @@ pub struct LootState {
     /// picks since the last notable (PRD counter)
     pub pity_n: u32,
     pub longest_dry: u32,
+    /// scav yield (Full Design v3.18, Collections: Scav yield): items more from every pile and container (the Street
+    /// set's +1), and the chance in a hundred each pick comes to nothing (Conscription's alarm, a loop's repeats)
+    pub bonus: u8,
+    pub cut_pct: u8,
 }
 
 fn mix(a: u64, b: u64, c: u64, tag: u64) -> u64 {
@@ -281,7 +285,7 @@ impl LootState {
                 s.locked = r.f32() < p;
             }
         }
-        LootState { sources, seed: map.seed, run_nonce, route_runs, day, stratum: map.stratum, opened: 0, pity_n: 0, longest_dry: 0 }
+        LootState { sources, seed: map.seed, run_nonce, route_runs, day, stratum: map.stratum, opened: 0, pity_n: 0, longest_dry: 0, bonus: 0, cut_pct: 0 }
     }
 
     pub fn source_at(&self, x: usize, y: usize) -> Option<usize> {
@@ -376,7 +380,8 @@ impl LootState {
         let row = def.rows[tier_row(eff_tier)];
         let c = tables.prd_c(source, eff_tier);
         let notable_from = def.notable.min(4);
-        let picks = rng.range(def.count[0] as i32, def.count[1] as i32) as u8 + extra_picks;
+        let picks = rng.range(def.count[0] as i32, def.count[1] as i32) as u8 + extra_picks + self.bonus;
+        let cut = self.cut_pct;
         let mut out = Vec::new();
         let mut notables = 0usize;
         // the category table is a map; its iteration order is per process, so the roll walks it sorted or two
@@ -390,6 +395,9 @@ impl LootState {
         let cat_total: u32 = cats.iter().map(|(_, w)| w).sum();
         for _ in 0..picks {
             if def.nodrop > 0.0 && rng.f32() < def.nodrop {
+                continue;
+            }
+            if cut > 0 && rng.below(100) < cut as u32 {
                 continue;
             }
             // notable by PRD

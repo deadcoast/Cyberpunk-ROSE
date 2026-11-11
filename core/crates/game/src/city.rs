@@ -165,6 +165,8 @@ pub enum Haul {
 pub const PER_STALL: usize = 5;
 /// Chrome the steward keeps for the steering: a Relay's six.
 pub const CHROME_RESERVE: usize = 6;
+/// Parts the steward keeps when it pays for research: a Bunkhouse's ten.
+pub const RESEARCH_KEEP_PARTS: u32 = 10;
 
 /// The steward's standing orders, once a shift before the run.
 #[derive(Clone, Debug, Default)]
@@ -197,6 +199,7 @@ impl Steward {
         // the haul: contracts it can fill, the surplus to the best stalls in reach (or the Chrome to the ground),
         // protection when a Patrol is due at a Gang grate
         self.contracts(w, &mut out);
+        self.research(w, &mut out);
         self.surplus(w, &mut out);
         self.services(w, &mut out);
         // the steering: whenever the cord to the first grate is lost, a Relay ghost at the anchor nearest the grate on
@@ -233,21 +236,60 @@ impl Steward {
                 }
             }
         }
-        // every petition answered by placing what it asks, nearest the district's hub
-        let asks: Vec<(String, (u16, u16), String)> = w.colony.districts.iter().filter_map(|d| d.petition.as_ref().and_then(|p| p.asks.first().cloned()).map(|a| (a, d.hub, d.name.clone()))).collect();
-        for (def, hub, name) in asks {
-            let pending = w.colony.structures.iter().any(|s| !s.built && w.defs.structure[s.def].id == def);
-            if pending {
+        // every petition answered by placing the first thing it asks that can stand (a Lume Farm wants a Lume Bulb,
+        // a Lantern Post will do), nearest the district's hub
+        let asks: Vec<(Vec<String>, (u16, u16), String)> = w.colony.districts.iter().filter_map(|d| d.petition.as_ref().map(|p| (p.asks.clone(), d.hub, d.name.clone()))).collect();
+        for (defs, hub, name) in asks {
+            if defs.iter().any(|def| w.colony.structures.iter().any(|s| !s.built && w.defs.structure[s.def].id == *def)) {
                 continue;
             }
-            if let Some((x, y)) = nearest_spot(w, &def, hub) {
-                if w.colony.place(&w.defs, &w.city.sim, &def, x, y).is_ok() {
-                    Self::decide(w, format!("{name}'s petition: {} placed at {x},{y}", w.defs.get(&def).map_or(def.as_str(), |d| d.name.as_str())), &mut out);
+            for def in defs {
+                if let Some((x, y)) = nearest_spot(w, &def, hub) {
+                    if w.colony.place(&w.defs, &w.city.sim, &def, x, y).is_ok() {
+                        Self::decide(w, format!("{name}'s petition: {} placed at {x},{y}", w.defs.get(&def).map_or(def.as_str(), |d| d.name.as_str())), &mut out);
+                        break;
+                    }
                 }
             }
         }
         w.publish();
         out
+    }
+
+    /// The research standing order (this design's steward; Full Design v3.18, Research): with no project standing,
+    /// study a blueprint the Stash holds that opens a tier, else start the first node of the lowest open tier the
+    /// Stash pays for while it keeps a Bunkhouse's Parts and a Relay's Chrome.
+    fn research(&mut self, w: &mut World, out: &mut Vec<String>) {
+        if w.colony.progress.tech.project.is_some() {
+            return;
+        }
+        let f = progress::TechFile::shipped();
+        let held: Vec<String> = w.stash.handles().into_iter().map(|(_, _, it)| w.table.def(it.def).id.clone()).collect();
+        let mut studies: Vec<(u8, String)> = held.iter().filter_map(|id| f.blueprint(id).map(|(_, t)| (t, id.clone()))).collect();
+        studies.sort();
+        for (_, item) in studies {
+            let p = progress::Project::Study(item);
+            if crate::grow::pick_project(&mut w.colony, &mut w.stash, &mut w.ledger, &w.table, p).is_ok() {
+                let name = w.colony.progress.tech.project_name().unwrap_or_default();
+                Self::decide(w, format!("research: {name}"), out);
+                return;
+            }
+        }
+        let parts = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == items::Category::Part).count() as u32;
+        let chrome = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == items::Category::Chrome).count() as u32;
+        let mut nodes: Vec<&progress::tech::NodeDef> = f.node.iter().filter(|n| w.colony.progress.tech.cannot_pick(&progress::Project::Node(n.id.clone())).is_none()).collect();
+        nodes.sort_by_key(|n| n.tier);
+        for n in nodes {
+            let p = progress::Project::Node(n.id.clone());
+            let (cp, cc) = f.cost_of(&p);
+            if parts < cp + RESEARCH_KEEP_PARTS || chrome < cc + CHROME_RESERVE as u32 {
+                continue;
+            }
+            if crate::grow::pick_project(&mut w.colony, &mut w.stash, &mut w.ledger, &w.table, p).is_ok() {
+                Self::decide(w, format!("research: {}", n.name), out);
+                return;
+            }
+        }
     }
 
     /// The kit kept for the Runner: every piece of it in the Stash, the spares for the run a Runner does not come
@@ -345,11 +387,14 @@ impl Steward {
         let reach = Self::in_reach(w);
         let kit = Self::kit(w);
         let chrome = self.haul == Haul::Trade;
+        // a blueprint that opens a tier the tree has not opened is research, never surplus (Full Design v3.18)
+        let f = progress::TechFile::shipped();
+        let keep = |id: &str| f.blueprint(id).is_some_and(|(b, t)| w.colony.progress.tech.open[b] < t);
         let mut items: Vec<(u32, u32, Category)> = w
             .stash
             .handles()
             .into_iter()
-            .filter(|(h, _, it)| !it.pinned && !kit.contains(h))
+            .filter(|(h, _, it)| !it.pinned && !kit.contains(h) && !keep(&w.table.def(it.def).id))
             .map(|(h, _, it)| (w.table.def(it.def).value, h, w.table.def(it.def).category))
             .filter(|(_, _, c)| matches!(c, Category::Tech | Category::Curio | Category::Contraband | Category::Gear) || (chrome && *c == Category::Chrome))
             .collect();
@@ -583,7 +628,8 @@ pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize,
         let mut run_times: Vec<f32> = Vec::new();
         let outcome = runner.map(|id| {
             let r = w.roster.get(id).unwrap();
-            let setup = r.runner_setup(&w.traits);
+            let mut setup = r.runner_setup(&w.traits);
+            setup.flags.extend(crate::grow::run_flags(&w.colony, Some(&w.threats), &w.city.sim));
             rec.runner = r.full_name();
             let rig = pack(&mut w, setup.rig_rows, setup.carry_kg());
             w.roster.depart(id, &[]);
@@ -606,6 +652,11 @@ pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize,
             runs += 1;
             w.run_kills += o.oath_kills;
             w.economy.raider_kills(o.raider_kills);
+            for k in &o.killed {
+                if let Some(name) = w.colony.progress.collections.trophy("kill", k, day) {
+                    w.log.push(w.city.tick, crate::log::Class::Landing, format!("Trophy: {name}"));
+                }
+            }
             memory = o.route_memory.clone();
             rec.result = match o.result {
                 RunResult::Extracted { .. } => "extracted".into(),

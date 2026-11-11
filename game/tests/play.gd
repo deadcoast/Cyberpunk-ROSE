@@ -289,6 +289,102 @@ func _process(_delta: float) -> bool:
 		21:
 			if t % 10 == 5:
 				_shot("15_mended")
+				# research (Full Design v3.18): a Blueprint I in the Stash as a haul brings it; the Bench's Research tab,
+				# STUDY as its button does it
+				var st: RoseStash = sim.ensure_stash()
+				st.add(RoseItems.new().find("tec_blueprint_chrome1"), 80, true)
+				screens.show_screen("bench")
+				scr = screens.current
+				scr._set_tab("research")
+				scr.research_msg = sim.ensure().research_pick("study", "tec_blueprint_chrome1")
+				scr._replan()
+				scr._draw_research()
+				print("[play] study: %s" % ("picked" if scr.research_msg == "" else scr.research_msg))
+				# the Job grid: the D3s put Research at 4, as a player paints the column (Research is the job index 8)
+				for row in sim.ensure().job_grid(sim.ensure_people()):
+					if String(row.depth) == "D3":
+						sim.ensure_people().set_priority(int(row.id), 8, 4)
+				phase = 22
+		22:
+			if t % 10 == 5:
+				_shot("16_study")
+				# the shifts run until Chrome tier 2 opens; then the Sphincter housing picked and RESEARCH pressed
+				var rs: RoseSim = sim.ensure()
+				var shifts := 0
+				while int((rs.tech().open as PackedInt32Array)[0]) < 2 and shifts < 20:
+					sim.end_shift()
+					sim.day += 1
+					shifts += 1
+				print("[play] Chrome tier 2 open after %d shifts" % shifts)
+				# the node's Parts and Chrome, as the Stash holds them
+				var st: RoseStash = sim.ensure_stash()
+				for k in 6:
+					st.add(RoseItems.new().find("prt_pipe"), 70, true)
+				for k in 2:
+					st.add(RoseItems.new().find("chr_optic_slag"), 70, true)
+				scr._set_tab("research")
+				scr.picked_node = "c2_gate"
+				scr.research_msg = rs.research_pick("node", "c2_gate")
+				scr._replan()
+				scr._draw_research()
+				print("[play] node: %s" % ("picked" if scr.research_msg == "" else scr.research_msg))
+				phase = 23
+		23:
+			if t % 10 == 5:
+				_shot("17_node")
+				var rs: RoseSim = sim.ensure()
+				var shifts := 0
+				var done := false
+				while not done and shifts < 30:
+					sim.end_shift()
+					sim.day += 1
+					shifts += 1
+					for n in rs.tech().nodes:
+						if String(n.id) == "c2_gate" and String(n.state) == "researched":
+							done = true
+				print("[play] the Sphincter housing researched after %d more shifts" % shifts)
+				sim.build_tool = "gate"
+				screens.show_screen("build")
+				scr = screens.current
+				phase = 24
+		24:
+			if t % 10 == 5:
+				_shot("18_unlocked")
+				# organs (Full Design v3.18): the genome as a Garden feed plan leaves it; the shift's end grows them
+				var rs: RoseSim = sim.ensure()
+				rs.debug_gene(4, 0.7)
+				rs.debug_gene(2, 0.7)
+				rs.debug_gene(1, 0.7)
+				sim.end_shift()
+				sim.day += 1
+				screens.show_screen("colony")
+				scr = screens.current
+				scr.set_view(0)
+				for o in rs.organs():
+					if String(o.id) == "bulb":
+						scr.cam.position = Vector2(int(o.x) * 32 + 16, int(o.y) * 32 + 48)
+						scr.selected = {"kind": "tile", "x": int(o.x), "y": int(o.y)}
+						scr.card_sig = ""
+						scr._draw_card()
+						print("[play] a Lume Bulb at %d,%d" % [int(o.x), int(o.y)])
+						break
+				phase = 25
+		25:
+			if t % 10 == 5:
+				_shot("19_organ")
+				screens.show_screen("strain")
+				scr = screens.current
+				phase = 26
+		26:
+			if t % 10 == 5:
+				_shot("20_strain")
+				sim.codex_tab = "STRAINBOOK"
+				screens.show_screen("codex")
+				scr = screens.current
+				phase = 27
+		27:
+			if t % 10 == 5:
+				_shot("21_strainbook")
 				print("[play] %d frames, %d shots -> %s" % [t, shots, out_dir])
 				quit(0)
 				return true

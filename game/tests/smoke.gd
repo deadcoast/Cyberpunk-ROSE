@@ -102,7 +102,8 @@ func _verify_current() -> void:
 			# the city founded on the Mat: the Heart, the Route Board, a Bench; 25 defs
 			var rs: RoseSim = sim.ensure()
 			var defs: Array = rs.structure_defs()
-			_check(defs.size() == 25, "colony: %d structure defs" % defs.size())
+			var built := defs.filter(func(d): return String(d.category) != "organ")
+			_check(built.size() == 25, "colony: %d structure defs to build" % built.size())
 			var founded: Array = rs.structures()
 			_check(founded.size() >= 3 and String(founded[0].def) == "heart" and String(founded[1].def) == "route_board" and String(founded[2].def) == "bench", "colony: founding %s" % str(founded.map(func(x): return x.def)))
 			# the build tool: a Lantern Post ghost on the first tile near the Heart that takes it; two cheap Parts in

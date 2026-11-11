@@ -112,7 +112,7 @@ fn people_side(folk: &mut Folk, o: &ShiftOutcome, sold: u32, crafted: u32, hauls
             }
         }
     }
-    let mut work = ShiftWork { tend_shifts_by: o.work.tend_shifts_by.clone(), identified_by: o.work.identified_by.clone(), hauls_by: hauls.to_vec(), ..Default::default() };
+    let mut work = ShiftWork { tend_shifts_by: o.work.tend_shifts_by.clone(), identified_by: o.work.identified_by.clone(), hauls_by: hauls.to_vec(), research_by: o.work.research_by.clone(), build_by: o.work.build_by.clone(), ..Default::default() };
     if !o.work.crafts_by.is_empty() {
         for k in 0..crafted as usize {
             work.crafts_by.push(o.work.crafts_by[k % o.work.crafts_by.len()]);
@@ -146,6 +146,10 @@ fn people_side(folk: &mut Folk, o: &ShiftOutcome, sold: u32, crafted: u32, hauls
             let stranded = r.status == Status::Stranded;
             let mut cx = o.contexts.get(&r.id).copied().unwrap_or(ShiftContext { on_mat: !stranded, wet: stranded, asleep: !stranded, ..Default::default() });
             cx.death_voice = roster.death_voice_for(r, &died);
+            // a Memorial in the district, or the memorial wall, halves a death's hit (Full Design v3.18)
+            if cx.memorial {
+                cx.death_voice /= 2;
+            }
             (r.id, cx)
         })
         .collect();
@@ -225,6 +229,9 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
     if settled > 0 {
         stash_lines.push(format!("{settled} on the cords to the stockpiles"));
     }
+    // the Bench's recipe tiers follow Chrome's and the best Bench standing (Full Design v3.18, Research)
+    let bench_tier = colony.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "bench").map(|s| s.tier).max().unwrap_or(0);
+    bench.tier_open = colony.progress.tech.recipe_tier(bench_tier);
     let faster = crate::trade::faster(city, colony, defs);
     let closed = store::close(stash, ledger, bench, table, recipes, outcome.bench_slots as usize, &faster);
     // the Heart's tier is the city's; the grid follows it
@@ -232,7 +239,12 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
     let mut people_lines = people_side(&mut folk, &outcome, closed.report.sold, closed.placed, &hauls);
     // the flush (Recruitment): a batch at a grate when its time comes; beds shelter the waiting, the rest go feral
     let mut rng = mat::rng::Pcg32::new(0xF1A5_0000 ^ ((day as u64) << 16) ^ folk.roster.next_id as u64);
-    let came = folk.roster.flush(folk.traits, folk.names, &mut rng, day);
+    folk.roster.census = colony.progress.tech.flag("census");
+    folk.roster.d4_runs = colony.progress.tech.flag("d4_runs");
+    let mut came = folk.roster.flush(folk.traits, folk.names, &mut rng, day);
+    // each further grate the Mat reaches keeps its own clock (Full Design v3.18, City tiers)
+    let further: Vec<u16> = city.markets.iter().zip(city.market_cells.iter()).skip(1).filter(|(_, c)| c.is_some()).map(|(g, _)| *g as u16).collect();
+    came += folk.roster.flush_grates(folk.traits, folk.names, &mut rng, day, &further);
     if came > 0 {
         log.push(tick, Class::Landing, format!("{came} newcomer{} came down a grate", if came == 1 { "" } else { "s" }));
         people_lines.push(format!("{came} newcomer{} came down a grate", if came == 1 { "" } else { "s" }));
@@ -273,7 +285,7 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
     for (sid, hp) in mended {
         if let Some(s) = colony.get(sid) {
             let d = &defs.structure[s.def];
-            log.push(tick, Class::Landing, format!("{} at {},{} mended {hp} HP ({}/{})", d.name, s.x, s.y, s.hp, d.hp_at(s.tier)));
+            log.push(tick, Class::Landing, format!("{} at {},{} mended {hp} HP ({}/{})", d.name, s.x, s.y, s.hp, colony.hp_max(defs, s)));
         }
     }
     for did in &outcome.districts_formed {
@@ -298,6 +310,15 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
     for (x, y) in &outcome.cut {
         log.push(tick, Class::Landing, format!("a cord cut at {x},{y}"));
     }
+    if let Some(done) = &outcome.research_done {
+        let what = match done {
+            progress::Done::Node(id) => format!("researched: {}", progress::TechFile::shipped().get(id).map_or(id.as_str(), |n| n.name.as_str())),
+            progress::Done::Opened(b, t) => format!("{} tier {t} is open", progress::tech::BRANCH_NAMES[*b]),
+        };
+        log.push(tick, Class::Landing, what);
+    }
+    // the progression: organs, classes, the Strainbook, the collections (Full Design v3.18)
+    stash_lines.extend(crate::grow::shift_end(city, colony, defs, stash, table, folk.roster.records.len(), day, log));
     Shift { outcome, closed, stash_lines, people_lines, settled, hauled }
 }
 
@@ -308,6 +329,19 @@ pub fn refresh_movers(city: &mut City, colony: &Colony, defs: &StructureFile, ro
         return Vec::new();
     }
     let plan = colony.assign_jobs(defs, roster, traits, shift_of_day(day));
+    // a tended Pit releases x (1 + Shepherd / 10), Shepherd training x (1 + Shepherd / 5)
+    let per = if colony.progress.tech.flag("shepherd_x2") { 5.0 } else { 10.0 };
+    city.sim.pit_boost.clear();
+    for &(slimo, job, sid) in &plan {
+        if job != people::Job::Tend {
+            continue;
+        }
+        let pit = colony.get(sid).is_some_and(|s| matches!(defs.structure[s.def].id.as_str(), "pit" | "heart"));
+        if let (true, Some(cell), Some(r)) = (pit, colony.cargo_cell(defs, &city.sim, sid), roster.get(slimo)) {
+            let w = city.sim.w;
+            city.sim.pit_boost.insert((cell % w, cell / w), 1.0 + r.skill(Skill::Shepherd) as f32 / per);
+        }
+    }
     let movers = cargo::movers(colony, defs, city, roster, &plan);
     city.set_movers(&movers);
     plan

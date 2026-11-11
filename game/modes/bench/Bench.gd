@@ -4,6 +4,9 @@ extends ScreenBase
 ## Stash items that carry the slot's tag; outcome preview right with every stat against the base, condition and
 ## provenance; the queue below with shifts left. CRAFT takes the parts out of the Stash; CANCEL returns them; jobs
 ## finish when the shift ends. Craft on a Stash card arrives with that item pre-slotted (Sim.bench_slot).
+## RESEARCH (Full Design v3.18, Research): the tree as three columns of four tiers, a node a tile — researched lit,
+## open with its points and cost, locked under its blueprint; the project standing, the picked node's card with
+## RESEARCH; the blueprints in the Stash with STUDY. Every rule is the progress crate's (RoseSim.tech).
 
 const SLOT_W := 44
 const SLOT_H := 58
@@ -18,6 +21,12 @@ var chosen := ""                 # recipe id
 var chosen_slot := 0
 var filled: Array[int] = []      # handle per slot, -1 empty
 var list_buttons := {}
+var tab := "craft"
+var craft_view: Control
+var research_view: Control
+var tab_buttons := {}
+var picked_node := ""
+var research_msg := ""
 
 func _ready() -> void:
 	screen_title = "BENCH"
@@ -26,10 +35,19 @@ func _ready() -> void:
 func _build_content(c: Control) -> void:
 	stash = Sim.ensure_stash()
 	recipes = stash.recipes()
-	recipe_list = make_frame(c, Vector2(0, 0), Vector2(150, 306))
-	slots_frame = make_frame(c, Vector2(156, 0), Vector2(290, 150))
-	outcome_frame = make_frame(c, Vector2(452, 0), Vector2(180, 150))
-	queue_frame = make_frame(c, Vector2(156, 156), Vector2(476, 150))
+	for t in ["craft", "research"]:
+		var tt: String = t
+		tab_buttons[t] = make_button(c, t.to_upper(), Vector2(0 if t == "craft" else 52, 0), func(): _set_tab(tt))
+	craft_view = Control.new()
+	craft_view.position = Vector2(0, 16)
+	c.add_child(craft_view)
+	research_view = Control.new()
+	research_view.position = Vector2(0, 16)
+	c.add_child(research_view)
+	recipe_list = make_frame(craft_view, Vector2(0, 0), Vector2(150, 290))
+	slots_frame = make_frame(craft_view, Vector2(156, 0), Vector2(290, 140))
+	outcome_frame = make_frame(craft_view, Vector2(452, 0), Vector2(180, 140))
+	queue_frame = make_frame(craft_view, Vector2(156, 146), Vector2(476, 144))
 	_draw_list()
 	# an item sent over by Craft on the Stash: the first open recipe with a slot that takes it
 	var sent: Dictionary = Sim.bench_slot
@@ -53,6 +71,152 @@ func _build_content(c: Control) -> void:
 	if chosen == "":
 		_choose(String(recipes[0].id) if recipes.size() > 0 else "")
 	_redraw()
+	_set_tab(Sim.bench_tab if Sim.bench_tab != "" else "craft")
+
+func _set_tab(t: String) -> void:
+	tab = t
+	Sim.bench_tab = t
+	craft_view.visible = t == "craft"
+	research_view.visible = t == "research"
+	for k in tab_buttons:
+		tab_buttons[k].modulate = Color.WHITE if k == t else Color(0.55, 0.55, 0.62)
+	if t == "research":
+		_draw_research()
+
+# ---------------------------------------------------------------- research
+
+const NODE_W := 64
+const NODE_H := 40
+
+func _draw_research() -> void:
+	for ch in research_view.get_children():
+		ch.queue_free()
+	var sim: RoseSim = Sim.ensure()
+	var t: Dictionary = sim.tech()
+	var open: PackedInt32Array = t.open
+	var names: PackedStringArray = t.branches
+	var nodes: Array = t.nodes
+	for b in 3:
+		var col := make_frame(research_view, Vector2(b * 212, 0), Vector2(206, 200))
+		make_label(col, "%s   tier %d open" % [names[b].to_upper(), open[b]], Vector2(6, 4), UiTheme.CYAN)
+		for n in nodes:
+			if int(n.branch) != b:
+				continue
+			var k := 0
+			for m in nodes:
+				if int(m.branch) == b and int(m.tier) == int(n.tier) and String(m.id) < String(n.id):
+					k += 1
+			var pos := Vector2(4 + k * (NODE_W + 4), 18 + (int(n.tier) - 1) * (NODE_H + 4))
+			_node_tile(col, pos, n)
+	var proj: Dictionary = t.project
+	var pf := make_frame(research_view, Vector2(0, 206), Vector2(418, 84))
+	if proj.is_empty():
+		make_label(pf, "PROJECT   none: pick a node or study a blueprint", Vector2(6, 4), UiTheme.DUST)
+	else:
+		make_label(pf, "PROJECT   %s" % String(proj.name).to_upper(), Vector2(6, 4), UiTheme.CYAN)
+		var got := int(proj.got)
+		var need := maxi(1, int(proj.need))
+		make_gauge(pf, "ui.gauge.ooze", Vector2(6, 16), float(got) / float(need), "%d / %d points   %d on Research" % [got, need, int(proj.workers)])
+		make_button(pf, "DROP", Vector2(370, 2), func():
+			sim.research_drop()
+			_draw_research())
+	# the picked node's card
+	var picked := {}
+	for n in nodes:
+		if String(n.id) == picked_node:
+			picked = n
+	if not picked.is_empty():
+		var st := String(picked.state)
+		make_label(pf, String(picked.name).to_upper(), Vector2(6, 32), UiTheme.ACID if st == "researched" else UiTheme.CHALK)
+		make_label(pf, String(picked.text).left(68), Vector2(6, 44), UiTheme.DUST)
+		if st == "researched":
+			make_label(pf, "researched", Vector2(6, 58), UiTheme.ACID)
+		else:
+			var cost := "%d points   %d P %d C" % [int(picked.points), int(picked.parts), int(picked.chrome)]
+			if bool(picked.paid):
+				cost = "%d points   paid" % int(picked.points)
+			make_label(pf, cost, Vector2(6, 58), UiTheme.CHALK)
+			var why := String(picked.why)
+			if why != "":
+				make_label(pf, why, Vector2(200, 58), UiTheme.HOT_PINK)
+			elif not bool(picked.current):
+				var id := String(picked.id)
+				make_button(pf, "RESEARCH", Vector2(340, 56), func():
+					research_msg = sim.research_pick("node", id)
+					_replan()
+					_draw_research())
+	if research_msg != "":
+		make_label(pf, research_msg, Vector2(6, 70), UiTheme.HOT_PINK)
+	# the blueprints the Stash holds, and what the Bench has finished
+	var bf := make_frame(research_view, Vector2(424, 206), Vector2(208, 84))
+	var bps: Array = t.blueprints
+	make_label(bf, "BLUEPRINTS   %d held" % bps.size(), Vector2(6, 4), UiTheme.CYAN)
+	var y := 16
+	for bp in bps:
+		if y > 52:
+			break
+		var why := String(bp.why)
+		make_label(bf, String(bp.name).to_upper().left(22), Vector2(6, y), UiTheme.CHALK if why == "" else UiTheme.DUST)
+		if why == "":
+			var item := String(bp.item)
+			make_button(bf, "STUDY", Vector2(160, y - 3), func():
+				research_msg = sim.research_pick("study", item)
+				_replan()
+				_draw_research())
+		else:
+			y += 10
+			make_label(bf, "  " + why, Vector2(6, y), UiTheme.DUST)
+		y += 13
+	var hist: Array = t.history
+	if bps.is_empty():
+		make_label(bf, "a blueprint opens its branch's tier", Vector2(6, y), UiTheme.DUST)
+		y += 12
+	for h in hist:
+		if y > 72:
+			break
+		make_label(bf, String(h).left(32), Vector2(6, y), UiTheme.DUST)
+		y += 10
+
+## A project picked opens the Research slots: the shift's plan takes them now, as an order does.
+func _replan() -> void:
+	if research_msg == "":
+		Sim.ensure().refresh_movers(Sim.ensure_people(), Sim.day)
+
+func _node_tile(parent: Control, pos: Vector2, n: Dictionary) -> void:
+	var st := String(n.state)
+	var f := make_frame(parent, pos, Vector2(NODE_W, NODE_H))
+	var col: Color = UiTheme.ACID if st == "researched" else (UiTheme.CHALK if st == "open" else UiTheme.DUST)
+	if st == "locked":
+		f.modulate = Color(0.62, 0.62, 0.7)
+	# the name in lines of ten, the state under it
+	var lines: Array = []
+	for w in String(n.name).to_upper().split(" "):
+		if lines.is_empty() or (String(lines[-1]) + " " + w).length() > 10:
+			lines.append(w)
+		else:
+			lines[-1] = String(lines[-1]) + " " + w
+	for k in mini(lines.size(), 3):
+		make_label(f, String(lines[k]).left(10), Vector2(3, 1 + k * 9), col)
+	var foot := "DONE" if st == "researched" else ("%d PTS" % int(n.points) if st == "open" else "BLUEPRINT")
+	if bool(n.current):
+		foot = "RESEARCHING"
+	make_label(f, foot, Vector2(3, 29), UiTheme.CYAN if bool(n.current) else (UiTheme.ACID if st == "researched" else UiTheme.DUST))
+	if String(n.id) == picked_node:
+		var edge := ColorRect.new()
+		edge.color = UiTheme.CYAN
+		edge.position = Vector2(0, NODE_H - 2)
+		edge.size = Vector2(NODE_W, 2)
+		f.add_child(edge)
+	var id := String(n.id)
+	var b := Button.new()
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	b.size = f.size
+	b.pressed.connect(func():
+		picked_node = id
+		research_msg = ""
+		_draw_research())
+	f.add_child(b)
 
 func _recipe(id: String) -> Dictionary:
 	for r in recipes:
@@ -86,7 +250,7 @@ func _draw_list() -> void:
 		for r in recipes:
 			if int(r.tier) == tier:
 				n += 1
-		make_label(recipe_list, "TIER %d   %d recipes   blueprint" % [tier, n], Vector2(6, y), UiTheme.DUST)
+		make_label(recipe_list, "TIER %d   %d   CHROME %d" % [tier, n, tier], Vector2(6, y), UiTheme.DUST)
 		y += 12
 
 func _pick(id: String) -> void:
@@ -225,7 +389,7 @@ func _draw_outcome() -> void:
 		for part in parts:
 			make_label(outcome_frame, "  " + String(part).left(28), Vector2(6, y), UiTheme.DUST)
 			y += 10
-	make_button(outcome_frame, "CRAFT", Vector2(120, 128), func():
+	make_button(outcome_frame, "CRAFT", Vector2(120, 122), func():
 		if stash.craft(chosen, PackedInt32Array(filled), "the Bench", Sim.day):
 			_choose(chosen)
 			_redraw())
@@ -237,8 +401,8 @@ func _draw_queue() -> void:
 	make_label(queue_frame, "QUEUE   %d job%s" % [jobs.size(), "" if jobs.size() == 1 else "s"], Vector2(6, 4), UiTheme.CYAN)
 	var y := 18
 	for j in jobs:
-		if y > 118:
-			make_label(queue_frame, "+%d more" % (jobs.size() - 8), Vector2(6, y), UiTheme.DUST)
+		if y > 104:
+			make_label(queue_frame, "+%d more" % (jobs.size() - 7), Vector2(6, y), UiTheme.DUST)
 			break
 		var idx := int(j.index)
 		var left := int(j.shifts_left)
@@ -255,4 +419,4 @@ func _draw_queue() -> void:
 		y += 12
 	if jobs.is_empty():
 		make_label(queue_frame, "nothing on the Bench", Vector2(6, y), UiTheme.DUST)
-	make_label(queue_frame, "jobs finish when the shift ends, after a run", Vector2(6, 134), UiTheme.DUST)
+	make_label(queue_frame, "jobs finish when the shift ends, after a run", Vector2(6, 128), UiTheme.DUST)

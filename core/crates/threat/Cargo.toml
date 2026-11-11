@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 mat = { path = "../mat" }
 colony = { path = "../colony" }
+progress = { path = "../progress" }
 logistics = { path = "../logistics" }
 people = { path = "../people" }
 serde.workspace = true

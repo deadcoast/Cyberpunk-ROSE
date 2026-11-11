@@ -168,6 +168,8 @@ pub struct Outcome {
     pub oath_kills: u32,
     /// raiders the Runner killed (the clear-raiders contracts, Economy)
     pub raider_kills: u32,
+    /// what the run killed, by creature id (the trophies: Full Design v3.18, Collections)
+    pub killed: Vec<String>,
     pub chunks_seen: u32,
     pub route_memory: Vec<u8>,
     pub blind_value: u32,
@@ -211,6 +213,7 @@ pub struct RunSim {
     pub oath_kills: u32,
     /// raiders the Runner killed (the clear-raiders contracts, Economy)
     pub raider_kills: u32,
+    pub killed: Vec<String>,
     /// raider gangs still to come down
     pub raids: Vec<Raid>,
     /// a Flood shift's water on this route: the plan, the route's water before it, the tiles risen so far, and the
@@ -242,6 +245,8 @@ pub struct RunSim {
     buf_shoot: i32,
     /// the open loot source under the Runner, if any
     pub open_source: Option<usize>,
+    /// the Arasaka set: a locked locker opens by hand as an unlocked one (Full Design v3.18, Collections)
+    pub locks_open: bool,
 }
 
 /// how long a buffered press waits for the Runner to be free (ticks): combat presses briefly, interactions long
@@ -272,8 +277,22 @@ impl RunSim {
     pub fn new(map: RouteMap, table: ItemTable, tables: LootTables, defs: CreatureFile, setup: RunSetup) -> RunSim {
         let mut rng = Pcg32::new(map.seed ^ setup.run_nonce.rotate_left(17) ^ 0xC0FFEE);
         let senses = Senses::new(&map, setup.mat_lume_gene, setup.memory);
-        let loot = LootState::new(&map, &tables, setup.run_nonce, setup.route_runs, setup.day);
-        let creatures = creature::spawn_all(&map, &defs, &mut rng);
+        let mut loot = LootState::new(&map, &tables, setup.run_nonce, setup.route_runs, setup.day);
+        // scav yield (Full Design v3.18): the Street set's +1, Conscription's alarm and a loop's repeats
+        let has = |f: &str| setup.runner.flags.iter().any(|x| x == f);
+        loot.bonus = u8::from(has("scav_yield_plus_1"));
+        let loop_cut: u8 = setup.runner.flags.iter().filter_map(|f| f.strip_prefix("yield_cut_").and_then(|n| n.parse().ok())).max().unwrap_or(0);
+        loot.cut_pct = (loop_cut + if has("alarm_yield_cut") { 20 } else { 0 }).min(90);
+        let locks_open = has("locks_open");
+        let mut creatures = creature::spawn_all(&map, &defs, &mut rng);
+        // the Feral set: sewerats notice a Runner a tile later
+        if has("notice_minus_1") {
+            for c in creatures.iter_mut() {
+                if defs.creature.get(c.kind.key()).is_some_and(|d| d.feral) {
+                    c.notice_cut = 1;
+                }
+            }
+        }
         let start = map.entry.get(1).or(map.entry.first()).copied().unwrap_or((1, 12));
         let mut runner = Runner::new(&defs.runner, (start.0 as i32, start.1 as i32), setup.rig, &setup.runner);
         if let Some((dmg, _, mag)) = runner.ranged(&table) {
@@ -291,7 +310,6 @@ impl RunSim {
             followers.push(f);
         }
         // the dead of earlier runs: raiders roll once per day since each death, 10 % + 5 % per stratum
-        let mut loot = loot;
         for c in &setup.corpses {
             let days = setup.day.saturating_sub(c.day);
             let mut raided = c.raided;
@@ -336,6 +354,7 @@ impl RunSim {
             outcome: None,
             kills: 0,
             oath_kills: 0,
+            killed: Vec::new(),
             raider_kills: 0,
             raids,
             flood,
@@ -361,6 +380,7 @@ impl RunSim {
             buf_take: 0,
             buf_shoot: 0,
             open_source: None,
+            locks_open,
         }
     }
 
@@ -1026,6 +1046,9 @@ impl RunSim {
             || self.runner.rig.gear.hands.iter().flatten().any(|h| self.table.def(h.def).id == "ger_pry_bar")
             || self.runner.rig.backpack.items().any(|it| self.table.def(it.def).id == "ger_pry_bar");
         let method = if has_pry { OpenMethod::PryBar } else { OpenMethod::Hands };
+        if self.locks_open {
+            self.loot.sources[i].locked = false;
+        }
         if let Ok(r) = self.loot.open(&self.tables, &self.table, i, method) {
             let (sx, sy) = (self.loot.sources[i].x as usize, self.loot.sources[i].y as usize);
             let tick = self.senses.tick;
@@ -1170,6 +1193,7 @@ impl RunSim {
         let carried = std::mem::take(&mut c.carried);
         if ours {
             self.kills += 1;
+            self.killed.push(kind.key().to_string());
             if kind == Kind::Scout {
                 self.oath_kills += 1;
             }
@@ -1465,6 +1489,7 @@ impl RunSim {
             kills: self.kills,
             oath_kills: self.oath_kills,
             raider_kills: self.raider_kills,
+            killed: self.killed.clone(),
             chunks_seen: seen.len() as u32,
             route_memory: self.senses.fog.memory_bits(),
             blind_value,

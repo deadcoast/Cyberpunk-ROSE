@@ -17,14 +17,13 @@ pub const FOUNDING_STEPS: usize = 4000;
 
 /// The game's founding (Full Design, The founding): Pass 2's first session to 5:30 — the Heart and a Pit of six Junk
 /// Chrome, "a grate visible 40 tiles east; the Mat is 15 tiles out; second Pit, baited east", "the Mat reaches the
-/// grate" — which in this game's clock falls inside the first shift's run. The Sump stratum and a vigorous, conductive
-/// strain, the Heart at its centre grown from alone on the founding feed, FOUNDING_BAIT of it a step painted on the
+/// grate" — which in this game's clock falls inside the first shift's run. The Sump stratum and the Heart born with
+/// every gene at 0.5 (Pass 1; Full Design v3.18: a class is earned), at its centre grown from alone on the founding feed, FOUNDING_BAIT of it a step painted on the
 /// ground ahead of the Mat nearest the first grate, until the Mat reaches that grate (tissue within
 /// city::MARKET_REACH of it, joined to the Heart); then the Heart's Pit holding six Junk Chrome.
 pub fn founding(seed: u64) -> mat::MatSim {
-    use mat::genome::{CONDUCTANCE, VIGOR};
     use mat::{Genome, MatSim};
-    let g = Genome::default().with(VIGOR, 0.8).with(CONDUCTANCE, 0.8);
+    let g = Genome::default();
     let mut sim = MatSim::new(192, 48, seed, g);
     let (hx, hy) = FOUNDING_HEART;
     sim.seed_heart(hx, hy);

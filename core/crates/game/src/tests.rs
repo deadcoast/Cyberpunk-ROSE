@@ -420,3 +420,113 @@ fn the_city_replays_bit_exact_and_its_cargo_lands_within_the_next_shift() {
     assert!(c.shifts.iter().all(|r| r.late == 0 && r.starving == 0), "{:?}", c.failures);
     assert!(c.log.contains("city LAND"), "the city landed nothing");
 }
+
+#[test]
+fn a_blueprint_studied_opens_its_tier_and_the_node_researched_lets_its_structure_stand() {
+    let mut w = world();
+    // one D3 researches; nobody else works
+    let d3 = w.roster.records.iter().find(|r| r.depth == people::Depth::D3).unwrap().id;
+    for r in w.roster.records.iter_mut() {
+        r.priorities = [0; 9];
+    }
+    w.roster.get_mut(d3).unwrap().priorities[people::Job::Research.index()] = 4;
+    let tweak = w.roster.get(d3).unwrap().skill(people::Skill::Tweak) as u32;
+    assert!(tweak >= 2, "a D3 is born at Tweak 2");
+    // the Gate waits on its node
+    assert!(matches!(w.colony.can_place(&w.defs, &w.city.sim, "gate", 0, 0), Err(colony::PlaceError::Locked(_))));
+    // a Blueprint I in the Stash: picked as the project, spent at once
+    let bp = w.table.id_of("tec_blueprint_chrome1").unwrap();
+    w.stash.place_or_floor(&w.table, ItemInstance::new(bp));
+    crate::grow::pick_project(&mut w.colony, &mut w.stash, &mut w.ledger, &w.table, progress::Project::Study("tec_blueprint_chrome1".into())).unwrap();
+    assert!(!w.stash.all_items().any(|it| it.def == bp), "the blueprint is spent");
+    let mut shifts = 0;
+    while w.colony.progress.tech.open[0] < 2 && shifts < 10 {
+        w.end_shift();
+        shifts += 1;
+    }
+    assert_eq!(w.colony.progress.tech.open[0], 2, "Chrome tier 2 is open");
+    assert_eq!(shifts as u32, 8u32.div_ceil(tweak), "8 points at the researcher's Tweak a shift");
+    assert!(w.log.events.iter().any(|e| e.what == "Chrome tier 2 is open"));
+    assert!(w.roster.get(d3).unwrap().xp[people::Skill::Tweak.index()] > 0 || w.roster.get(d3).unwrap().skill(people::Skill::Tweak) as u32 > tweak, "Research trains Tweak");
+    // the node: its Parts and Chrome paid at the pick, then 24 points
+    for _ in 0..6 {
+        let p = w.table.id_of("prt_pipe").unwrap();
+        w.stash.place_or_floor(&w.table, ItemInstance::new(p));
+    }
+    for _ in 0..2 {
+        let c = w.table.id_of("chr_optic_slag").unwrap();
+        w.stash.place_or_floor(&w.table, ItemInstance::new(c));
+    }
+    crate::grow::pick_project(&mut w.colony, &mut w.stash, &mut w.ledger, &w.table, progress::Project::Node("c2_gate".into())).unwrap();
+    while !w.colony.progress.tech.has("c2_gate") && shifts < 40 {
+        w.end_shift();
+        shifts += 1;
+    }
+    assert!(w.colony.progress.tech.has("c2_gate"));
+    assert!(!matches!(w.colony.can_place(&w.defs, &w.city.sim, "gate", 0, 0), Err(colony::PlaceError::Locked(_))), "the Gate can be placed");
+    assert_eq!(w.bench.tier_open, 1, "a tier-1 Bench caps the recipes at 1 though Chrome's tier 2 is open");
+}
+
+#[test]
+fn a_gene_over_its_line_grows_its_organ_the_mat_stands_its_own_and_the_class_follows() {
+    let mut w = world();
+    // Lume and Thrift over the Garden's line: a Lume Bulb grows, a Filter Lung where water is near, the class holds
+    w.city.sim.genome.0[mat::genome::LUME] = 0.7;
+    w.city.sim.genome.0[mat::genome::THRIFT] = 0.7;
+    w.city.sim.genome.0[mat::genome::BRANCHING] = 0.7;
+    w.end_shift();
+    let f = progress::StrainFile::shipped();
+    let bulb = f.organ_index("bulb").unwrap();
+    let knot = f.organ_index("knot").unwrap();
+    assert_eq!(w.city.sim.organs_of(bulb).count(), 1, "one a shift");
+    assert!(w.colony.progress.strain.holds("garden"));
+    assert!(w.colony.progress.strain.has_card("bulb") && w.colony.progress.strain.has_card("garden"));
+    // a Bulb lights its tiles without a housing
+    let b = w.city.sim.organs_of(bulb).next().unwrap().i as usize;
+    let lit = w.colony.lit_cells(&w.defs, &w.city.sim, true);
+    assert!(lit[b]);
+    // a Brood Knot stands as the Mat's own structure, two beds
+    if let Some(k) = w.city.sim.organs_of(knot).next().map(|o| o.i as usize) {
+        let (x, y) = ((k % w.city.sim.w) as u16, (k / w.city.sim.w) as u16);
+        let sid = w.colony.occupied(&w.defs, x, y).expect("the Knot stands on its organ");
+        assert_eq!(w.defs.structure[w.colony.get(sid).unwrap().def].id, "knot");
+        assert!(w.colony.can_place(&w.defs, &w.city.sim, "knot", x, y).is_err(), "the Mat's own is never placed");
+    }
+    // the cap: 1 + Nodes / 30 of a kind, one more a shift until it is met
+    let cap = 1 + w.city.sim.node_count() / f.organ_per_nodes;
+    for _ in 0..cap + 2 {
+        w.end_shift();
+    }
+    assert!(w.city.sim.organs_of(bulb).count() <= 1 + w.city.sim.node_count() / f.organ_per_nodes);
+    // a Lume Farm stands only on a Bulb, once its node stands
+    w.colony.progress.tech = progress::Tech::every_structure();
+    let b = w.city.sim.organs_of(bulb).next().unwrap().i as usize;
+    let (bx, by) = ((b % w.city.sim.w) as u16, (b / w.city.sim.w) as u16);
+    let off = (0..w.city.sim.hy.len()).find(|&i| w.city.sim.hy[i] == hy::NODE && w.city.sim.organ_at(i).is_none()).unwrap();
+    assert!(matches!(w.colony.can_place(&w.defs, &w.city.sim, "lume_farm", (off % w.city.sim.w) as u16, (off / w.city.sim.w) as u16), Err(colony::PlaceError::NeedsOrgan(_)) | Err(_)));
+    let on = w.colony.can_place(&w.defs, &w.city.sim, "lume_farm", bx, by);
+    assert!(!matches!(on, Err(colony::PlaceError::NeedsOrgan(_))), "{on:?}");
+    // the genes fall back: the class goes, the organs stay
+    w.city.sim.genome.0[mat::genome::LUME] = 0.5;
+    w.end_shift();
+    assert!(!w.colony.progress.strain.holds("garden"));
+    assert!(w.colony.progress.strain.has_card("class_lost"));
+    assert!(w.city.sim.organs_of(bulb).count() >= 1);
+}
+
+#[test]
+fn a_feed_past_the_ceiling_reflects_and_a_repelled_patrol_pays_authority() {
+    let mut w = world();
+    w.city.sim.genome.0[mat::genome::LUME] = 0.95;
+    let mut d = [0.0f32; 10];
+    d[mat::genome::LUME] = 0.13;
+    let bounced = w.city.sim.drift_genome(d);
+    assert_eq!(bounced, vec![(mat::genome::LUME, true)]);
+    assert!((w.city.sim.genome.0[mat::genome::LUME] - 0.92).abs() < 1e-5, "1.08 lands at 0.92");
+    // the deeds: a Patrol repelled +1, a Sweep +2, a Cleansing +3, and the trophies the threats' shift hands over
+    let before = w.colony.charter.authority;
+    let ended = threat::Ended { repelled: vec!["patrol".into(), "cleansing".into()], killed: vec!["flamer".into()], lived: vec!["flood".into()], ..Default::default() };
+    crate::pressure::deeds(&mut w.colony, &ended, 3, 0, &mut w.log);
+    assert_eq!(w.colony.charter.authority, before + 4);
+    assert!(w.colony.progress.collections.has_trophy("kill_flamer") && w.colony.progress.collections.has_trophy("lived_flood"));
+}

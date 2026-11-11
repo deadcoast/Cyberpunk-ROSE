@@ -2,7 +2,11 @@
 # Cord or Node; sigma: signal the footprint needs; node: a Node under the anchor; grate: a grate within 2 tiles;
 # relay: on a Relay. cost is tier 1 (tier 2 x2, tier 3 x3); build: points (a builder adds Hands per shift).
 # hosts: the job the structure gives slots to, slots per tier; gate: the level of that job's skill a slimo needs for the slot. Per-tier numbers are arrays indexed by tier - 1
-# (the Heart has four). hp is per tier. art: the manifest slot. category: the Build menu's tab (city: prebuilt).
+# (the Heart has four). hp is per tier. art: the manifest slot. category: the Build menu's tab (city: prebuilt; organ:
+# the Mat's own, stood on an organ when it grows and never in the Build menu; Full Design v3.18, Organs).
+# organ: the organ the anchor must stand on (a housing); free_on: an organ the anchor may stand on to cost nothing;
+# shuts: a gate to bodies and water; damage/range: strikes (with a Guard in the seat when it hosts guard);
+# oath_only: strikes Oathkeepers only. The tree's nodes name the structures they let be placed (data/tech.toml).
 
 [[structure]]
 id = "heart"
@@ -101,6 +105,7 @@ category = "mat"
 footprint = [2, 2]
 sigma = 0.5
 node = true
+organ = "bulb"
 cost = { parts = 6, chrome = 4, eddies = 0 }
 build = 16
 hosts = "tend"
@@ -108,7 +113,7 @@ slots = [1, 1, 1]
 hp = 100
 light = [4, 6, 8]
 attention = [2, 2, 2]
-text = "Bulbs grown on a Node. Light for every home within reach, and Attention at any grate within ten tiles."
+text = "A housing round a Lume Bulb. Light for every home within reach, and Attention at any grate within ten tiles."
 art = "struct.lume_farm"
 
 [[structure]]
@@ -118,6 +123,7 @@ category = "mat"
 footprint = [2, 2]
 sigma = 0.5
 node = true
+organ = "lung"
 cost = { parts = 10, chrome = 4, eddies = 0 }
 build = 18
 hosts = "cook"
@@ -126,7 +132,7 @@ slots = [1, 2, 3]
 hp = 100
 brine = [1, 2, 3]
 dry_radius = [6, 6, 6]
-text = "A Lung organ in a housing: the clinic. Each Cook here (Medic 5) treats one injury a shift; brine for the Still and the Salt Works; homes within six tiles count dry."
+text = "A housing round a Filter Lung: the clinic. Each Cook here (Medic 5) treats one injury a shift; brine for the Still and the Salt Works; homes within six tiles count dry."
 art = "struct.lung"
 
 [[structure]]
@@ -151,6 +157,8 @@ name = "Sphincter Gate"
 category = "order"
 footprint = [2, 1]
 sigma = 0.3
+free_on = "sphincter"
+shuts = true
 cost = { parts = 4, chrome = 2, eddies = 0 }
 build = 8
 hosts = "guard"
@@ -375,3 +383,69 @@ hp = 100
 salt = [1, 2, 3]
 text = "Brine pans over a burner. A Cook turns Lung brine into salt."
 art = "struct.salt_works"
+
+# ---------------------------------------------------------------- the Mat's own (Full Design v3.18, Organs)
+
+[[structure]]
+id = "knot"
+name = "Brood Knot"
+category = "organ"
+footprint = [1, 1]
+sigma = 0.0
+prebuilt = true
+organ = "knot"
+cost = { parts = 0, chrome = 0, eddies = 0 }
+build = 0
+hp = 100
+beds = [2, 2, 2]
+rest = [20, 20, 20]
+text = "A knot of the Mat grown hollow: two beds."
+art = "mat.organ.knot"
+
+[[structure]]
+id = "sphincter"
+name = "Sphincter"
+category = "organ"
+footprint = [1, 1]
+sigma = 0.0
+prebuilt = true
+organ = "sphincter"
+shuts = true
+cost = { parts = 0, chrome = 0, eddies = 0 }
+build = 0
+hp = 100
+text = "A ring of the Mat across a passage: shut while white light is within 8 tiles, and always to the Flood."
+art = "mat.organ.sphincter"
+
+[[structure]]
+id = "maw"
+name = "Maw"
+category = "organ"
+footprint = [1, 1]
+sigma = 0.0
+prebuilt = true
+organ = "maw"
+cost = { parts = 0, chrome = 0, eddies = 0 }
+build = 0
+hp = 100
+damage = [4, 4, 4]
+range = [2, 2, 2]
+text = "A mouth at a Node: strikes whatever comes within two tiles."
+art = "mat.organ.maw"
+
+[[structure]]
+id = "gland"
+name = "Venom Gland"
+category = "organ"
+footprint = [1, 1]
+sigma = 0.0
+prebuilt = true
+organ = "gland"
+oath_only = true
+cost = { parts = 0, chrome = 0, eddies = 0 }
+build = 0
+hp = 100
+damage = [4, 4, 4]
+range = [4, 4, 4]
+text = "A gland that spits at Oathkeepers within four tiles: 2 + 4 x Toxicity."
+art = "mat.organ.gland"

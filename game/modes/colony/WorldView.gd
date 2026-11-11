@@ -254,6 +254,29 @@ func _draw_cargo() -> void:
 		cargo.draw_rect(Rect2(x - 1, y - 1, size + 2, size + 2), UiTheme.VOID)
 		cargo.draw_rect(Rect2(x, y, size, size), col)
 
+## The Mat's own structures (Full Design v3.18, Organs): drawn as their organ, never with a footprint outline.
+const OWN_ORGANS := ["knot", "sphincter", "maw", "gland"]
+
+## An organ's frame: the strip's first frame (the strip's width over four).
+func _organ_frame(art: String) -> Texture2D:
+	var st := Assets.organ_state(art)
+	var strip := Assets.texture(art, st)
+	if strip == null:
+		return null
+	return Assets.frame(art, strip.get_width() / 4, strip.get_height(), 0, st)
+
+## The organs out of a housing and not the Mat's own: each at its Node, its sprite's bottom on the tile's bottom; a
+## Lume Bulb its rule has darkened dimmed.
+func _draw_organs(sim: RoseSim) -> void:
+	for o in sim.organs():
+		if bool(o.housed) or String(o.id) in OWN_ORGANS:
+			continue
+		var tex := _organ_frame(String(o.art))
+		if tex == null:
+			continue
+		var dst := Rect2(int(o.x) * TILE, int(o.y) * TILE + TILE - tex.get_height(), tex.get_width(), tex.get_height())
+		buildings.draw_texture_rect(tex, dst, false, Color(0.45, 0.45, 0.55) if bool(o.dark) else Color.WHITE)
+
 ## Structures stand on their footprint: the sprite's bottom edge on the footprint's bottom row, its width the
 ## footprint's. A ghost is half-transparent with its build progress as a bar; a damaged one shows its HP.
 func _draw_buildings() -> void:
@@ -261,8 +284,10 @@ func _draw_buildings() -> void:
 		return
 	var sim: RoseSim = Sim.ensure()
 	_draw_zones(sim)
+	_draw_organs(sim)
 	for st in sim.structures():
-		var tex := Assets.texture(String(st.art), "t%d" % int(st.tier))
+		var own := String(st.def) in OWN_ORGANS
+		var tex: Texture2D = _organ_frame(String(st.art)) if own else Assets.texture(String(st.art), "t%d" % int(st.tier))
 		if tex == null:
 			continue
 		var fw := int(st.w) * TILE
@@ -271,7 +296,8 @@ func _draw_buildings() -> void:
 		var built := bool(st.built)
 		buildings.draw_texture_rect(tex, dst, false, Color(1, 1, 1, 1.0 if built else 0.45))
 		# the footprint's outline on the floor, Cyan for a ghost
-		buildings.draw_rect(Rect2(int(st.x) * TILE, int(st.y) * TILE, fw, fh), UiTheme.CYAN if not built else Color(UiTheme.OOZE_GLOW, 0.5), false, 1.0)
+		if not own:
+			buildings.draw_rect(Rect2(int(st.x) * TILE, int(st.y) * TILE, fw, fh), UiTheme.CYAN if not built else Color(UiTheme.OOZE_GLOW, 0.5), false, 1.0)
 		if not built or int(st.upgrading_to) > 0:
 			var total := maxi(1, int(st.build_total))
 			var frac := clampf(float(st.progress) / total, 0.0, 1.0)
