@@ -124,18 +124,18 @@ pub fn nearest_spot(w: &World, def: &str, from: (u16, u16)) -> Option<(u16, u16)
     best.map(|b| (b.1, b.2))
 }
 
-/// The grate nearest the Heart (Pass 2's "a grate visible 40 tiles east"), by tiles across and up.
-pub fn first_grate(w: &World) -> Option<(u16, u16)> {
+/// The grate nearest the Heart (Pass 2's "a grate visible 40 tiles east"), by tiles across and up, as a tile.
+pub fn first_grate(w: &World) -> Option<usize> {
     let (hx, hy) = heart_xy(w);
-    logistics::first_grate(&w.city.sim, hx as usize, hy as usize).map(|x| (x as u16, 0))
+    logistics::first_grate(&w.city.sim, hx as usize, hy as usize)
 }
 
 /// The anchor joined to the Heart where a Relay may stand nearest the first grate along the ground the Mat can grow
 /// on (a shaft that dead-ends under rock is not nearer for being close across; Mat cut off from the Heart is not the
 /// city's side of a break), ties by row then column.
 pub fn relay_spot(w: &World) -> Option<(u16, u16)> {
-    let (gx, _) = first_grate(w)?;
-    let way = logistics::ground_distance(&w.city.sim, gx as usize);
+    let g = first_grate(w)?;
+    let way = logistics::ground_distance(&w.city.sim, g);
     let joined = logistics::joined_to_heart(&w.city.sim);
     let sw = w.city.sim.w;
     (0..way.len()).filter(|&i| way[i] != usize::MAX && joined[i]).filter(|&i| w.colony.can_place(&w.defs, &w.city.sim, "relay", (i % sw) as u16, (i / sw) as u16).is_ok()).min_by_key(|&i| (way[i], i)).map(|i| ((i % sw) as u16, (i / sw) as u16))
@@ -143,8 +143,8 @@ pub fn relay_spot(w: &World) -> Option<(u16, u16)> {
 
 /// Whether the Mat reaches the first grate's market from the Heart.
 pub fn reaches_first_grate(w: &World) -> bool {
-    let Some((gx, _)) = first_grate(w) else { return false };
-    w.city.markets.iter().position(|&m| m == gx as usize).is_some_and(|k| w.city.from_heart(logistics::Kind::Market, k as u32).is_some())
+    let Some(g) = first_grate(w) else { return false };
+    w.city.markets.iter().position(|&m| m == g).is_some_and(|k| w.city.from_heart(logistics::Kind::Market, k as u32).is_some())
 }
 
 fn heart_xy(w: &World) -> (u16, u16) {

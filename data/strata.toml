@@ -1,0 +1,63 @@
+# Cyberpunk: ROSE — the stack (Full Design v3.19, Progression: The stack and the breach). Six strata of 192 x 48
+# in one Mat of 192 x 288, the Sump at the bottom. Pass 1's strata table gives what each is; the ground weights are
+# this design's, the Sump's the prototype's (the single-stratum map before the stack).
+#
+# Fields: n (1 the Sump) name short region (the Route Board's route name) key (the grate key that opens this
+# stratum's ceiling, an item id) ground: culvert_from culvert_every culvert_half pipe_above cave deposit water_rows.
+
+rows = 48
+width = 192
+
+[[stratum]]
+n = 1
+name = "the Sump"
+short = "SUMP"
+region = "SUMP EAST"
+key = "key_grate_sump"
+note = "black water, silt, the Heart"
+ground = { culvert_from = 12, culvert_every = 13, culvert_half = 1, pipe_above = 2, cave = 0.56, deposit = 0.025, water_rows = 1 }
+
+[[stratum]]
+n = 2
+name = "the Culverts"
+short = "CULVERTS"
+region = "CULVERT NORTH"
+key = "key_grate_culvert"
+note = "brick arches, pipe runs"
+ground = { culvert_from = 10, culvert_every = 12, culvert_half = 1, pipe_above = 2, cave = 0.60, deposit = 0.028, water_rows = 1 }
+
+[[stratum]]
+n = 3
+name = "the Storm Drains"
+short = "STORM DRAINS"
+region = "STORM DRAIN"
+key = "key_grate_drain"
+note = "newcomer flushes; water moves every Flood"
+ground = { culvert_from = 12, culvert_every = 14, culvert_half = 2, pipe_above = 0, cave = 0.58, deposit = 0.022, water_rows = 3 }
+
+[[stratum]]
+n = 4
+name = "the Service Tunnels"
+short = "SERVICE TUNNELS"
+region = "SERVICE WEST"
+key = "key_grate_service"
+note = "power conduits, Badge patrol routes"
+ground = { culvert_from = 9, culvert_every = 10, culvert_half = 1, pipe_above = 2, cave = 0.64, deposit = 0.02, water_rows = 1 }
+
+[[stratum]]
+n = 5
+name = "the Vault"
+short = "VAULT"
+region = "VAULT ARCHIVE"
+key = "key_vault_card"
+note = "a drowned corporate archive"
+ground = { culvert_from = 12, culvert_every = 16, culvert_half = 2, pipe_above = 0, cave = 0.68, deposit = 0.015, water_rows = 2 }
+
+[[stratum]]
+n = 6
+name = "the Undercroft"
+short = "UNDERCROFT"
+region = "UNDERCROFT LINE"
+key = ""
+note = "metro and utility levels under Night City; neon leaks through every grate"
+ground = { culvert_from = 20, culvert_every = 18, culvert_half = 2, pipe_above = 2, cave = 0.62, deposit = 0.02, water_rows = 1 }

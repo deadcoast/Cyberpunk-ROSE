@@ -16,4 +16,4 @@ pub mod sim;
 
 pub use genome::{Genome, Params};
 pub use organ::{Organ, OrganDef, Site};
-pub use sim::{MatSim, Mods, Stats};
+pub use sim::{MatSim, Mods, Stats, StratumGen};

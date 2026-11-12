@@ -96,10 +96,8 @@ var last_outcome := {}
 var route_memory := {}
 ## The city's one Stash (inventory crate through RoseStash); every screen is a view of it.
 var stash: RoseStash
-## Strata whose route cards are open; Phase E's Relay sets this, the three launch cards are open until then.
+## The highest stratum the Board offers at the founding (the bridge follows the city's stratum after it).
 var strata_open := 3
-## Region names per stratum at launch (Full Design, The Route Board).
-const REGIONS := {1: "SUMP EAST", 2: "CULVERT NORTH", 3: "STORM DRAIN"}
 ## The roster (people crate through RosePeople): every slimo's record, founded from the save's seed on first use.
 var people: RosePeople
 ## What the Route Board hands the Run: {stratum, seed, name, rig: PackedByteArray, runner: RosePeople.runner_setup,
@@ -186,8 +184,16 @@ func ensure_stash() -> RoseStash:
 func route_seed(stratum: int) -> int:
 	return ensure().route_seed(seed_value, stratum)
 
+## The Route Board's strata (Full Design v3.19): the city's stratum − 1 to + 1, held to the stack.
+func board_strata() -> PackedInt32Array:
+	return ensure().board_strata()
+
+## A stratum's route name (data/strata.toml).
 func region_name(stratum: int) -> String:
-	return String(REGIONS.get(stratum, "S%d DRAIN" % stratum))
+	for st in ensure().strata():
+		if int(st.n) == stratum:
+			return String(st.region)
+	return "S%d DRAIN" % stratum
 
 func memory_of(stratum: int, seed_v: int) -> PackedByteArray:
 	return route_memory.get(route_key(stratum, seed_v), PackedByteArray())

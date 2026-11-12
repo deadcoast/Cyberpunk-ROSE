@@ -3,6 +3,7 @@
 //! log. The Godot bridge calls these with its parts; `rose city` owns them all and plays twenty shifts.
 
 pub mod alerts;
+pub mod breach;
 pub mod cargo;
 pub mod city;
 pub mod grow;

@@ -238,12 +238,19 @@ impl FactionFile {
 
 // ---------------------------------------------------------------- the state
 
-/// The street above a grate: the grate's column and number on the stratum, and the faction that works it.
+/// The street above a grate: the grate's tile and number on its stratum, the faction that works it, and the stratum
+/// (Full Design v3.19: every stratum's grates open onto streets).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Street {
     pub grate: u16,
     pub number: u8,
     pub faction: u8,
+    #[serde(default = "sump")]
+    pub stratum: u8,
+}
+
+fn sump() -> u8 {
+    1
 }
 
 /// The city's standing with a faction: reputation −3..+3, favour toward the next step, eddies traded both ways, and
@@ -444,11 +451,9 @@ impl Economy {
         Economy { file, s, items, stock_items, uniques, templates_items }
     }
 
-    /// The founding (Full Design v3.15, Economy: The streets above the grates): the first grate's street is the
-    /// `first` faction's, each of `every` takes one more of the stratum's grates, the rest roll by the stratum's
-    /// weights. `grates` are the stratum's top-row grate columns west to east.
-    pub fn found(file: FactionFile, table: &ItemTable, seed: u64, grates: &[u16], first: u16, stratum: u8) -> Economy {
-        let n = file.factions.len();
+    /// One stratum's streets: the founding's first grate the Nomads', each faction of `every` at least one more grate of
+    /// the stratum, the rest by the stratum's weights (Full Design v3.15; v3.19 every stratum).
+    fn streets_of(file: &FactionFile, seed: u64, grates: &[u16], first: u16, stratum: u8) -> Vec<Street> {
         let mut r = rng(seed, 1, stratum as u64, 0);
         let first_f = file.index(&file.streets.first).unwrap_or(0);
         let mut faction: Vec<Option<u8>> = grates.iter().map(|&g| (g == first).then_some(first_f)).collect();
@@ -473,7 +478,22 @@ impl Economy {
                 x -= w;
             }
         }
-        let streets = grates.iter().enumerate().map(|(k, &g)| Street { grate: g, number: (k + 1) as u8, faction: faction[k].unwrap_or(first_f) }).collect();
+        grates.iter().enumerate().map(|(k, &g)| Street { grate: g, number: (k + 1) as u8, faction: faction[k].unwrap_or(first_f), stratum }).collect()
+    }
+
+    /// The founding (Full Design v3.15, Economy: The streets above the grates): the first grate's street is the
+    /// `first` faction's, each of `every` takes one more of the stratum's grates, the rest roll by the stratum's
+    /// weights. `grates` are the stratum's top-row grate columns west to east.
+    pub fn found(file: FactionFile, table: &ItemTable, seed: u64, grates: &[(u16, u8)], first: u16) -> Economy {
+        let n = file.factions.len();
+        let mut strata: Vec<u8> = grates.iter().map(|g| g.1).collect();
+        strata.sort_unstable();
+        strata.dedup();
+        let mut streets = Vec::new();
+        for s in strata {
+            let gs: Vec<u16> = grates.iter().filter(|g| g.1 == s).map(|g| g.0).collect();
+            streets.extend(Self::streets_of(&file, seed, &gs, first, s));
+        }
         let walk = file.factions.iter().map(|f| std::array::from_fn(|c| f.base(CATEGORIES[c]))).collect();
         let s = EconomySave { seed, streets, standing: vec![Standing::default(); n], walk, stock: vec![Vec::new(); n], bought_service: vec![0; n], next_id: 1, ..EconomySave::default() };
         let mut e = Economy::resolve(file, table, s);
@@ -1037,7 +1057,8 @@ mod tests {
     fn econ(seed: u64) -> (Economy, ItemTable) {
         let table = ItemTable::from_toml(items::ITEMS_TOML).unwrap();
         let grates = [10u16, 33, 56, 79, 102, 125, 148, 171];
-        (Economy::found(FactionFile::shipped(), &table, seed, &grates, 102, 1), table)
+        let grates: Vec<(u16, u8)> = grates.iter().map(|&g| (g, 1)).collect();
+        (Economy::found(FactionFile::shipped(), &table, seed, &grates, 102), table)
     }
 
     #[test]

@@ -286,21 +286,19 @@ impl City {
     /// at it); while the Mat does not reach it its cell is None and no cargo goes there.
     pub fn refresh_markets(&mut self) {
         let (w, h) = (self.sim.w, self.sim.h);
-        for x in 0..w {
-            if self.sim.sub[x] != sub::GRATE {
-                continue;
-            }
+        for g in self.sim.grates() {
+            let (x, gy) = (g % w, g / w);
             let mut best: Option<(usize, usize)> = None;
-            for y in 0..=MARKET_REACH.min(h - 1) {
+            for y in gy..=(gy + MARKET_REACH).min(h - 1) {
                 for xx in x.saturating_sub(MARKET_REACH)..=(x + MARKET_REACH).min(w - 1) {
                     let i = y * w + xx;
-                    let d = y + xx.abs_diff(x);
+                    let d = (y - gy) + xx.abs_diff(x);
                     if d <= MARKET_REACH && self.mat_mask[i] && best.map_or(true, |(bd, _)| d < bd) {
                         best = Some((d, i));
                     }
                 }
             }
-            let grate = x;
+            let grate = g;
             match self.markets.iter().position(|&m| m == grate) {
                 Some(k) => self.market_cells[k] = best.map(|b| b.1),
                 None => {
@@ -333,14 +331,25 @@ impl City {
         }
     }
 
-    /// A grate's number on the stratum, west to east from 1 (the threats' zones and every line of the log name grates so).
-    pub fn grate_number(&self, x: usize) -> usize {
-        1 + (0..x.min(self.sim.w)).filter(|&c| self.sim.sub[c] == sub::GRATE).count()
+    /// A grate tile's number on its stratum, west to east from 1.
+    pub fn grate_number(&self, g: usize) -> usize {
+        let (w, y) = (self.sim.w, g / self.sim.w);
+        1 + (y * w..g.min(self.sim.sub.len())).filter(|&c| self.sim.sub[c] == sub::GRATE).count()
     }
 
-    /// The number of the grate a market stands under.
-    pub fn market_grate(&self, market: usize) -> usize {
-        self.markets.get(market).map_or(market + 1, |&x| self.grate_number(x))
+    /// A grate's name in the log and on the cards: its number, and its stratum above the Sump ("5", "5 in S3").
+    pub fn grate_label(&self, g: usize) -> String {
+        let s = self.sim.stratum_at(g.min(self.sim.sub.len().saturating_sub(1)));
+        if s <= 1 {
+            self.grate_number(g).to_string()
+        } else {
+            format!("{} in S{s}", self.grate_number(g))
+        }
+    }
+
+    /// The name of the grate a market stands under.
+    pub fn market_grate(&self, market: usize) -> String {
+        self.markets.get(market).map_or((market + 1).to_string(), |&g| self.grate_label(g))
     }
 
     pub fn heart_cell(&self) -> Option<usize> {

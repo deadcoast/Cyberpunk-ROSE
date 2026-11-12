@@ -3,34 +3,54 @@
 
 pub mod city;
 pub mod field;
+pub mod strata;
 
 pub use city::{Arrival, City, CityStats, Consumer, Kind, Mover};
+pub use strata::{board_strata, StrataFile, StratumDef};
 
 /// Six Common (Junk) Chrome at 0.18 nutrient each.
 pub const FOUNDING_PIT: f32 = 6.0 * 0.18;
 /// The founding's feed a step (Pass 1's tuning rate), FOUNDING_BAIT of it painted ahead of the Mat toward the grate.
 pub const FOUNDING_FEED: f32 = 0.6;
 pub const FOUNDING_BAIT: f32 = 0.3;
+/// The Heart's tile in the Sump, from the Sump's ceiling (Full Design v3.19: the Heart stays in the Sump).
 pub const FOUNDING_HEART: (usize, usize) = (96, 25);
-/// The founding gives up growing after this many steps (seeds 11-26 reach the grate in 77-439).
+
+/// The founding stops trying after this many steps (seeds 11-26 reach the grate in 69-576).
 pub const FOUNDING_STEPS: usize = 4000;
+
+/// The stack as the game founds it (Full Design v3.19, The stack and the breach): six strata of `data/strata.toml`,
+/// the Sump at the bottom.
+pub fn stack(seed: u64, g: mat::Genome) -> mat::MatSim {
+    let f = StrataFile::shipped();
+    mat::MatSim::stack(f.width, f.rows, &f.gens(), seed, g)
+}
+
+/// The Heart's tile on a map: the Sump's ceiling and FOUNDING_HEART below it.
+pub fn heart_tile(sim: &mat::MatSim) -> (usize, usize) {
+    (FOUNDING_HEART.0.min(sim.w - 1), sim.ceiling(1) + FOUNDING_HEART.1.min(sim.strata_rows - 1))
+}
 
 /// The game's founding (Full Design, The founding): Pass 2's first session to 5:30 — the Heart and a Pit of six Junk
 /// Chrome, "a grate visible 40 tiles east; the Mat is 15 tiles out; second Pit, baited east", "the Mat reaches the
-/// grate" — which in this game's clock falls inside the first shift's run. The Sump stratum and the Heart born with
-/// every gene at 0.5 (Pass 1; Full Design v3.18: a class is earned), at its centre grown from alone on the founding feed, FOUNDING_BAIT of it a step painted on the
-/// ground ahead of the Mat nearest the first grate, until the Mat reaches that grate (tissue within
-/// city::MARKET_REACH of it, joined to the Heart); then the Heart's Pit holding six Junk Chrome.
+/// grate" — which in this game's clock falls inside the first shift's run. The stack with the Heart in the Sump, born
+/// with every gene at 0.5 (Pass 1; Full Design v3.18: a class is earned), or a strain code's genome (New Game+),
+/// grown from alone on the founding feed, FOUNDING_BAIT of it a step painted on the ground ahead of the Mat nearest
+/// the first grate, until the Mat reaches that grate (tissue within city::MARKET_REACH of it, joined to the Heart);
+/// then the Heart's Pit holding six Junk Chrome.
 pub fn founding(seed: u64) -> mat::MatSim {
-    use mat::{Genome, MatSim};
-    let g = Genome::default();
-    let mut sim = MatSim::new(192, 48, seed, g);
-    let (hx, hy) = FOUNDING_HEART;
+    founding_with(seed, mat::Genome::default())
+}
+
+/// The founding on a given genome (New Game+: the strain code's).
+pub fn founding_with(seed: u64, g: mat::Genome) -> mat::MatSim {
+    let mut sim = stack(seed, g);
+    let (hx, hy) = heart_tile(&sim);
     sim.seed_heart(hx, hy);
-    if let Some(gx) = first_grate(&sim, hx, hy) {
-        let way = ground_distance(&sim, gx);
+    if let Some(gt) = first_grate(&sim, hx, hy) {
+        let way = ground_distance(&sim, gt);
         for _ in 0..FOUNDING_STEPS {
-            if reaches_grate(&sim, gx) {
+            if reaches_grate(&sim, gt) {
                 break;
             }
             sim.feed(hx, hy, FOUNDING_FEED - FOUNDING_BAIT);
@@ -44,11 +64,12 @@ pub fn founding(seed: u64) -> mat::MatSim {
     sim
 }
 
-/// Whether the Mat joined to the Heart has tissue within MARKET_REACH of the grate at column `gx` (the test a market
-/// is found by).
-pub fn reaches_grate(sim: &mat::MatSim, gx: usize) -> bool {
+/// Whether the Mat joined to the Heart has tissue within MARKET_REACH of the grate tile `g` (the test a market is
+/// found by).
+pub fn reaches_grate(sim: &mat::MatSim, g: usize) -> bool {
     let joined = joined_to_heart(sim);
-    (0..joined.len()).any(|i| joined[i] && i / sim.w + (i % sim.w).abs_diff(gx) <= city::MARKET_REACH)
+    let (gx, gy) = (g % sim.w, g / sim.w);
+    (0..joined.len()).any(|i| joined[i] && (i / sim.w).abs_diff(gy) + (i % sim.w).abs_diff(gx) <= city::MARKET_REACH)
 }
 
 /// The tissue joined to the Heart along the Mat (tips, cords and nodes).
@@ -75,18 +96,19 @@ pub fn joined_to_heart(sim: &mat::MatSim) -> Vec<bool> {
     seen
 }
 
-/// The grate nearest a tile, by columns across and rows up (grates are on the top row).
+/// The grate of a tile's stratum nearest it, by columns across and rows up, as a tile.
 pub fn first_grate(sim: &mat::MatSim, hx: usize, hy: usize) -> Option<usize> {
-    (0..sim.w).filter(|&x| sim.sub[x] == mat::sim::sub::GRATE).min_by_key(|&x| (x.abs_diff(hx) + hy, x))
+    let s = sim.stratum_of_row(hy);
+    sim.grates_of(s).into_iter().min_by_key(|&g| ((g % sim.w).abs_diff(hx) + hy.abs_diff(g / sim.w), g))
 }
 
-/// Tiles from the grate at column `gx` (top row) to every cell, walked over the ground the Mat can grow on (rock and
-/// collapse are not); `usize::MAX` where no way leads.
-pub fn ground_distance(sim: &mat::MatSim, gx: usize) -> Vec<usize> {
+/// Tiles from the grate tile `g` to every cell, walked over the ground the Mat can grow on (rock, collapse and slabs
+/// are not); `usize::MAX` where no way leads.
+pub fn ground_distance(sim: &mat::MatSim, g: usize) -> Vec<usize> {
     let (w, h) = (sim.w, sim.h);
     let mut d = vec![usize::MAX; w * h];
-    d[gx] = 0;
-    let mut q = std::collections::VecDeque::from([gx]);
+    d[g] = 0;
+    let mut q = std::collections::VecDeque::from([g]);
     while let Some(i) = q.pop_front() {
         let (x, y) = (i % w, i / w);
         for (nx, ny) in [(x.wrapping_sub(1), y), (x + 1, y), (x, y.wrapping_sub(1)), (x, y + 1)] {

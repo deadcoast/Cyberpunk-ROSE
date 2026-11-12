@@ -70,6 +70,20 @@ negative = "full daylight, white light, outline on bars"
 status = "placeholder"
 
 [[slot]]
+id = "tile.slab"
+kind = "tile"
+size = [32, 32]
+frames = 2
+states = [""]
+ramp = "noir"
+silhouette = "hatch"
+tag = "SLB"
+anchor = "anchor.tile"
+prompt = "a poured concrete slab sealing a vertical sewer shaft between two levels, rebar ends, a stencilled number, cold and heavy, 2-tone dither, no outline"
+negative = "gradient, outline, green, text"
+status = "placeholder"
+
+[[slot]]
 id = "tile.collapse"
 kind = "tile"
 size = [32, 32]

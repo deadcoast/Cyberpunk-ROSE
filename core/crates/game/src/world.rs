@@ -41,6 +41,14 @@ pub fn starting_haul(stash: &mut Stash, table: &ItemTable) {
     }
 }
 
+/// The economy at the founding (Full Design v3.19): a street above every grate of the stack, by stratum, the first
+/// grate of the Heart's the Nomads'.
+pub fn found_economy(sim: &mat::MatSim, table: &ItemTable, seed: u64) -> economy::Economy {
+    let grates: Vec<(u16, u8)> = sim.grates().into_iter().map(|g| (g as u16, sim.stratum_at(g))).collect();
+    let first = sim.heart.and_then(|(hx, hy)| logistics::first_grate(sim, hx, hy)).unwrap_or(0) as u16;
+    economy::Economy::found(economy::FactionFile::shipped(), table, seed, &grates, first)
+}
+
 pub struct World {
     pub city: City,
     pub colony: Colony,
@@ -90,9 +98,7 @@ impl World {
         let mut stash = Stash::new();
         starting_haul(&mut stash, &table);
         let threats = threat::Threats::new(&city.sim, seed);
-        let grates: Vec<u16> = (0..city.sim.w).filter(|&x| city.sim.sub[x] == mat::sim::sub::GRATE).map(|x| x as u16).collect();
-        let first = city.sim.heart.and_then(|(hx, hy)| logistics::first_grate(&city.sim, hx, hy)).unwrap_or(0) as u16;
-        let economy = economy::Economy::found(economy::FactionFile::shipped(), &table, seed, &grates, first, 1);
+        let economy = found_economy(&city.sim, &table, seed);
         let mut w = World {
             city,
             colony,
@@ -176,12 +182,14 @@ impl World {
     pub fn end_shift(&mut self) -> Shift {
         let mut folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
         let loop_lines = crate::loops::play(&mut self.colony, &mut folk, &mut self.stash, &self.table, Some(&self.threats), &self.city.sim, self.threats.seed, self.day, self.city.tick, &mut self.log);
-        let town = Town { city: &mut self.city, colony: &mut self.colony, defs: &self.defs };
+        let town = Town { city: &mut self.city, colony: &mut self.colony, defs: &self.defs, flush_mult: 1.0 };
         let store = Store { stash: &mut self.stash, ledger: &mut self.ledger, bench: &mut self.bench, table: &self.table, recipes: &self.recipes };
         let folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
         let mut s = shift::end_shift(town, store, folk, self.day, &mut self.log);
         s.people_lines.splice(0..0, loop_lines);
         self.last = Some(s.outcome.clone());
+        // the breach and the city's stratum before the threats choose what comes (Full Design v3.19)
+        crate::breach::shift_end(&mut self.city, &self.colony, &self.defs, Some(&mut self.threats), &mut self.log);
         self.pressure_end(&s.outcome);
         // the headless city's runs carry no bodies: a recover link here is laid nowhere
         let (lines, _) = crate::trade::end_shift(&mut self.economy, &mut self.ledger, &mut self.stash, &self.table, &mut self.city, &mut self.colony, &mut self.roster, &self.traits, &self.names, Some(&mut self.threats), None, &s.closed.report.to_faction, self.day, self.raiders, &mut self.log);

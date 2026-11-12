@@ -320,7 +320,7 @@ mod tests {
         save.ledger.stores.push((3, vec![items::ItemInstance::new(items::ItemId(1))]));
         // the surface's factions, standing and a contract in hand (v13)
         let table = items::ItemTable::from_toml(items::ITEMS_TOML).unwrap();
-        let mut econ = economy::Economy::found(economy::FactionFile::shipped(), &table, 7, &[10, 33, 56, 79, 102], 102, 1);
+        let mut econ = economy::Economy::found(economy::FactionFile::shipped(), &table, 7, &[(10, 1), (33, 1), (56, 1), (79, 1), (102, 1)], 102);
         econ.refresh_offers(&economy::ShiftFacts { reached: vec![102], ..Default::default() }, 1, &mut |s| format!("N{s}"));
         let offer = econ.s.offers[0].id;
         econ.accept(offer, 1).unwrap();

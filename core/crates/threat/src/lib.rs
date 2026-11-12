@@ -174,7 +174,7 @@ impl ThreatFile {
 /// One grate's zone (Full Design, Pressure: Attention).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Zone {
-    /// the grate's column on the top row
+    /// the grate's tile (its stratum's ceiling; Full Design v3.19, the stack)
     pub grate: usize,
     pub attention: f32,
     /// the shift each stage last came down here
@@ -302,6 +302,13 @@ pub struct Event {
     /// Mat tiles it burned, structures it ruined, for the log
     pub burned: u32,
     pub ruined: u32,
+    /// the share of its squad sent (chapter 3's accepted accord sends half; Full Design v3.19)
+    #[serde(default = "whole")]
+    pub share: f32,
+}
+
+fn whole() -> f32 {
+    1.0
 }
 
 /// An event due down a grate this shift.
@@ -403,14 +410,33 @@ pub struct ThreatSave {
     pub next_id: u32,
     pub shift: u32,
     pub owed: (u32, u32),
+    #[serde(default)]
+    pub campaign: Campaign,
+}
+
+/// What the campaign changed of the threats (Full Design v3.19, Narrative and Ivan: the accord, difficulty): the
+/// Attention a zone loses a shift, whether Cleansings come from any stratum (after chapter 3's envoy), and whether
+/// the Oathkeepers have mapped the Heart (an accepted accord: every Sweep and Cleansing walks for it).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Campaign {
+    pub decay: f32,
+    pub any_cleansing: bool,
+    pub mapped: bool,
+}
+
+impl Default for Campaign {
+    fn default() -> Self {
+        Campaign { decay: 2.0, any_cleansing: false, mapped: false }
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct Threats {
     pub rules: ThreatFile,
     pub seed: u64,
-    /// the stratum the city stands in (the Sump, 1, until a Relay breaches up — Phase E)
+    /// the city's stratum: the highest the Mat has reached (Full Design v3.19, The stack and the breach)
     pub stratum: u8,
+    pub campaign: Campaign,
     pub zones: Vec<Zone>,
     /// the zone of every tile (u16::MAX where no ground leads)
     zone_of: Vec<u16>,
@@ -492,10 +518,11 @@ impl Threats {
     /// grow on, ties to the lower column.
     pub fn new(sim: &MatSim, seed: u64) -> Threats {
         let rules = ThreatFile::shipped();
-        let grates: Vec<usize> = (0..sim.w).filter(|&x| sim.sub[x] == sub::GRATE).collect();
+        let grates: Vec<usize> = sim.grates();
         let zones = grates.iter().map(|&g| Zone { grate: g, attention: 0.0, last: vec![None; rules.stage.len()], sold: 0, kills: 0, blackline: 0, gained: 0.0 }).collect();
         let n = sim.w * sim.h;
         let mut t = Threats {
+            campaign: Campaign { decay: rules.attention.decay, ..Campaign::default() },
             rules,
             seed,
             stratum: 1,
@@ -527,7 +554,7 @@ impl Threats {
 
     /// What a save keeps.
     pub fn save(&self) -> ThreatSave {
-        ThreatSave { stratum: self.stratum, zones: self.zones.clone(), bodies: self.bodies.clone(), events: self.events.clone(), due: self.due.clone(), flood: self.flood.clone(), next_id: self.next_id, shift: self.shift, owed: self.owed }
+        ThreatSave { stratum: self.stratum, zones: self.zones.clone(), bodies: self.bodies.clone(), events: self.events.clone(), due: self.due.clone(), flood: self.flood.clone(), next_id: self.next_id, shift: self.shift, owed: self.owed, campaign: self.campaign.clone() }
     }
 
     /// The threats a save kept, on its stratum (an empty save is a fresh start).
@@ -543,6 +570,7 @@ impl Threats {
             t.next_id = s.next_id.max(1);
             t.shift = s.shift.max(1);
             t.owed = s.owed;
+            t.campaign = s.campaign;
         }
         t
     }
@@ -575,6 +603,23 @@ impl Threats {
             self.stain = vec![0; n];
         }
         self.last_step = sim.tick;
+    }
+
+    /// A zone's grate's name: its number on its stratum, west to east, and the stratum above the Sump ("5", "5 in S3").
+    pub fn grate_label(&self, sim: &MatSim, zone: usize) -> String {
+        let g = self.zones[zone].grate;
+        let row = g / sim.w * sim.w;
+        let n = 1 + (row..g).filter(|&c| sim.sub[c] == sub::GRATE).count();
+        match sim.stratum_at(g) {
+            1 => n.to_string(),
+            s => format!("{n} in S{s}"),
+        }
+    }
+
+    /// A zone's grate as (x, y).
+    pub fn grate_xy(&self, sim: &MatSim, zone: usize) -> (u16, u16) {
+        let g = self.zones[zone].grate;
+        ((g % sim.w) as u16, (g / sim.w) as u16)
     }
 
     /// The zone a tile is in.
@@ -844,12 +889,12 @@ impl Threats {
         let near_defs: Vec<usize> = self.rules.attention.near_grate.iter().filter_map(|d| defs.index(d)).collect();
         let zone_defs: Vec<usize> = self.rules.attention.in_zone.iter().filter_map(|d| defs.index(d)).collect();
         for k in 0..self.zones.len() {
-            let g = (self.zones[k].grate as u16, 0u16);
+            let g = self.grate_xy(sim, k);
             let mut gain = 0.0f32;
             for i in 0..sim.hy.len() {
                 if sim.hy[i] == hy::NODE && !sim.is_bloom(i) {
                     let t = ((i % sim.w) as u16, (i / sim.w) as u16);
-                    if (t.0 as i32 - g.0 as i32).abs() + t.1 as i32 <= near {
+                    if (t.0 as i32 - g.0 as i32).abs() + (t.1 as i32 - g.1 as i32).abs() <= near {
                         gain += lume;
                     }
                 }
@@ -862,7 +907,7 @@ impl Threats {
                 if defs.structure[s.def].id == "lume_farm" && garden_quiet(sim, garden, (s.x as i32, s.y as i32)) {
                     continue;
                 }
-                let near_it = near_defs.contains(&s.def) && (s.x as i32 - g.0 as i32).abs() + s.y as i32 <= near;
+                let near_it = near_defs.contains(&s.def) && (s.x as i32 - g.0 as i32).abs() + (s.y as i32 - g.1 as i32).abs() <= near;
                 let in_it = zone_defs.contains(&s.def) && self.zone_at(sim, s.x, s.y) == Some(k);
                 if near_it || in_it {
                     gain += a;
@@ -874,7 +919,7 @@ impl Threats {
                 if colony.dark_bulbs.contains(&(bi as u32)) || colony.nerve.dark_bulbs.contains(&(bi as u32)) || colony.occupied(defs, t.0 as u16, t.1 as u16).is_some() || garden_quiet(sim, garden, t) {
                     continue;
                 }
-                if (t.0 - g.0 as i32).abs() + t.1 <= near {
+                if (t.0 - g.0 as i32).abs() + (t.1 - g.1 as i32).abs() <= near {
                     gain += BULB_ATTENTION;
                 }
             }
@@ -888,9 +933,13 @@ impl Threats {
             if open_grates && reached {
                 gain *= self.rules.attention.open_grates;
             }
+            // closer to the white light (Full Design v3.19): a point a shift a stratum the city stands above the Sump
+            if reached {
+                gain += self.stratum.saturating_sub(1) as f32;
+            }
             let z = &mut self.zones[k];
             z.gained = gain;
-            let decay = self.rules.attention.decay + if reliquary { 1.0 } else { 0.0 };
+            let decay = self.campaign.decay + if reliquary { 1.0 } else { 0.0 };
             z.attention = (z.attention + gain - decay).clamp(0.0, self.rules.attention.max);
             z.sold = 0;
             z.kills = 0;
@@ -916,7 +965,8 @@ impl Threats {
             let a = self.zones[k].attention;
             let mut pick = None;
             for st in (0..self.rules.stage.len()).rev() {
-                if a < self.rules.stage[st].at || self.rules.stage[st].from > self.stratum {
+                let from = if self.campaign.any_cleansing && self.rules.stage[st].id == "cleansing" { 1 } else { self.rules.stage[st].from };
+                if a < self.rules.stage[st].at || from > self.stratum {
                     continue;
                 }
                 let quiet = (st..self.rules.stage.len()).any(|s| self.zones[k].last[s].is_some_and(|d| next.saturating_sub(d) < self.rules.stage[s].quiet));
@@ -929,7 +979,7 @@ impl Threats {
                 let mut r = self.rng(100 + k as u64);
                 let in_ticks = r.below(self.rules.stage[st].arrive_in.max(1));
                 self.due.push(Due { stage: st, zone: k as u16, in_ticks });
-                out.notes.push(Note { loss: false, decision: true, what: format!("grate {} is loud enough for a {}", k + 1, self.rules.stage[st].name) });
+                out.notes.push(Note { loss: false, decision: true, what: format!("grate {} is loud enough for a {}", self.grate_label(&city.sim, k), self.rules.stage[st].name) });
             }
         }
         // salvage owed; what fell, was repelled and lived through
@@ -954,35 +1004,50 @@ impl Threats {
 
     /// Send a stage down a zone's grate now (the scheduler, and the proof's forced Cleansing).
     pub fn send(&mut self, city: &City, colony: &Colony, defs: &StructureFile, stage: usize, zone: usize) -> Vec<Note> {
+        self.send_share(city, colony, defs, stage, zone, 1.0)
+    }
+
+    /// Send a stage with a share of its squad (chapter 3's accepted accord: half).
+    pub fn send_share(&mut self, city: &City, colony: &Colony, defs: &StructureFile, stage: usize, zone: usize, share: f32) -> Vec<Note> {
         let st = self.rules.stage[stage].clone();
         let id = self.next_id;
         self.next_id += 1;
         self.zones[zone].last[stage] = Some(self.shift);
         let lungs = colony.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "lung").count() as f32;
         let flood_left = (st.flood_steps as f32 * (1.0 - st.lung_cut * lungs).max(0.0)).round() as u32;
-        let mut e = Event { id, stage, zone: zone as u16, started: city.tick, phase: Phase::Bodies, flood_left, sent: 0, fallen: 0, flamers_out: false, way: 0, burned: 0, ruined: 0 };
-        let mut notes = vec![Note::loss(format!("a {} came down grate {}", st.name, zone + 1))];
+        let phase = if flood_left > 0 { Phase::Flood } else { Phase::Bodies };
+        self.events.push(Event { id, stage, zone: zone as u16, started: city.tick, phase, flood_left, sent: 0, fallen: 0, flamers_out: false, way: 0, burned: 0, ruined: 0, share: share.clamp(0.05, 1.0) });
+        let gl = self.grate_label(&city.sim, zone);
+        let mut notes = vec![Note::loss(format!("a {} came down grate {gl}", st.name))];
         if flood_left > 0 {
-            e.phase = Phase::Flood;
-            notes.push(Note::loss(format!("the Oathkeepers opened the sluice at grate {}: bleach in the water for {flood_left} Mat steps", zone + 1)));
+            notes.push(Note::loss(format!("the Oathkeepers opened the sluice at grate {gl}: bleach in the water for {flood_left} Mat steps")));
         } else {
-            e.sent = self.send_squad(city, colony, defs, &st, id, zone, false);
+            let n = self.send_squad(city, colony, defs, &st, id, zone, false);
+            if let Some(e) = self.events.iter_mut().find(|e| e.id == id) {
+                e.sent = n;
+            }
         }
-        self.events.push(e);
         notes
     }
 
     #[allow(clippy::too_many_arguments)]
     fn send_squad(&mut self, city: &City, colony: &Colony, defs: &StructureFile, st: &StageDef, event: u32, zone: usize, flamers: bool) -> u32 {
-        let g = (self.zones[zone].grate as u16, 0u16);
-        let source = self.brightest(&city.sim, colony, defs, zone);
+        let g = self.grate_xy(&city.sim, zone);
+        // mapped (an accepted accord): every squad walks for the Heart, never a decoy (Full Design v3.19)
+        let heart = city.sim.heart.map(|(x, y)| (x as u16, y as u16));
+        let source = match heart {
+            Some(h) if self.campaign.mapped => h,
+            _ => self.brightest(&city.sim, colony, defs, zone),
+        };
+        let share = self.events.iter().find(|e| e.id == event).map_or(1.0, |e| e.share);
         let mut n = 0;
         for (role, count) in &st.squad {
             let role = Role::from_key(role);
             if (role == Role::Flamer) != flamers {
                 continue;
             }
-            for _ in 0..*count {
+            let count = ((*count as f32 * share).ceil() as u32).max(1);
+            for _ in 0..count {
                 let goal = match (st.id.as_str(), role) {
                     ("cleansing", Role::Flamer) => self.burn_target(colony, defs).map(Goal::Burn).unwrap_or(Goal::Heart),
                     ("cleansing", _) => Goal::Heart,
@@ -1172,7 +1237,7 @@ impl Threats {
                     }
                 }
                 Goal::Leave => {
-                    let g = (self.zones[b.zone as usize].grate as u16, 0);
+                    let g = self.grate_xy(&city.sim, b.zone as usize);
                     if pos == g {
                         self.bodies[k].gone = true;
                         None
@@ -1528,7 +1593,7 @@ impl Threats {
                     e.sent += n;
                     e.way = if way == NONE16 { 1 } else { way as u32 };
                 }
-                notes.push(Note::loss(format!("the white light comes down grate {}", zone + 1)));
+                notes.push(Note::loss(format!("the white light comes down grate {}", self.grate_label(&city.sim, zone))));
             }
         }
         // ---- what landed: bodies, structures
@@ -1632,7 +1697,7 @@ impl Threats {
                         e.flamers_out = true;
                         e.sent += n;
                     }
-                    notes.push(Note::loss(format!("flamers come down grate {} for the Pits and the Heart", zone + 1)));
+                    notes.push(Note::loss(format!("flamers come down grate {} for the Pits and the Heart", self.grate_label(&city.sim, zone))));
                     continue;
                 }
             }
@@ -1653,6 +1718,7 @@ impl Threats {
                 if matches!(st.id.as_str(), "sweep" | "cleansing") && !city.sim.heart_lost {
                     self.lived.push(st.id.clone());
                 }
+                let gl = self.grate_label(&city.sim, zone);
                 let e = self.events.iter_mut().find(|e| e.id == id).unwrap();
                 e.phase = Phase::Done;
                 if st.salvage_per == "event" && sent > 0 && fallen > 0 {
@@ -1662,7 +1728,7 @@ impl Threats {
                     self.owed.0 += (roll as f32 * fallen as f32 / sent as f32).round() as u32;
                     self.owed.1 += (relic as f32 * fallen as f32 / sent as f32).round() as u32;
                 }
-                notes.push(Note { loss: false, decision: false, what: format!("the {} at grate {} is over: {fallen} of {sent} fell, {} tiles of Mat burned, {} structures ruined", st.name, zone + 1, e.burned, e.ruined) });
+                notes.push(Note { loss: false, decision: false, what: format!("the {} at grate {} is over: {fallen} of {sent} fell, {} tiles of Mat burned, {} structures ruined", st.name, gl, e.burned, e.ruined) });
             }
         }
         notes
@@ -1786,11 +1852,35 @@ mod tests {
     fn a_gate_holds_the_lamps_and_only_flame_opens_it() {
         let (mut c, mut col, defs, mut t) = city();
         let g = t.zones.iter().position(|z| c.markets.contains(&z.grate)).unwrap();
-        let gx = t.zones[g].grate;
+        let (gx, gy) = t.grate_xy(&c.sim, g);
+        col.progress.tech = progress::Tech::every_structure();
         // a Gate across the throat under the grate, wherever its anchor takes it
         let mut gate = None;
-        for (x, rot) in [(gx, false), (gx.saturating_sub(1), false)] {
-            if let Ok(id) = col.place_r(&defs, &c.sim, "gate", x as u16, 1, rot) {
+        let mut why = Vec::new();
+        // rows where the shaft is two wide: a Gate at the grate's column closes it
+        let w = c.sim.w;
+        let narrow = |y: u16| !walkable(&c.sim, y as usize * w + gx as usize - 1) && !walkable(&c.sim, y as usize * w + gx as usize + 2);
+        let tries: Vec<(u16, u16, bool)> = (1..=20u16).filter(|&dy| narrow(gy + dy)).map(|dy| (gx, gy + dy, false)).take(1).collect();
+        // the Mat down the shaft to it, joined to the founding's tissue at the grate
+        if let Some(&(_, ty, _)) = tries.first() {
+            for y in gy..=ty + 1 {
+                for x in [gx, gx + 1] {
+                    let i = y as usize * w + x as usize;
+                    if mat::sim::sub::GROWABLE[c.sim.sub[i] as usize] && !c.sim.is_hyphal_at(i) {
+                        c.sim.hy[i] = hy::CORD;
+                        c.sim.n[i] = 0.5;
+                    }
+                }
+            }
+            c.sim.place_relay(gx as usize + 1, ty as usize + 1);
+            c.sim.compute_signal();
+        }
+        for (x, y, rot) in tries {
+            let r = col.place_r(&defs, &c.sim, "gate", x, y, rot);
+            if let Err(e) = &r {
+                why.push(format!("{x},{y}: {e:?}"));
+            }
+            if let Ok(id) = r {
                 let s = col.get_mut(id).unwrap();
                 s.built = true;
                 s.hp = 400;
@@ -1798,14 +1888,25 @@ mod tests {
                 break;
             }
         }
-        let Some(gate) = gate else { return };
+        let gate = gate.unwrap_or_else(|| panic!("a Gate stands across the throat under the founding's grate: {why:?}"));
         let st = t.rules.stage_index("cleansing").unwrap();
         t.send(&c, &col, &defs, st, g);
-        run(&mut c, &mut col, &defs, &mut t, &Posts::default(), 600);
-        // the lamp carriers wait at the Gate: none passes it while it stands
-        let hp_mid = col.get(gate).map(|s| s.hp);
-        assert_eq!(hp_mid, Some(400), "no carrier breaks a Gate");
-        assert!(t.bodies.iter().filter(|b| b.role == Role::Carrier && !b.dead).all(|b| b.y <= 1));
+        let (gate_x, gate_y) = col.get(gate).map(|s| (s.x, s.y)).unwrap();
+        // the lamp carriers wait at the Gate: none passes it and it takes no harm until a flamer stands beside it
+        let mut flamed = false;
+        for _ in 0..1200 {
+            run(&mut c, &mut col, &defs, &mut t, &Posts::default(), 1);
+            let hp = col.get(gate).map(|s| s.hp);
+            if !flamed {
+                assert_eq!(hp, Some(400), "nothing but flame harms a Gate");
+                assert!(t.bodies.iter().filter(|b| b.role == Role::Carrier && !b.dead).all(|b| b.y < gate_y), "a carrier passed a standing Gate");
+            }
+            flamed |= t.bodies.iter().any(|b| b.role == Role::Flamer && !b.dead && cheb((b.x, b.y), (gate_x, gate_y)).min(cheb((b.x, b.y), (gate_x + 1, gate_y))) <= 1);
+            if hp.is_none() {
+                break;
+            }
+        }
+        assert!(flamed, "the flamers came to the Gate");
     }
 
     #[test]
@@ -1816,9 +1917,10 @@ mod tests {
         // cut the founding's cord to the grate below its top: the top is cut off
         let joined = logistics::joined_to_heart(&c.sim);
         let w = c.sim.w;
-        let top: Vec<usize> = (0..joined.len()).filter(|&i| joined[i] && i / w <= 6).collect();
+        let y0 = c.sim.ceiling(1);
+        let top: Vec<usize> = (0..joined.len()).filter(|&i| joined[i] && i / w >= y0 && i / w <= y0 + 6).collect();
         assert!(!top.is_empty());
-        let cut: Vec<usize> = (0..joined.len()).filter(|&i| i / w == 7 && c.sim.is_hyphal_at(i)).collect();
+        let cut: Vec<usize> = (0..joined.len()).filter(|&i| i / w == y0 + 7 && c.sim.is_hyphal_at(i)).collect();
         for i in cut {
             c.sim.sever(i % w, i / w);
         }
@@ -1864,7 +1966,8 @@ mod tests {
     fn quarantine_severs_mat_dark_two_shift_ends_running() {
         let (mut c, mut col, defs, mut t) = city();
         let w = c.sim.w;
-        let cut: Vec<usize> = (0..c.sim.hy.len()).filter(|&i| i / w == 7 && c.sim.is_hyphal_at(i)).collect();
+        let y0 = c.sim.ceiling(1);
+        let cut: Vec<usize> = (0..c.sim.hy.len()).filter(|&i| i / w == y0 + 7 && c.sim.is_hyphal_at(i)).collect();
         for i in cut {
             c.sim.sever(i % w, i / w);
         }

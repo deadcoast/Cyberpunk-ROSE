@@ -54,6 +54,9 @@ var alerts_now: Array = []
 var minimap: TextureRect
 var minimap_frame: Control
 var minimap_img: Image
+var minimap_label: Label
+## the stratum the minimap shows: the one the camera is in (Full Design v3.19: the stack)
+var mm_stratum := {}
 var stack_return := Vector2.ZERO   # where the camera was before the Stack view framed the stratum
 
 func _ready() -> void:
@@ -141,6 +144,8 @@ func _build_content(c: Control) -> void:
 	minimap.mouse_filter = Control.MOUSE_FILTER_STOP
 	minimap.gui_input.connect(_on_minimap_input)
 	mm.add_child(minimap)
+	minimap_label = make_label(mm, "", Vector2(4, 4), UiTheme.DUST)
+	minimap_label.z_index = 2
 	minimap_frame = Control.new()
 	minimap_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	minimap_frame.size = minimap.size
@@ -815,6 +820,11 @@ func _card_tile(info: Dictionary) -> void:
 	if bool(t.cut):
 		marks.append("marked to be cut")
 	make_label(card, "   ".join(marks), Vector2(6, 26), UiTheme.DUST)
+	# a crossing between strata: its slab, and the breach (Full Design v3.19, The stack and the breach)
+	for cr in sim.crossings():
+		if int(cr.y) == y and (int(cr.x) == x or int(cr.x) + 1 == x):
+			_crossing_block(cr)
+			return
 	if String(t.get("organ", "")) != "":
 		_organ_block(t, 37)
 	# the handoff (Full Design v3.18): the Mat's proposed bypass, confirmed or severed here
@@ -842,6 +852,31 @@ func _card_tile(info: Dictionary) -> void:
 			sim.erase_zone(int(t.zone))
 			card_sig = ""
 			world.redraw_city())
+
+## A slab's card: where it leads, how it opens; OPEN spends the stratum's grate key.
+func _crossing_block(cr: Dictionary) -> void:
+	var sim: RoseSim = Sim.ensure()
+	var above := int(cr.below) + 1
+	var name := ""
+	for st in sim.strata():
+		if int(st.n) == above:
+			name = String(st.name).to_upper()
+	if not bool(cr.sealed):
+		make_label(card, "THE WAY INTO S%d %s IS OPEN" % [above, name], Vector2(6, 37), UiTheme.OOZE_GLOW)
+		return
+	make_label(card, "SLAB: THE WAY INTO S%d %s" % [above, name], Vector2(6, 37), UiTheme.ACID)
+	make_label(card, "a Relay within 4 tiles breaks it at the shift's end", Vector2(6, 48), UiTheme.CHALK)
+	if String(cr.key) == "":
+		return
+	if bool(cr.has_key):
+		make_button(card, "OPEN WITH THE %s" % String(cr.key_name).to_upper(), Vector2(6, 62), func():
+			var why: String = sim.open_crossing(int(cr.tile))
+			if why != "":
+				push_warning(why)
+			card_sig = ""
+			world.redraw_city())
+	else:
+		make_label(card, "or the %s, which the Stash has not" % String(cr.key_name), Vector2(6, 59), UiTheme.DUST)
 
 # ---------------------------------------------------------------- the alerts
 func _level_color(level: String) -> Color:
@@ -905,29 +940,51 @@ func _draw_alerts() -> void:
 		alert_rows.add_child(b)
 
 # ---------------------------------------------------------------- the minimap
+## The stratum the camera is in, held to the strata reached.
+func _camera_stratum() -> Dictionary:
+	var row := int(cam.position.y / WorldView.TILE)
+	var best := {}
+	for st in world.strata_info:
+		if not bool(st.reached):
+			continue
+		best = st if best.is_empty() else best
+		if row >= int(st.ceiling) and row < int(st.ceiling) + int(st.rows):
+			return st
+		if int(st.ceiling) < int(best.ceiling):
+			best = st
+	return best
+
 func _paint_minimap(sim: RoseSim) -> void:
 	var rgb: PackedByteArray = sim.stack_image()
 	if rgb.size() != world.w * world.h * 3:
 		return
-	minimap_img = Image.create_from_data(world.w, world.h, false, Image.FORMAT_RGB8, rgb)
-	if minimap.texture == null:
+	mm_stratum = _camera_stratum()
+	var y0 := int(mm_stratum.get("ceiling", 0))
+	var rows := int(mm_stratum.get("rows", world.h))
+	var whole := Image.create_from_data(world.w, world.h, false, Image.FORMAT_RGB8, rgb)
+	minimap_img = whole.get_region(Rect2i(0, y0, world.w, mini(rows, world.h - y0)))
+	if minimap.texture == null or (minimap.texture as ImageTexture).get_height() != minimap_img.get_height():
 		minimap.texture = ImageTexture.create_from_image(minimap_img)
 	else:
 		(minimap.texture as ImageTexture).update(minimap_img)
+	minimap_label.text = "S%d %s" % [int(mm_stratum.get("n", 1)), String(mm_stratum.get("short", ""))]
 	minimap_frame.queue_redraw()
 
 func _draw_minimap_frame() -> void:
 	var half: Vector2 = get_viewport_rect().size * 0.5 / cam.zoom.x / WorldView.TILE
-	var c: Vector2 = cam.position / WorldView.TILE
-	var k: Vector2 = minimap.size / Vector2(maxi(1, world.w), maxi(1, world.h))
+	var y0 := float(mm_stratum.get("ceiling", 0))
+	var rows := float(mm_stratum.get("rows", world.h))
+	var c: Vector2 = cam.position / WorldView.TILE - Vector2(0, y0)
+	var k: Vector2 = minimap.size / Vector2(maxi(1, world.w), maxf(1.0, rows))
 	var r := Rect2((c - half) * k, half * 2.0 * k)
 	r = r.intersection(Rect2(Vector2.ZERO, minimap.size))
 	minimap_frame.draw_rect(r, UiTheme.CYAN, false, 1.0)
 
 func _on_minimap_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var k: Vector2 = Vector2(world.w, world.h) / minimap.size
-		var t: Vector2 = (event.position * k).floor()
+		var rows := float(mm_stratum.get("rows", world.h))
+		var k: Vector2 = Vector2(world.w, rows) / minimap.size
+		var t: Vector2 = (event.position * k).floor() + Vector2(0, float(mm_stratum.get("ceiling", 0)))
 		following = false
 		if view_index == 2:
 			set_view(0)
@@ -971,12 +1028,13 @@ func _draw_cursor() -> void:
 		cursor.draw_rect(r, col, false, 2.0)
 
 # ---------------------------------------------------------------- views, keys, the mouse
-## Street, District or Stack. The Stack view frames the whole stratum; leaving it returns to where the camera was.
+## Street, District or Stack. The Stack view frames the strata the city has reached; leaving it returns to where the camera was.
 func set_view(i: int) -> void:
 	var to := clampi(i, 0, ZOOMS.size() - 1)
 	if to == 2 and view_index != 2:
 		stack_return = cam.position
-		cam.position = Vector2(world.w, world.h) * WorldView.TILE / 2.0
+		# the strata the city has reached, framed (Full Design v3.19: the Stack view is the stack)
+		cam.position = Vector2(world.w / 2.0, (world.top_row + world.h) / 2.0) * WorldView.TILE
 	elif to != 2 and view_index == 2 and stack_return != Vector2.ZERO:
 		cam.position = stack_return
 	view_index = to

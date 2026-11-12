@@ -951,6 +951,18 @@ pub struct Roster {
 /// The flush (Full Design v3.12, Recruitment): a batch of 1–6 every 9–15 shifts; a newcomer not sheltered within
 /// two shifts goes feral.
 pub const FLUSH_SIZE: (u32, u32) = (1, 6);
+
+/// A flush's batch at a grate of `stratum` (Full Design v3.19, Newcomers by stratum): FLUSH_SIZE for each stratum of
+/// the grate, times `mult` (the occupation's 2, Endless Sump's growth with the Mat), rounded.
+pub fn flush_size(rng: &mut Pcg32, stratum: u8, mult: f32) -> u32 {
+    let n: u32 = (0..stratum.max(1)).map(|_| FLUSH_SIZE.0 + rng.below(FLUSH_SIZE.1 - FLUSH_SIZE.0 + 1)).sum();
+    if (mult - 1.0).abs() < 1e-6 {
+        n
+    } else {
+        (n as f32 * mult).round().max(1.0) as u32
+    }
+}
+
 pub const FLUSH_EVERY: (u32, u32) = (9, 15);
 pub const FERAL_AFTER: u8 = 2;
 /// The census's (Full Design v3.18, Research: Flesh tier 4).
@@ -1012,11 +1024,11 @@ impl Roster {
 
     /// A flush comes down at the end of shift `day` when its time has come: the batch joins the waiting list.
     /// Returns how many came.
-    pub fn flush(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32) -> usize {
+    pub fn flush(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, mult: f32) -> usize {
         if day < self.next_flush.max(1) {
             return 0;
         }
-        let n = FLUSH_SIZE.0 + rng.below(FLUSH_SIZE.1 - FLUSH_SIZE.0 + 1);
+        let n = flush_size(rng, 1, mult);
         self.batch(traits, names, rng, day, n);
         self.next_flush = day + self.flush_gap(rng);
         n as usize
@@ -1029,16 +1041,16 @@ impl Roster {
 
     /// The further grates the Mat reaches (all but the first, whose clock is `next_flush`): each keeps its own clock
     /// from the shift it is first reached (Full Design v3.18, City tiers). Returns how many came.
-    pub fn flush_grates(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, grates: &[u16]) -> usize {
+    pub fn flush_grates(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, grates: &[(u16, u8)], mult: f32) -> usize {
         let mut came = 0;
-        for &g in grates {
+        for &(g, stratum) in grates {
             match self.grate_flush.iter().position(|c| c.0 == g) {
                 None => {
                     let next = day + self.flush_gap(rng);
                     self.grate_flush.push((g, next));
                 }
                 Some(k) if day >= self.grate_flush[k].1 => {
-                    let n = FLUSH_SIZE.0 + rng.below(FLUSH_SIZE.1 - FLUSH_SIZE.0 + 1);
+                    let n = flush_size(rng, stratum, mult);
                     self.batch(traits, names, rng, day, n);
                     came += n as usize;
                     self.grate_flush[k].1 = day + self.flush_gap(rng);

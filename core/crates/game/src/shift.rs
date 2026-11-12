@@ -20,6 +20,8 @@ pub struct Town<'a> {
     pub city: &'a mut City,
     pub colony: &'a mut Colony,
     pub defs: &'a StructureFile,
+    /// every flush's batch multiplied (Full Design v3.19: the occupation's 2 from chapter 6, Endless Sump's growth)
+    pub flush_mult: f32,
 }
 
 /// The Stash, its ledger and the Bench.
@@ -179,7 +181,7 @@ fn people_side(folk: &mut Folk, o: &ShiftOutcome, sold: u32, crafted: u32, hauls
 
 /// The shift whole. `day` picks the shift of the day. Every landing, loss and the shift's own events go to `log`.
 pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut CityLog) -> Shift {
-    let Town { city, colony, defs } = town;
+    let Town { city, colony, defs, flush_mult } = town;
     let Store { stash, ledger, bench, table, recipes } = st;
     let sod = shift_of_day(day);
     let eddies = ledger.eddies;
@@ -241,10 +243,11 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
     let mut rng = mat::rng::Pcg32::new(0xF1A5_0000 ^ ((day as u64) << 16) ^ folk.roster.next_id as u64);
     folk.roster.census = colony.progress.tech.flag("census");
     folk.roster.d4_runs = colony.progress.tech.flag("d4_runs");
-    let mut came = folk.roster.flush(folk.traits, folk.names, &mut rng, day);
-    // each further grate the Mat reaches keeps its own clock (Full Design v3.18, City tiers)
-    let further: Vec<u16> = city.markets.iter().zip(city.market_cells.iter()).skip(1).filter(|(_, c)| c.is_some()).map(|(g, _)| *g as u16).collect();
-    came += folk.roster.flush_grates(folk.traits, folk.names, &mut rng, day, &further);
+    let mut came = folk.roster.flush(folk.traits, folk.names, &mut rng, day, flush_mult);
+    // each further grate the Mat reaches keeps its own clock (Full Design v3.18, City tiers), its batch by its stratum
+    // (v3.19)
+    let further: Vec<(u16, u8)> = city.markets.iter().zip(city.market_cells.iter()).skip(1).filter(|(_, c)| c.is_some()).map(|(g, _)| (*g as u16, city.sim.stratum_at(*g))).collect();
+    came += folk.roster.flush_grates(folk.traits, folk.names, &mut rng, day, &further, flush_mult);
     if came > 0 {
         log.push(tick, Class::Landing, format!("{came} newcomer{} came down a grate", if came == 1 { "" } else { "s" }));
         people_lines.push(format!("{came} newcomer{} came down a grate", if came == 1 { "" } else { "s" }));

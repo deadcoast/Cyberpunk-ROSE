@@ -108,15 +108,15 @@ pub fn current(colony: &Colony, defs: &StructureFile, city: &City, roster: &Rost
             let standing = t.bodies.iter().filter(|b| b.event == e.id && !b.dead && !b.gone).collect::<Vec<_>>();
             let cell = standing.first().map(|b| b.y as usize * w + b.x as usize).or(Some(g));
             let what = match e.phase {
-                threat::Phase::Flood => format!("a {} at grate {}: bleach in the water", st.name, e.zone + 1),
-                threat::Phase::Leaving => format!("the {} at grate {} is leaving", st.name, e.zone + 1),
-                _ => format!("a {} down grate {}: {} standing, {} fallen", st.name, e.zone + 1, standing.len(), e.fallen),
+                threat::Phase::Flood => format!("a {} at grate {}: bleach in the water", st.name, t.grate_label(&city.sim, e.zone as usize)),
+                threat::Phase::Leaving => format!("the {} at grate {} is leaving", st.name, t.grate_label(&city.sim, e.zone as usize)),
+                _ => format!("a {} down grate {}: {} standing, {} fallen", st.name, t.grate_label(&city.sim, e.zone as usize), standing.len(), e.fallen),
             };
             v.push(Alert { level: Level::White, key: format!("oath {}", e.id), text: what, cell });
         }
         for d in &t.due {
             let st = &t.rules.stage[d.stage];
-            v.push(Alert { level: Level::White, key: format!("due {}", d.zone), text: format!("grate {} is loud: a {} is coming", d.zone + 1, st.name), cell: Some(t.zones[d.zone as usize].grate) });
+            v.push(Alert { level: Level::White, key: format!("due {}", d.zone), text: format!("grate {} is loud: a {} is coming", t.grate_label(&city.sim, d.zone as usize), st.name), cell: Some(t.zones[d.zone as usize].grate) });
         }
         let crawlers = t.bodies.iter().filter(|b| b.role == threat::Role::Crawler && !b.dead && !b.gone).collect::<Vec<_>>();
         if let Some(c) = crawlers.first() {
@@ -130,11 +130,11 @@ pub fn current(colony: &Colony, defs: &StructureFile, city: &City, roster: &Rost
     // at this shift's end — the Corpo remnants' intel for a Sweep, the Badges' timings for any line
     if let (Some(t), Some(e)) = (threats, economy) {
         for (k, z) in t.zones.iter().enumerate() {
-            let next = z.attention + z.gained - t.rules.attention.decay;
+            let next = z.attention + z.gained - t.campaign.decay;
             for st in &t.rules.stage {
                 let by = if e.s.timings > 0 { "the Badges' timings" } else if e.s.intel > 0 && st.id == "sweep" { "Corpo intel" } else { continue };
                 if z.attention < st.at && next >= st.at {
-                    v.push(Alert { level: Level::White, key: format!("forecast {k} {}", st.id), text: format!("{by}: grate {} loud enough for a {} by the shift's end", k + 1, st.name), cell: Some(z.grate) });
+                    v.push(Alert { level: Level::White, key: format!("forecast {k} {}", st.id), text: format!("{by}: grate {} loud enough for a {} by the shift's end", t.grate_label(&city.sim, k), st.name), cell: Some(z.grate) });
                 }
             }
         }

@@ -343,7 +343,7 @@ func _verify_current() -> void:
 			_check(int(sim.shift_report.get("crafted", 0)) == 1, "bench: shift report crafted %s" % str(sim.shift_report))
 			_check(st.save_round_trip(), "bench: save round trip with a queue failed")
 		"route":
-			_check(scr.routes.size() == sim.strata_open, "route: %d cards, expected %d" % [scr.routes.size(), sim.strata_open])
+			_check(scr.routes.size() == sim.board_strata().size(), "route: %d cards, expected %d" % [scr.routes.size(), sim.board_strata().size()])
 			for rt in scr.routes:
 				var cd: Dictionary = rt.card
 				_check(int(cd.chunks) >= 8 and int(cd.chunks) <= 14, "route: card S%d has %d chunks" % [int(rt.stratum), int(cd.chunks)])

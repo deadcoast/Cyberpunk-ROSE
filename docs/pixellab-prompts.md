@@ -623,6 +623,13 @@ tiles.toml
 - prompt: street grate seen from below, steel bars with a thin pink-and-cyan neon leak between them, frame 2 brighter
 - negative: full daylight, white light, outline on bars
 
+### tile.slab
+
+- kind tile · one frame 32x32 · 2 frames · states single
+- anchor `anchor.tile` · ramp noir · status placeholder
+- prompt: a poured concrete slab sealing a vertical sewer shaft between two levels, rebar ends, a stencilled number, cold and heavy, 2-tone dither, no outline
+- negative: gradient, outline, green, text
+
 ### tile.collapse
 
 - kind tile · one frame 32x32 · 4 frames · states single

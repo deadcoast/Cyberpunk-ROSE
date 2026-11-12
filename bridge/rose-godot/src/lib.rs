@@ -72,10 +72,8 @@ impl RoseSim {
     fn start_city(&mut self, seed: i64) {
         let city = City::game(logistics::founding(seed as u64), seed as u64);
         self.threats = Some(threat::Threats::new(&city.sim, seed as u64));
-        let grates: Vec<u16> = (0..city.sim.w).filter(|&x| city.sim.sub[x] == sub::GRATE).map(|x| x as u16).collect();
-        let first = city.sim.heart.and_then(|(hx, hy)| logistics::first_grate(&city.sim, hx, hy)).unwrap_or(0) as u16;
         let table = items::ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
-        self.economy = Some(economy::Economy::found(economy::FactionFile::shipped(), &table, seed as u64, &grates, first, 1));
+        self.economy = Some(game::world::found_economy(&city.sim, &table, seed as u64));
         self.city = Some(city);
     }
 
@@ -84,6 +82,85 @@ impl RoseSim {
     fn set_strata_open(&mut self, strata: i64) {
         self.strata = strata.clamp(1, 255) as u8;
         self.raiders = game::trade::raiders_walk(self.strata);
+    }
+
+    /// The city's stratum: the highest the Mat has reached (Full Design v3.19, The stack and the breach).
+    #[func]
+    fn city_stratum(&self) -> i64 {
+        self.threats.as_ref().map_or(1, |t| t.stratum as i64)
+    }
+
+    /// The Route Board's three strata: one below the city's to one above (Full Design v3.19).
+    #[func]
+    fn board_strata(&self) -> PackedInt32Array {
+        let n = self.city.as_ref().map_or(6, |c| c.sim.strata);
+        PackedInt32Array::from(logistics::board_strata(self.city_stratum() as u8, n).map(|s| s as i32).collect::<Vec<_>>().as_slice())
+    }
+
+    /// The stack's strata for the views: [{n, name, short, region, ceiling (row), rows, reached}] from the Sump up.
+    #[func]
+    fn strata(&self) -> Array<VarDictionary> {
+        let mut out = Array::new();
+        let Some(c) = self.city.as_ref() else { return out };
+        let top = self.city_stratum() as u8;
+        for d in &logistics::StrataFile::shipped().stratum {
+            if d.n > c.sim.strata {
+                break;
+            }
+            let mut v = VarDictionary::new();
+            v.set("n", d.n as i64);
+            v.set("name", d.name.as_str());
+            v.set("short", d.short.as_str());
+            v.set("region", d.region.as_str());
+            v.set("ceiling", c.sim.ceiling(d.n) as i64);
+            v.set("rows", c.sim.strata_rows as i64);
+            v.set("reached", d.n <= top);
+            out.push(&v);
+        }
+        out
+    }
+
+    /// The crossings between strata: [{tile, x, y, below, sealed, key, key_name, has_key}] (a slab's card).
+    #[func]
+    fn crossings(&self) -> Array<VarDictionary> {
+        let mut out = Array::new();
+        let Some(c) = self.city.as_ref() else { return out };
+        let held: Vec<String> = self.stash.as_ref().map(|st| {
+            let b = st.bind();
+            match (b.stash.as_ref(), b.table.as_ref()) {
+                (Some(s), Some(t)) => s.handles().iter().map(|(_, _, it)| t.def(it.def).id.clone()).collect(),
+                _ => Vec::new(),
+            }
+        }).unwrap_or_default();
+        let table = items::ItemTable::from_toml(items::ITEMS_TOML).ok();
+        for x in game::breach::crossings(&c.sim) {
+            let mut v = VarDictionary::new();
+            v.set("tile", x.tile as i64);
+            v.set("x", (x.tile % c.sim.w) as i64);
+            v.set("y", (x.tile / c.sim.w) as i64);
+            v.set("below", x.below as i64);
+            v.set("sealed", x.sealed);
+            v.set("key", x.key.as_str());
+            let name = table.as_ref().and_then(|t| t.id_of(&x.key).map(|k| t.def(k).name.clone())).unwrap_or_default();
+            v.set("key_name", name.as_str());
+            v.set("has_key", !x.key.is_empty() && held.contains(&x.key));
+            out.push(&v);
+        }
+        out
+    }
+
+    /// Spend the grate key on a crossing (its card's OPEN): "" when it opened, else why not.
+    #[func]
+    fn open_crossing(&mut self, tile: i64) -> GString {
+        let Some(st) = self.stash.as_mut() else { return "no Stash".into() };
+        let mut st = st.bind_mut();
+        st.ensure();
+        let st = &mut *st;
+        let Some(city) = self.city.as_mut() else { return "no city".into() };
+        match game::breach::open_with_key(city, self.threats.as_mut(), st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), tile.max(0) as usize, &mut self.log) {
+            Ok(_) => "".into(),
+            Err(e) => e.as_str().into(),
+        }
     }
 
     /// Fresh stratum with a Heart at (x, y) and no city; feed it to make it grow.
@@ -173,8 +250,8 @@ impl RoseSim {
         out
     }
 
-    /// Each grate's zone: grate (column), number, attention, step (0 quiet, 1 Patrol, 2 Sweep, 3 Cleansing), reached,
-    /// gained (last shift end), an event down.
+    /// Each grate's zone: grate (tile), x, y, number (on its stratum), stratum, label ("G5", "S2 G3"), attention, step
+    /// (0 quiet, 1 Patrol, 2 Sweep, 3 Cleansing), reached, gained (last shift end), an event down.
     #[func]
     fn attention(&self) -> VarArray {
         let mut out = VarArray::new();
@@ -182,7 +259,12 @@ impl RoseSim {
         for (k, z) in t.zones.iter().enumerate() {
             let mut d = VarDictionary::new();
             d.set("grate", z.grate as i64);
-            d.set("number", (k + 1) as i64);
+            d.set("x", (z.grate % c.sim.w) as i64);
+            d.set("y", (z.grate / c.sim.w) as i64);
+            let (n, s) = (c.grate_number(z.grate), c.sim.stratum_at(z.grate));
+            d.set("number", n as i64);
+            d.set("stratum", s as i64);
+            d.set("label", if s <= 1 { format!("G{n}") } else { format!("S{s} G{n}") }.as_str());
             d.set("attention", z.attention as f64);
             d.set("step", t.step_of(k) as i64);
             d.set("reached", c.markets.contains(&z.grate));
@@ -260,6 +342,42 @@ impl RoseSim {
         }
     }
 
+    /// Development only (the play script): the Mat up an open crossing, `up` tiles into the stratum above, as feeding
+    /// it a few shifts would grow it: Cord from the Mat nearest the grate below to the grate, then up the shaft.
+    #[func]
+    fn debug_climb(&mut self, crossing: i64, up: i64) {
+        use mat::sim::{hy, sub};
+        let Some(c) = self.city.as_mut() else { return };
+        let (sw, cross) = (c.sim.w, crossing.max(0) as usize);
+        let g = cross + sw;
+        if g >= c.sim.sub.len() || c.sim.sub[g] != sub::GRATE {
+            return;
+        }
+        let way = logistics::ground_distance(&c.sim, g);
+        let joined = logistics::joined_to_heart(&c.sim);
+        let Some(mut at) = (0..joined.len()).filter(|&i| joined[i] && way[i] != usize::MAX).min_by_key(|&i| (way[i], i)) else { return };
+        while way[at] > 0 {
+            if !c.sim.is_hyphal_at(at) {
+                c.sim.hy[at] = hy::CORD;
+                c.sim.n[at] = 0.4;
+            }
+            let (x, y) = (at % sw, at / sw);
+            let Some(n) = [(x.wrapping_sub(1), y), (x + 1, y), (x, y.wrapping_sub(1)), (x, y + 1)].into_iter().filter(|&(nx, ny)| nx < sw && ny < c.sim.h).map(|(nx, ny)| ny * sw + nx).filter(|&j| way[j] < way[at]).min_by_key(|&j| (way[j], j)) else { break };
+            at = n;
+        }
+        for y in (cross / sw).saturating_sub(up.max(0) as usize)..=g / sw {
+            for x in [cross % sw, cross % sw + 1] {
+                let i = y * sw + x;
+                if sub::GROWABLE[c.sim.sub[i] as usize] && !c.sim.is_hyphal_at(i) {
+                    c.sim.hy[i] = hy::CORD;
+                    c.sim.n[i] = 0.4;
+                    c.sim.changed.push(i as u32);
+                }
+            }
+        }
+        c.sim.compute_signal();
+    }
+
     /// Development only (the play script): every node researched and every tier open, as a long campaign leaves the
     /// Bench, so the later frames reach the systems the tree gates.
     #[func]
@@ -268,10 +386,9 @@ impl RoseSim {
         let defs = self.defs().clone();
         let before: Vec<i32> = self.colony.structures.iter().map(|s| self.colony.hp_max(&defs, s)).collect();
         self.colony.progress.tech = progress::Tech::all();
-        for k in 0..self.colony.structures.len() {
-            let after = self.colony.hp_max(&defs, &self.colony.structures[k]);
-            let s = &mut self.colony.structures[k];
-            s.hp = s.hp * after / before[k].max(1);
+        let after: Vec<i32> = self.colony.structures.iter().map(|s| self.colony.hp_max(&defs, s)).collect();
+        for (s, (b, a)) in self.colony.structures.iter_mut().zip(before.into_iter().zip(after)) {
+            s.hp = s.hp * a / b.max(1);
         }
     }
 
@@ -435,7 +552,15 @@ impl RoseSim {
     /// with cargo waiting to enter it — Chalk white, consumers Acid, markets Hot Pink).
     #[func]
     fn stack_image(&self) -> PackedByteArray {
-        self.city.as_ref().map_or_else(PackedByteArray::new, |c| PackedByteArray::from(render::stack_view(c, 1).px.as_slice()))
+        self.city.as_ref().map_or_else(PackedByteArray::new, |c| {
+            let mut px = render::stack_view(c, 1).px;
+            // a stratum not yet reached is Void, its slab row shown (Full Design v3.19)
+            let first = c.sim.ceiling(self.city_stratum() as u8).saturating_sub(1);
+            for v in px.iter_mut().take(first * c.sim.w * 3).collect::<Vec<_>>() {
+                *v = 0x07;
+            }
+            PackedByteArray::from(px.as_slice())
+        })
     }
 
     /// Traffic per cell (slimos + 2 x packets), what the Stack view draws as light.
@@ -898,11 +1023,18 @@ impl RoseSim {
                 let city_seed = self.economy.as_ref().map_or(0, |e| e.s.seed);
                 game::loops::play(&mut self.colony, &mut folk, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), self.threats.as_ref(), &city.sim, city_seed, day.max(1) as u32, city.tick, &mut self.log)
             };
-            let town = game::Town { city, colony: &mut self.colony, defs: &defs };
+            let town = game::Town { city, colony: &mut self.colony, defs: &defs, flush_mult: 1.0 };
             let store = game::Store { stash: st.stash.as_mut().unwrap(), ledger: &mut st.ledger, bench: &mut st.bench, table: st.table.as_ref().unwrap(), recipes: st.recipes.as_ref().unwrap() };
             let folk = game::Folk { roster: &mut p.roster, traits: &traits, names: &names, died: &mut p.died_this_shift };
             let mut shift = game::end_shift(town, store, folk, day.max(1) as u32, &mut self.log);
             shift.people_lines.splice(0..0, loop_lines);
+            // the breach and the city's stratum before the threats choose what comes (Full Design v3.19)
+            if let Some(top) = game::breach::shift_end(city, &self.colony, &defs, self.threats.as_mut(), &mut self.log) {
+                let name = logistics::StrataFile::shipped().get(top).map(|d| d.name.clone()).unwrap_or_default();
+                shift.people_lines.push(format!("the Mat reached {name} (S{top})"));
+                self.strata = *logistics::board_strata(top, city.sim.strata).end();
+                self.raiders = game::trade::raiders_walk(self.strata);
+            }
             // the threats' side, the stalls' (Full Design v3.15, Economy), then the next shift's water (v3.14, Pressure)
             if let Some(t) = self.threats.as_mut() {
                 let kills = std::mem::take(&mut self.run_kills);

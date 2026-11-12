@@ -38,6 +38,7 @@ func _shot(name: String) -> void:
 var t0 := 0
 var runner_id := -1
 var mend_id := -1
+var slab := {}
 var shrine_id := -1
 
 func _hp(id: int) -> int:
@@ -491,6 +492,46 @@ func _process(_delta: float) -> bool:
 		31:
 			if t % 10 == 5:
 				_shot("24_handoff")
+				# the breach (Full Design v3.19): the slab over the first grate, its card, the Sump Grate Key
+				var rs: RoseSim = sim.ensure()
+				sim.ensure_stash().add(RoseItems.new().find("key_grate_sump"), 100, true)
+				var hs: Dictionary = rs.structures()[0]
+				var heart := Vector2i(int(hs.x), int(hs.y))
+				var best := {}
+				for cr in rs.crossings():
+					if int(cr.below) == 1 and (best.is_empty() or absi(int(cr.x) - heart.x) < absi(int(best.x) - heart.x)):
+						best = cr
+				slab = best
+				scr.set_view(0)
+				scr.cam.position = Vector2(int(slab.x) * 32 + 16, int(slab.y) * 32 + 64)
+				scr.selected = {"kind": "tile", "x": int(slab.x), "y": int(slab.y)}
+				scr.card_sig = ""
+				scr._draw_card()
+				phase = 32
+		32:
+			if t % 10 == 5:
+				_shot("25_slab")
+				var rs: RoseSim = sim.ensure()
+				var why: String = rs.open_crossing(int(slab.tile))
+				print("[play] the Sump Grate Key on the slab at %d,%d: %s" % [int(slab.x), int(slab.y), "open" if why == "" else why])
+				rs.debug_climb(int(slab.tile), 6)
+				sim.end_shift()
+				sim.day += 1
+				print("[play] the city's stratum: S%d" % rs.city_stratum())
+				for l in sim.people_lines:
+					if String(l).contains("reached"):
+						print("[play] %s" % String(l))
+				if scr.world.refresh_strata():
+					scr.world.full_paint()
+				# the frame over the slab: the Culverts revealed above, the Mat up the open shaft
+				scr.cam.position = Vector2(int(slab.x) * 32 + 16, int(slab.y) * 32 - 40)
+				scr.selected = {"kind": "tile", "x": int(slab.x), "y": int(slab.y)}
+				scr.card_sig = ""
+				scr._draw_card()
+				phase = 33
+		33:
+			if t % 10 == 5:
+				_shot("26_breach")
 				print("[play] %d frames, %d shots -> %s" % [t, shots, out_dir])
 				quit(0)
 				return true

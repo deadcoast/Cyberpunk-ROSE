@@ -17,11 +17,14 @@ pub mod sub {
     pub const CONCRETE: u8 = 7;
     /// rubble across a run chunk: dug to pass; the Mat cannot enter it until it is dug
     pub const COLLAPSE: u8 = 8;
-    pub const COUNT: usize = 9;
+    /// where a shaft crosses from one stratum into the next: sealed until a breach opens it (Full Design v3.19, The
+    /// stack and the breach); nothing grows into it or walks it
+    pub const SLAB: u8 = 9;
+    pub const COUNT: usize = 10;
     /// nutrient conductance per substrate
-    pub const COND: [f32; COUNT] = [0.0, 0.40, 0.60, 0.08, 0.40, 0.25, 0.40, 0.04, 0.0];
+    pub const COND: [f32; COUNT] = [0.0, 0.40, 0.60, 0.08, 0.40, 0.25, 0.40, 0.04, 0.0, 0.0];
     /// hyphae may enter
-    pub const GROWABLE: [bool; COUNT] = [false, true, true, true, true, true, true, true, false];
+    pub const GROWABLE: [bool; COUNT] = [false, true, true, true, true, true, true, true, false, false];
 }
 
 // ---------------------------------------------------------------- hyphal states
@@ -80,6 +83,10 @@ impl Default for Mods {
 pub struct MatSim {
     pub w: usize,
     pub h: usize,
+    /// rows a stratum (48 in the stack, h for a single stratum) and how many strata the grid holds, the Sump the
+    /// lowest (Full Design v3.19, The stack and the breach)
+    pub strata_rows: usize,
+    pub strata: u8,
     pub genome: Genome,
     pub p: Params,
     pub rng: Pcg32,
@@ -138,12 +145,26 @@ pub struct MatSim {
 
 impl MatSim {
     pub fn new(w: usize, h: usize, seed: u64, genome: Genome) -> Self {
-        let n = w * h;
         let mut rng = Pcg32::new(seed);
         let sub = worldgen(w, h, &mut rng);
+        Self::on_ground(w, h, h, sub, rng, genome)
+    }
+
+    /// The stack (Full Design v3.19): one stratum of `rows` for each of `gens`, the first the Sump at the bottom, each
+    /// ceiling's shafts sealed by a slab where they run on into the stratum above.
+    pub fn stack(w: usize, rows: usize, gens: &[StratumGen], seed: u64, genome: Genome) -> Self {
+        let mut rng = Pcg32::new(seed);
+        let sub = worldgen_stack(w, rows, gens, &mut rng);
+        Self::on_ground(w, rows * gens.len().max(1), rows, sub, rng, genome)
+    }
+
+    fn on_ground(w: usize, h: usize, strata_rows: usize, sub: Vec<u8>, rng: Pcg32, genome: Genome) -> Self {
+        let n = w * h;
         MatSim {
             w,
             h,
+            strata_rows,
+            strata: (h / strata_rows.max(1)).max(1) as u8,
             genome,
             p: genome.params(),
             rng,
@@ -189,6 +210,62 @@ impl MatSim {
     #[inline]
     pub fn idx(&self, x: usize, y: usize) -> usize {
         y * self.w + x
+    }
+
+    /// The stratum a row lies in, 1 the Sump at the bottom.
+    #[inline]
+    pub fn stratum_of_row(&self, y: usize) -> u8 {
+        self.strata.saturating_sub((y / self.strata_rows.max(1)) as u8).max(1)
+    }
+
+    /// The stratum a tile lies in.
+    #[inline]
+    pub fn stratum_at(&self, i: usize) -> u8 {
+        self.stratum_of_row(i / self.w)
+    }
+
+    /// A stratum's ceiling: its top row, where its grates are.
+    pub fn ceiling(&self, stratum: u8) -> usize {
+        (self.strata.saturating_sub(stratum.max(1))) as usize * self.strata_rows
+    }
+
+    /// Every grate of the stack as a tile, the Sump's first, west to east within a stratum.
+    pub fn grates(&self) -> Vec<usize> {
+        (1..=self.strata).flat_map(|s| self.grates_of(s)).collect()
+    }
+
+    /// A stratum's grates as tiles, west to east.
+    pub fn grates_of(&self, stratum: u8) -> Vec<usize> {
+        let y = self.ceiling(stratum);
+        (0..self.w).map(|x| y * self.w + x).filter(|&i| self.sub[i] == sub::GRATE).collect()
+    }
+
+    /// The crossings out of a stratum's ceiling into the one above, each as its left tile (a slab of two while sealed,
+    /// open floor once breached): one beside each grate.
+    pub fn crossings_of(&self, stratum: u8) -> Vec<usize> {
+        if stratum >= self.strata {
+            return Vec::new();
+        }
+        let y = self.ceiling(stratum) - 1;
+        self.grates_of(stratum).into_iter().map(|g| y * self.w + g % self.w).collect()
+    }
+
+    /// Whether a crossing is still sealed.
+    pub fn sealed(&self, crossing: usize) -> bool {
+        self.sub[crossing] == sub::SLAB || self.sub.get(crossing + 1) == Some(&sub::SLAB)
+    }
+
+    /// Open a crossing's slab: the breach (Full Design v3.19). Returns whether anything opened.
+    pub fn open_slab(&mut self, crossing: usize) -> bool {
+        let mut opened = false;
+        for i in [crossing, crossing + 1] {
+            if self.sub.get(i) == Some(&sub::SLAB) {
+                self.sub[i] = sub::OPEN;
+                self.changed.push(i as u32);
+                opened = true;
+            }
+        }
+        opened
     }
 
     #[inline]
@@ -889,23 +966,54 @@ impl MatSim {
     }
 }
 
+/// One stratum's ground weights (Full Design v3.19: `data/strata.toml`, after Pass 1's strata table).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StratumGen {
+    /// culvert rows: the first's centre, the spacing, and the half-height (1: three rows)
+    pub culvert_from: usize,
+    pub culvert_every: usize,
+    pub culvert_half: usize,
+    /// a pipe run this many rows above each culvert (0: none)
+    pub pipe_above: usize,
+    /// smoothed noise above this is a cave
+    pub cave: f32,
+    /// a Deposit's chance on open ground
+    pub deposit: f32,
+    /// rows of water under the lowest culvert
+    pub water_rows: usize,
+}
+
+impl StratumGen {
+    /// The Sump as Pass 1's prototype generated it (and every single-stratum map before the stack).
+    pub const SUMP: StratumGen = StratumGen { culvert_from: 12, culvert_every: 13, culvert_half: 1, pipe_above: 2, cave: 0.56, deposit: 0.025, water_rows: 1 };
+}
+
 /// Generated sewer stratum: culvert rows with pipe runs, vertical shafts, collapsed caves, brick lining,
 /// scrap deposits and a water line. Same layout family as the Python prototype.
 pub fn worldgen(w: usize, h: usize, rng: &mut Pcg32) -> Vec<u8> {
+    worldgen_band(w, h, rng, &StratumGen::SUMP)
+}
+
+/// One stratum by its weights: culvert rows, shafts every 23 columns from 10, smoothed-noise caves, brick lining,
+/// Deposits, water under the lowest culvert, and a grate on the top row over each shaft.
+pub fn worldgen_band(w: usize, h: usize, rng: &mut Pcg32, g: &StratumGen) -> Vec<u8> {
     let mut s = vec![sub::ROCK; w * h];
     let idx = |x: usize, y: usize| y * w + x;
-    // culvert rows every 13 tiles starting at 12, a pipe run two above
-    let mut y = 12usize;
-    while y + 2 < h {
-        for yy in y - 1..=y + 1 {
+    let half = g.culvert_half.max(1);
+    // culvert rows, a pipe run above each
+    let mut y = g.culvert_from.max(half + g.pipe_above);
+    while y + half + 1 < h {
+        for yy in y - half..=y + half {
             for x in 0..w {
                 s[idx(x, yy)] = sub::OPEN;
             }
         }
-        for x in 0..w {
-            s[idx(x, y - 2)] = sub::PIPE;
+        if g.pipe_above > 0 {
+            for x in 0..w {
+                s[idx(x, y - half - g.pipe_above + 1)] = sub::PIPE;
+            }
         }
-        y += 13;
+        y += g.culvert_every.max(half * 2 + 3);
     }
     // vertical shafts
     let mut x = 10usize;
@@ -922,17 +1030,17 @@ pub fn worldgen(w: usize, h: usize, rng: &mut Pcg32) -> Vec<u8> {
         let prev = noise.clone();
         for yy in 0..h {
             for xx in 0..w {
-                let g = |dx: i32, dy: i32| -> f32 {
+                let gg = |dx: i32, dy: i32| -> f32 {
                     let x2 = (xx as i32 + dx).rem_euclid(w as i32) as usize;
                     let y2 = (yy as i32 + dy).rem_euclid(h as i32) as usize;
                     prev[y2 * w + x2]
                 };
-                noise[idx(xx, yy)] = (g(0, 0) + g(0, -1) + g(0, 1) + g(-1, 0) + g(1, 0)) / 5.0;
+                noise[idx(xx, yy)] = (gg(0, 0) + gg(0, -1) + gg(0, 1) + gg(-1, 0) + gg(1, 0)) / 5.0;
             }
         }
     }
-    for i in 0..w * h {
-        if noise[i] > 0.56 {
+    for (i, v) in noise.iter().enumerate() {
+        if *v > g.cave {
             s[i] = sub::OPEN;
         }
     }
@@ -954,33 +1062,60 @@ pub fn worldgen(w: usize, h: usize, rng: &mut Pcg32) -> Vec<u8> {
             }
         }
     }
-    // deposits on open ground, water on the row below the lowest culvert
-    for i in 0..w * h {
-        if s[i] == sub::OPEN && rng.f32() < 0.025 {
-            s[i] = sub::DEPOSIT;
+    // deposits on open ground, water under the lowest culvert
+    for v in s.iter_mut() {
+        if *v == sub::OPEN && rng.f32() < g.deposit {
+            *v = sub::DEPOSIT;
         }
     }
-    let mut last_culvert = 12usize;
-    let mut yy = 12usize;
-    while yy + 2 < h {
+    let mut last_culvert = g.culvert_from.max(half + g.pipe_above);
+    let mut yy = last_culvert;
+    while yy + half + 1 < h {
         last_culvert = yy;
-        yy += 13;
+        yy += g.culvert_every.max(half * 2 + 3);
     }
-    if last_culvert + 1 < h {
-        for x in 0..w {
-            let i = idx(x, last_culvert + 1);
-            if s[i] == sub::OPEN {
-                s[i] = sub::WATER;
+    for r in 0..g.water_rows {
+        let row = last_culvert + half + r;
+        if row < h {
+            for x in 0..w {
+                let i = idx(x, row);
+                if s[i] == sub::OPEN {
+                    s[i] = sub::WATER;
+                }
             }
         }
     }
-    // grates: one open tile at the top row above each shaft top
+    // grates: the top row over each shaft (a Deposit that fell there is the grate's: every shaft has one)
     let mut x = 10usize;
     while x + 1 < w {
-        if s[idx(x, 0)] == sub::OPEN {
-            s[idx(x, 0)] = sub::GRATE;
-        }
+        s[idx(x, 0)] = sub::GRATE;
         x += 23;
+    }
+    s
+}
+
+/// The stack (Full Design v3.19): `gens[0]` the Sump at the bottom, each above it in order; generated Sump first so
+/// a seed's Sump is the single-stratum map's. Every stratum above the Sump has its bottom row sealed — rock, and a
+/// slab where a shaft crosses — so nothing passes until a breach.
+pub fn worldgen_stack(w: usize, rows: usize, gens: &[StratumGen], rng: &mut Pcg32) -> Vec<u8> {
+    let n = gens.len().max(1);
+    let mut s = vec![sub::ROCK; w * rows * n];
+    for (k, g) in gens.iter().enumerate() {
+        let band = worldgen_band(w, rows, rng, g);
+        let y0 = (n - 1 - k) * rows;
+        s[y0 * w..(y0 + rows) * w].copy_from_slice(&band);
+        if k > 0 {
+            let bottom = y0 + rows - 1;
+            for x in 0..w {
+                s[bottom * w + x] = sub::ROCK;
+            }
+            let mut x = 10usize;
+            while x + 1 < w {
+                s[bottom * w + x] = sub::SLAB;
+                s[bottom * w + x + 1] = sub::SLAB;
+                x += 23;
+            }
+        }
     }
     s
 }
@@ -989,6 +1124,27 @@ pub fn worldgen(w: usize, h: usize, rng: &mut Pcg32) -> Vec<u8> {
 mod tests {
     use super::*;
     use crate::genome::*;
+
+    #[test]
+    fn the_stack_keeps_the_sump_and_seals_every_crossing_until_a_breach() {
+        let g = [StratumGen::SUMP; 3];
+        let single = worldgen(192, 48, &mut Pcg32::new(7));
+        let mut sim = MatSim::stack(192, 48, &g, 7, Genome::default());
+        assert_eq!((sim.h, sim.strata), (144, 3));
+        assert_eq!(&sim.sub[96 * 192..], &single[..], "the Sump is the single-stratum map");
+        assert_eq!(sim.stratum_of_row(143), 1);
+        assert_eq!(sim.stratum_of_row(0), 3);
+        assert_eq!(sim.grates_of(1).len(), 8);
+        assert!(sim.grates().iter().all(|&i| sim.sub[i] == sub::GRATE));
+        let cross = sim.crossings_of(1);
+        assert_eq!(cross.len(), 8);
+        assert!(cross.iter().all(|&c| sim.sealed(c)));
+        // nothing grows from the Sump into the Culverts: the row between is rock and slab
+        let between = sim.ceiling(1) - 1;
+        assert!((0..192).all(|x| !sub::GROWABLE[sim.sub[between * 192 + x] as usize]));
+        assert!(sim.open_slab(cross[0]) && !sim.sealed(cross[0]));
+        assert!(sim.crossings_of(3).is_empty());
+    }
 
     fn fed_run(seed: u64, genome: Genome, ticks: u64) -> MatSim {
         let mut sim = MatSim::new(192, 48, seed, genome);

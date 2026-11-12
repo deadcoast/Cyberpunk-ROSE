@@ -149,7 +149,7 @@ impl RoseSim {
         e.set("traffic", c.traffic()[i] as i64);
         e.set("jam", c.jam[i]);
         e.set("salt", c.sim.salt[i]);
-        e.set("substrate", ["rock", "open", "pipe", "brick", "deposit", "water", "grate", "concrete", "collapse"].get(c.sim.sub[i] as usize).copied().unwrap_or("?"));
+        e.set("substrate", ["rock", "open", "pipe", "brick", "deposit", "water", "grate", "concrete", "collapse", "slab"].get(c.sim.sub[i] as usize).copied().unwrap_or("?"));
         e.set("structure", self.colony.occupied(&defs, x as u16, y as u16).map_or(-1, |s| s as i64));
         let z = self.colony.zone_at(i as u32);
         e.set("zone", z.map_or(-1, |z| z.id as i64));

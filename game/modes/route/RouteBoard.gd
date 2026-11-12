@@ -83,10 +83,11 @@ func _build_content(c: Control) -> void:
 	_redraw_rig()
 	_select(0)
 
-## One RoseRun per open stratum, assembled from the save's route seed: the cards read these.
+## One RoseRun per open stratum — the three from one below the city's to one above (Full Design v3.19) —
+## assembled from the save's route seed: the cards read these.
 func _assemble_routes() -> void:
 	routes.clear()
-	for stratum in range(1, Sim.strata_open + 1):
+	for stratum in Sim.board_strata():
 		var seed_v: int = Sim.route_seed(stratum)
 		var run := RoseRun.new()
 		if run.assemble(seed_v, stratum, 0) == 0:

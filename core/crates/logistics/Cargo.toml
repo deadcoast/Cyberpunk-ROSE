@@ -7,3 +7,5 @@ license.workspace = true
 
 [dependencies]
 mat = { path = "../mat" }
+serde.workspace = true
+toml.workspace = true

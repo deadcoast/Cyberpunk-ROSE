@@ -415,6 +415,8 @@ name = "logistics"
 version = "0.2.0"
 dependencies = [
  "mat",
+ "serde",
+ "toml",
 ]
 
 [[package]]

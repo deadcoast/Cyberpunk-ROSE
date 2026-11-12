@@ -303,7 +303,7 @@ pub fn end_shift(econ: &mut Economy, ledger: &mut Ledger, stash: &mut Stash, tab
         if let Some(k) = t.due.iter().position(|d| d.stage == 0 && econ.faction_at(t.zones[d.zone as usize].grate) == Some(gangs)) {
             if econ.take_protection() {
                 let d = t.due.remove(k);
-                log.push(tick, Class::Landing, format!("the Gangs held off the Patrol at grate {}", d.zone + 1));
+                log.push(tick, Class::Landing, format!("the Gangs held off the Patrol at grate {}", t.grate_label(&city.sim, d.zone as usize)));
             }
         }
     }

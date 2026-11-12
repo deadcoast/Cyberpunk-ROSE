@@ -263,7 +263,7 @@ fn protection_holds_off_the_patrol_due_at_a_gang_grate() {
     w.economy.s.protection = 1;
     w.end_shift();
     assert!(!w.threats.due.iter().any(|d| d.zone as usize == zone), "{:?}", w.threats.due);
-    assert!(w.log.events.iter().any(|e| e.what == format!("the Gangs held off the Patrol at grate {}", zone + 1)));
+    assert!(w.log.events.iter().any(|e| e.what == format!("the Gangs held off the Patrol at grate {}", w.threats.grate_label(&w.city.sim, zone))));
     assert_eq!(w.economy.s.protection, 0);
     // none bought: the next one comes
     w.threats.zones[zone].attention = 40.0;

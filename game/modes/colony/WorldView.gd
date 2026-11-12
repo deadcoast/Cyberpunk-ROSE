@@ -9,7 +9,7 @@ extends Node2D
 ## light as hard pools round the lamps, and the bodies on the map over everything.
 
 const TILE := 32
-const SUB := {0: "tile.concrete", 1: "", 2: "tile.pipe", 3: "tile.brick", 4: "tile.deposit", 5: "tile.water", 6: "tile.grate", 7: "tile.concrete", 8: "tile.collapse"}
+const SUB := {0: "tile.concrete", 1: "", 2: "tile.pipe", 3: "tile.brick", 4: "tile.deposit", 5: "tile.water", 6: "tile.grate", 7: "tile.concrete", 8: "tile.collapse", 9: "tile.slab"}
 const HY := {1: ["mat.tip", ""], 2: ["mat.cord", "fed"], 3: ["mat.node", "fed"], 4: ["mat.necro", ""]}
 
 var tileset: TileSet
@@ -35,6 +35,11 @@ var w := 0
 var h := 0
 var draw_crowd := true
 var bind_sim := true   # false: a Run paints its own grid and nothing ticks
+## The stack (Full Design v3.19): the strata from the Sump up; rows above `top_row` (the slab row over the city's
+## stratum) belong to strata not yet reached and draw as Void with their names
+var strata_info: Array = []
+var top_row := 0
+var strata_names: Node2D
 
 func _ready() -> void:
 	tileset = TileSet.new()
@@ -82,10 +87,15 @@ func _ready() -> void:
 	gauges.z_index = 10
 	gauges.draw.connect(_draw_gauges)
 	add_child(gauges)
+	strata_names = Node2D.new()
+	strata_names.z_index = 9
+	strata_names.draw.connect(_draw_strata_names)
+	add_child(strata_names)
 	if bind_sim:
 		var sim: RoseSim = Sim.ensure()
 		w = sim.width()
 		h = sim.height()
+		refresh_strata()
 		full_paint()
 		Sim.ticked.connect(_on_tick)
 
@@ -139,12 +149,26 @@ func put_mat(x: int, y: int, hv: int, state: String) -> void:
 	var spec: Array = HY.get(hv, ["", ""])
 	_put_cell(matlayer, x, y, spec[0], state if hv == 2 or hv == 3 else "", (x + y) % 4)
 
+## Read the city's stratum; true when it rose (a stratum newly reached: repaint).
+func refresh_strata() -> bool:
+	strata_info = Sim.ensure().strata()
+	var row := 0
+	for st in strata_info:
+		if bool(st.reached):
+			row = maxi(0, int(st.ceiling) - 1)
+	if strata_info.is_empty() or row == top_row:
+		return false
+	top_row = row
+	return true
+
 func full_paint() -> void:
 	var sim: RoseSim = Sim.ensure()
 	var sub: PackedByteArray = sim.substrate()
 	var hy: PackedByteArray = sim.hyphae()
 	var sig: PackedFloat32Array = sim.signal()
-	for y in h:
+	substrate.clear()
+	matlayer.clear()
+	for y in range(top_row, h):
 		for x in w:
 			var i := y * w + x
 			_put_cell(substrate, x, y, SUB.get(int(sub[i]), ""), "", (x * 7 + y * 13) % 4)
@@ -152,6 +176,7 @@ func full_paint() -> void:
 	props.clear()
 	for i in sim.salt_cells():
 		put_prop(i % w, i / w, "tile.salt", "", i % 2)
+	strata_names.queue_redraw()
 	flooded = {}
 	for i in sim.flooded_cells():
 		flooded[int(i)] = true
@@ -168,11 +193,18 @@ func _paint_mat(x: int, y: int, hv: int, sg: float) -> void:
 
 func _on_tick() -> void:
 	var sim: RoseSim = Sim.ensure()
+	if refresh_strata():
+		full_paint()
 	var changed: PackedInt32Array = sim.changed_cells()
 	if not changed.is_empty():
 		var hy: PackedByteArray = sim.hyphae()
 		var sig: PackedFloat32Array = sim.signal()
+		var sub: PackedByteArray = sim.substrate()
 		for i in changed:
+			if i / w < top_row:
+				continue
+			# a breach opens a slab: its tiles change substrate
+			_put_cell(substrate, i % w, i / w, SUB.get(int(sub[i]), ""), "", ((i % w) * 7 + (i / w) * 13) % 4)
 			_paint_mat(i % w, i / w, int(hy[i]), sig[i])
 	_repaint_flood(sim)
 	crowd.queue_redraw()
@@ -581,13 +613,13 @@ func _draw_gauges() -> void:
 		if not bool(z.reached):
 			continue
 		var step := int(z.step)
-		var at := Vector2(int(z.grate) * TILE + TILE / 2, TILE + 4 * k)
+		var at := Vector2(int(z.x) * TILE + TILE / 2, (int(z.y) + 1) * TILE + 4 * k)
 		gauges.draw_set_transform(at, 0.0, Vector2(k, k))
 		var who := String(z.get("faction", "")).split(" ")[0].to_upper()
 		var wide := maxi(29, who.length() * 4 + 5)
 		gauges.draw_rect(Rect2(-wide / 2, -1, wide, 22), Color(UiTheme.SUMP, 0.9))
 		var blink: bool = bool(z.down) and int(Time.get_ticks_msec() / 250) % 2 == 0
-		var label := "G%d" % int(z.number)
+		var label := String(z.get("label", "G%d" % int(z.number)))
 		if bool(z.get("exact", false)):
 			label += " %d" % int(round(float(z.attention)))
 		gauges.draw_string(font, Vector2(-label.length() * 2, 5), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.VESTMENT if blink else UiTheme.CHALK)
@@ -595,3 +627,24 @@ func _draw_gauges() -> void:
 			gauges.draw_rect(Rect2(-12 + p * 9, 8, 7, 4), lit[p] if step > p else UiTheme.VOID)
 		gauges.draw_string(font, Vector2(-who.length() * 2, 19), who, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.DUST)
 		gauges.draw_set_transform(Vector2.ZERO)
+
+## Each stratum's name: in Dust across a stratum not yet reached (Void until the Mat reaches it), at the left edge
+## of one reached (Full Design v3.19, The stack and the breach).
+func _draw_strata_names() -> void:
+	if not bind_sim or strata_info.is_empty():
+		return
+	var cam := get_viewport().get_camera_2d()
+	var k := 1.0 / (cam.zoom.x if cam != null else 1.0)
+	var font := UiTheme.pixel_font()
+	for st in strata_info:
+		var y0 := int(st.ceiling) * TILE
+		var name := "S%d  %s" % [int(st.n), String(st.name).to_upper()]
+		if bool(st.reached):
+			strata_names.draw_set_transform(Vector2(4 * k, y0 + 4 * k), 0.0, Vector2(k, k))
+			strata_names.draw_string(font, Vector2.ZERO + Vector2(0, 6), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.DUST)
+		else:
+			var rows := int(st.rows) * TILE
+			strata_names.draw_set_transform(Vector2(w * TILE / 2.0, y0 + rows / 2.0), 0.0, Vector2(k, k) * 2.0)
+			strata_names.draw_string(font, Vector2(-name.length() * 2, 3), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.DUST)
+			strata_names.draw_string(font, Vector2(-38, 13), "NOT YET REACHED", HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.DUST)
+	strata_names.draw_set_transform(Vector2.ZERO)

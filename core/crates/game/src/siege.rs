@@ -241,7 +241,7 @@ fn defend(w: &mut World, gx: usize) -> Vec<String> {
 pub fn cleansing(seed: u64, shifts: u32, defended: bool) -> Siege {
     let (_, mut w) = city::play_world(seed, shifts, &mut |_, _| {});
     let mut out = Siege { defended, before: tally(&w), ..Default::default() };
-    let gx = city::first_grate(&w).map(|g| g.0 as usize).unwrap_or(0);
+    let gx = city::first_grate(&w).unwrap_or(0);
     if defended {
         // the defence stands on the tree's structures (Gates, Turrets) and none of its numbers (Full Design v3.18)
         w.colony.progress.tech = progress::Tech::every_structure();
@@ -250,7 +250,7 @@ pub fn cleansing(seed: u64, shifts: u32, defended: bool) -> Siege {
         w.publish();
     }
     w.movers();
-    let zone = w.threats.zone_at(&w.city.sim, gx as u16, 0).unwrap_or(0);
+    let zone = w.threats.zones.iter().position(|z| z.grate == gx).unwrap_or(0);
     let stage = w.threats.rules.stage_index("cleansing").expect("a Cleansing in threats.toml");
     let log_from = w.log.events.len();
     let start = w.city.tick;
