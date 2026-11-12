@@ -12,8 +12,10 @@ use threat::Threats;
 
 use crate::log::{CityLog, Class};
 
-/// Chapters are Phase E: the city is in the first.
-pub const CHAPTER: u8 = 1;
+/// The campaign's chapter as the surface reads it (Full Design v3.19): the economy keeps it, the campaign sets it.
+pub fn chapter(econ: &economy::Economy) -> u8 {
+    econ.s.chapter.max(1)
+}
 
 /// The surface's day of a shift (three shifts a day).
 pub fn day_of(shift: u32) -> u32 {
@@ -79,7 +81,7 @@ pub fn open_grates(colony: &Colony) -> bool {
 /// The books the ledger prices by, as the day's demand, the standing and the staff have them now.
 pub fn set_books(econ: &Economy, ledger: &mut Ledger, city: &City, colony: &Colony, defs: &StructureFile, roster: &Roster, plan: &[(u32, Job, u32)]) {
     let staff = stalls(city, colony, defs, roster, plan);
-    ledger.books = econ.books(&city.markets, &staff, open_grates(colony), CHAPTER);
+    ledger.books = econ.books(&city.markets, &staff, open_grates(colony), chapter(econ));
 }
 
 /// The grates the Mat reaches from the Heart (columns).
@@ -102,12 +104,12 @@ fn facts(city: &City, threats: Option<&Threats>, roster: &Roster, raiders: bool)
 pub fn start_shift(econ: &mut Economy, ledger: &mut Ledger, city: &City, colony: &Colony, defs: &StructureFile, roster: &Roster, names: &NameFile, plan: &[(u32, Job, u32)], threats: Option<&Threats>, shift: u32, raiders: bool, log: &mut CityLog) {
     let day = Economy::day_of(shift);
     if day != econ.s.day {
-        let notes = econ.begin_day(day, CHAPTER);
+        let notes = econ.begin_day(day, chapter(econ));
         note(log, city.tick, notes);
     }
     let f = facts(city, threats, roster, raiders);
     let first = names.first.clone();
-    econ.refresh_offers(&f, CHAPTER, &mut |s| first[(s % first.len().max(1) as u64) as usize].clone());
+    econ.refresh_offers(&f, chapter(econ), &mut |s| first[(s % first.len().max(1) as u64) as usize].clone());
     set_books(econ, ledger, city, colony, defs, roster, plan);
 }
 
@@ -194,9 +196,10 @@ fn hosts(econ: &mut Economy, roster: &mut Roster, traits: &TraitFile, names: &Na
 /// Where the city deals with a faction: its own street nearest the Heart when the Mat reaches one, else under Open
 /// Grates the market nearest the Heart (Full Design v3.16, Economy: Buying).
 pub fn market_of(econ: &Economy, city: &City, colony: &Colony, faction: u8) -> Option<u8> {
+    let accord = econ.file.factions[faction as usize].accord;
     let near = |own: bool| {
         (0..city.markets.len())
-            .filter(|&k| !own || econ.faction_at(city.markets[k]) == Some(faction))
+            .filter(|&k| !own || econ.faction_at(city.markets[k]) == Some(faction) || accord && econ.s.accord_grate == Some(city.markets[k] as u16))
             .filter_map(|k| city.from_heart(logistics::Kind::Market, k as u32).map(|d| (d, k)))
             .min_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)))
             .map(|(_, k)| k as u8)

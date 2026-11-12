@@ -4,7 +4,7 @@
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 14;
+pub const SAVE_VERSION: u16 = 15;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -105,6 +105,11 @@ pub struct SaveFile {
     /// Economy); the ledger's glut by category, books and orders and an item's contract (v13)
     #[serde(default)]
     pub economy: economy::EconomySave,
+    /// the campaign: the chapter, the accord, the Bloom, the alliance, the Great Cleansing, the ending and the panels
+    /// (v15, Full Design v3.19); the stack's Mat (the snapshots), the threats' stratum and campaign state, a street's
+    /// stratum, the economy's chapter, accord grate and ally (v15)
+    #[serde(default)]
+    pub campaign: story::Campaign,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -155,6 +160,7 @@ impl SaveFile {
             colony: colony::Colony::new(),
             threats: threat::ThreatSave::default(),
             economy: economy::EconomySave::default(),
+            campaign: story::Campaign::default(),
         }
     }
 
@@ -334,7 +340,13 @@ mod tests {
         save.colony.progress.strain.lineage.push((3, [0.5; 10]));
         save.colony.progress.collections.scrapdex.push(("chr_street_eye".into(), 2));
         save.colony.progress.collections.trophies.push(("lived_flood".into(), 4));
+        // the campaign (v15): chapter 3 answered, its Cleansing due
+        save.campaign.chapter = 3;
+        save.campaign.accord = Some(story::Accord::Accepted { on: 9 });
+        save.campaign.cleansing_at = Some(12);
+        save.campaign.panels.push("ch3.close".into());
         let back = SaveFile::decode(&save.encode()).unwrap();
+        assert_eq!(back.campaign, save.campaign);
         assert_eq!(back.colony.progress, save.colony.progress);
         assert_eq!(back.economy, save.economy);
         assert_eq!(back.ledger.glut_by, save.ledger.glut_by);

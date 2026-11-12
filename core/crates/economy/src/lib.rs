@@ -172,6 +172,9 @@ pub struct FactionDef {
     pub rotate: u8,
     #[serde(default)]
     pub chapter: u8,
+    /// trades only at the envoy's grate after an accepted accord (the Oathkeepers; Full Design v3.19)
+    #[serde(default)]
+    pub accord: bool,
     #[serde(default)]
     pub fence: u8,
     #[serde(default = "unit")]
@@ -429,6 +432,15 @@ pub struct EconomySave {
     pub bought_service: Vec<u8>,
     /// a clinic day: this shift's end brings the flush
     pub flush: bool,
+    /// the campaign's chapter, which the surface's events and stalls read (Full Design v3.19)
+    #[serde(default)]
+    pub chapter: u8,
+    /// the envoy's grate after an accepted accord: the Oathkeepers trade there
+    #[serde(default)]
+    pub accord_grate: Option<u16>,
+    /// the alliance signed at chapter 6's council: its tier 4 is open whatever its standing asks
+    #[serde(default)]
+    pub ally: Option<u8>,
 }
 
 pub struct Economy {
@@ -523,7 +535,29 @@ impl Economy {
 
     fn trades(&self, f: usize, chapter: u8) -> bool {
         let d = &self.file.factions[f];
+        if d.accord {
+            return self.s.accord_grate.is_some();
+        }
         d.chapter == 0 || chapter >= d.chapter
+    }
+
+    /// The alliance (Full Design v3.19, the council): the faction's tier 4 opens, its rival drops to −2. Once a run.
+    pub fn ally_with(&mut self, f: u8) -> Result<(), String> {
+        if self.s.ally.is_some() {
+            return Err("an alliance is signed already".into());
+        }
+        let rival = self.file.factions[f as usize].rival.clone();
+        self.s.ally = Some(f);
+        if let Some(r) = self.file.index(&rival) {
+            let st = &mut self.s.standing[r as usize];
+            st.rep = st.rep.min(-2);
+        }
+        Ok(())
+    }
+
+    /// The ally's reputation (0 with none): the warchest's and the endings' alliance score.
+    pub fn ally_rep(&self) -> i32 {
+        self.s.ally.map_or(0, |f| self.s.standing[f as usize].rep)
     }
 
     // ------------------------------------------------------------ the surface's clock
@@ -635,6 +669,9 @@ impl Economy {
             return 0;
         }
         let by_rule = (1..=4u8).filter(|&t| st.rep >= r.tier_rep[t as usize - 1] && st.traded >= r.tier_volume[t as usize - 1]).max().unwrap_or(0);
+        if self.s.ally == Some(f) {
+            return 4;
+        }
         by_rule.max(st.opened.min(4))
     }
 
@@ -701,7 +738,15 @@ impl Economy {
             .map(|(m, &g)| {
                 let (trade, pasts) = staff.get(m).cloned().unwrap_or_default();
                 let all = open_grates || self.s.convoy.contains(&(m as u8));
-                let fs: Vec<u8> = if all { (0..self.file.factions.len()).filter(|&f| self.trades(f, chapter)).map(|f| f as u8).collect() } else { self.faction_at(g).into_iter().collect() };
+                let mut fs: Vec<u8> = if all { (0..self.file.factions.len()).filter(|&f| self.trades(f, chapter)).map(|f| f as u8).collect() } else { self.faction_at(g).into_iter().collect() };
+                // the Oathkeepers at the envoy's grate after an accepted accord
+                if self.s.accord_grate == Some(g as u16) {
+                    if let Some(o) = self.file.factions.iter().position(|d| d.accord) {
+                        if !fs.contains(&(o as u8)) {
+                            fs.push(o as u8);
+                        }
+                    }
+                }
                 fs.into_iter()
                     .map(|f| {
                         let past = pasts.iter().any(|p| *p == self.file.factions[f as usize].past);

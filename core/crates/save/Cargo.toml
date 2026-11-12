@@ -13,6 +13,7 @@ people = { path = "../people" }
 colony = { path = "../colony" }
 threat = { path = "../threat" }
 economy = { path = "../economy" }
+story = { path = "../story" }
 serde.workspace = true
 postcard.workspace = true
 

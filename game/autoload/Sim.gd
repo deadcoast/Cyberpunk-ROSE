@@ -96,6 +96,11 @@ var last_outcome := {}
 var route_memory := {}
 ## The city's one Stash (inventory crate through RoseStash); every screen is a view of it.
 var stash: RoseStash
+## The campaign's panels (Full Design v3.19): where the Panels screen goes back to, a set to replay (the Codex's
+## Lore), and a hold that keeps a waiting set from playing (the shots and the play script set it).
+var panel_return := "colony"
+var panel_replay := ""
+var panel_hold := false
 ## The highest stratum the Board offers at the founding (the bridge follows the city's stratum after it).
 var strata_open := 3
 ## The roster (people crate through RosePeople): every slimo's record, founded from the save's seed on first use.

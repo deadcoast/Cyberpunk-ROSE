@@ -12,6 +12,7 @@ mod cargo_bridge;
 mod hud_bridge;
 mod market_bridge;
 mod progress_bridge;
+mod story_bridge;
 mod colony_bridge;
 mod people;
 
@@ -55,6 +56,8 @@ pub struct RoseSim {
     /// one of them
     strata: u8,
     raiders: bool,
+    /// the campaign (Full Design v3.19, Narrative and Ivan)
+    campaign: story::Campaign,
 }
 
 #[godot_api]
@@ -75,6 +78,9 @@ impl RoseSim {
         let table = items::ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
         self.economy = Some(game::world::found_economy(&city.sim, &table, seed as u64));
         self.city = Some(city);
+        if let (Some(t), Some(e)) = (self.threats.as_mut(), self.economy.as_mut()) {
+            game::campaign::found(&self.campaign, t, e);
+        }
     }
 
     /// The Board's open strata: raiders walk its routes when one of them rolls for raiders (clear-raiders contracts).
@@ -1023,7 +1029,11 @@ impl RoseSim {
                 let city_seed = self.economy.as_ref().map_or(0, |e| e.s.seed);
                 game::loops::play(&mut self.colony, &mut folk, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), self.threats.as_ref(), &city.sim, city_seed, day.max(1) as u32, city.tick, &mut self.log)
             };
-            let town = game::Town { city, colony: &mut self.colony, defs: &defs, flush_mult: 1.0 };
+            let (flush_mult, gain_mult) = game::campaign::mults(&self.campaign, &city.sim);
+            if let Some(t) = self.threats.as_mut() {
+                t.campaign.gain_mult = gain_mult;
+            }
+            let town = game::Town { city, colony: &mut self.colony, defs: &defs, flush_mult };
             let store = game::Store { stash: st.stash.as_mut().unwrap(), ledger: &mut st.ledger, bench: &mut st.bench, table: st.table.as_ref().unwrap(), recipes: st.recipes.as_ref().unwrap() };
             let folk = game::Folk { roster: &mut p.roster, traits: &traits, names: &names, died: &mut p.died_this_shift };
             let mut shift = game::end_shift(town, store, folk, day.max(1) as u32, &mut self.log);
@@ -1047,6 +1057,13 @@ impl RoseSim {
                 let (lines, l) = game::trade::end_shift(e, &mut st.ledger, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), city, &mut self.colony, &mut p.roster, &traits, &names, self.threats.as_mut(), Some(&board), &shift.closed.report.to_faction, day.max(1) as u32, self.raiders, &mut self.log);
                 shift.stash_lines.extend(lines);
                 laid = l;
+            }
+            // the campaign reads the shift: a chapter's goal, the accord, the Great Cleansing, the ending (v3.19)
+            if let (Some(t), Some(e)) = (self.threats.as_mut(), self.economy.as_mut()) {
+                let guards = self.posts.guards.len();
+                let mut parts = game::campaign::Parts { city, colony: &mut self.colony, defs: &defs, threats: t, economy: e, roster: &mut p.roster, died: &mut p.died_this_shift, stash: st.stash.as_mut().unwrap(), table: st.table.as_ref().unwrap(), log: &mut self.log, guards };
+                let story = game::campaign::shift_end(&mut self.campaign, &mut parts, day.max(1) as u32);
+                shift.people_lines.extend(story);
             }
             if let Some(t) = self.threats.as_mut() {
                 let next = day.max(1) as u32 + 1;

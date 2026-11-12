@@ -221,7 +221,7 @@ fn quotas(colony: &Colony, defs: &StructureFile, city: &City, ledger: &Ledger) -
 /// Shift end: what the Stills and Salt Works made rides home, the Stash's queue leaves the Heart (or its
 /// stockpile), the quotas pull. Returns the lines for the report.
 #[allow(clippy::too_many_arguments)]
-pub fn dispatch_shift(city: &mut City, colony: &Colony, defs: &StructureFile, stash: &mut Stash, ledger: &mut Ledger, table: &ItemTable, o: &ShiftOutcome) -> Vec<String> {
+pub fn dispatch_shift(city: &mut City, colony: &mut Colony, defs: &StructureFile, stash: &mut Stash, ledger: &mut Ledger, table: &ItemTable, o: &ShiftOutcome) -> Vec<String> {
     let mut lines = Vec::new();
     if city.heart_cell().is_none() {
         return lines;
@@ -244,6 +244,7 @@ pub fn dispatch_shift(city: &mut City, colony: &Colony, defs: &StructureFile, st
             made += 1;
         }
     }
+    colony.downer_made += made;
     if !o.stills.is_empty() {
         lines.push(if made > 0 { format!("the Still made {made} dose{}: on the cords home", if made == 1 { "" } else { "s" }) } else { "the Still made nothing: no brine or no Enzyme Part in its store".into() });
     }

@@ -2,9 +2,9 @@ extends ScreenBase
 ## Codex (Full Design v3.18, UI and screens: Codex; Progression: Collections): the Scrapdex (the 150 entries as tiles,
 ## silhouettes for the unseen), the Strainbook (the 38 cards, dark until earned), the curio sets (each with its three
 ## and its passive), the Memorial (the dead) and the Trophies (the twelve). Every rule is the progress crate's
-## (RoseSim.codex); the screen reads it. Lore arrives with the chapters (PAC-081).
+## (RoseSim.codex); the screen reads it. Lore (Full Design v3.19) keeps every panel set seen and replays it.
 
-const TABS := ["SCRAPDEX", "STRAINBOOK", "SETS", "MEMORIAL", "TROPHIES"]
+const TABS := ["SCRAPDEX", "STRAINBOOK", "SETS", "MEMORIAL", "TROPHIES", "LORE"]
 
 var tab := "SCRAPDEX"
 var view: Control
@@ -22,7 +22,7 @@ func _build_content(c: Control) -> void:
 	for t in TABS:
 		var tt: String = t
 		buttons[t] = make_button(c, t, Vector2(x, 0), func(): _set_tab(tt))
-		x += 84
+		x += 72
 	view = Control.new()
 	view.position = Vector2(0, 16)
 	c.add_child(view)
@@ -50,6 +50,8 @@ func _draw() -> void:
 			_memorial()
 		"TROPHIES":
 			_trophies()
+		"LORE":
+			_lore()
 
 func _click(parent: Control, size_: Vector2, text: String) -> void:
 	var b := Button.new()
@@ -160,3 +162,22 @@ func _trophies() -> void:
 		make_label(f, String(e.name).to_upper(), Vector2(6, 4), UiTheme.ACID if got else UiTheme.DUST)
 		make_label(f, String(e.text).left(24), Vector2(6, 16), UiTheme.CHALK if got else UiTheme.DUST)
 		make_label(f, "SHIFT %d" % int(e.won) if got else "", Vector2(6, 34), UiTheme.DUST)
+
+## The panel sets seen, in the order they played; a click replays one.
+func _lore() -> void:
+	var camp: Dictionary = Sim.ensure().campaign()
+	var seen: PackedStringArray = camp.get("seen", PackedStringArray())
+	make_label(view, "LORE   %d panel set%s seen   click one to see it again" % [seen.size(), "" if seen.size() == 1 else "s"], Vector2(0, 2), UiTheme.CYAN)
+	var y := 18
+	if seen.is_empty():
+		make_label(view, "nothing yet: a chapter's panels land here once they have played", Vector2(0, y), UiTheme.DUST)
+	for k in seen:
+		var key := String(k)
+		var title := String(Sim.ensure().panel_set(key).get("title", key))
+		make_button(view, title, Vector2(0, y), func():
+			Sim.panel_replay = key
+			Sim.panel_return = "codex"
+			Screens.show_screen("panels"))
+		y += 16
+		if y > 280:
+			break

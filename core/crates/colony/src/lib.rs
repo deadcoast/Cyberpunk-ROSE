@@ -758,6 +758,9 @@ pub struct Colony {
     /// tiles marked to be cut (v3.12)
     #[serde(default)]
     pub cuts: Vec<Cut>,
+    /// Downer the Stills made over the run (the warchest; Full Design v3.19)
+    #[serde(default)]
+    pub downer_made: u32,
     /// tiles left in the open bag of road salt
     #[serde(default)]
     pub salt_left: u8,
@@ -840,6 +843,7 @@ impl Colony {
             names_left: DISTRICT_NAMES.iter().map(|s| s.to_string()).collect(),
             charter: Charter::default(),
             barred_hubs: Vec::new(),
+            downer_made: 0,
             low_priority: Vec::new(),
             cuts: Vec::new(),
             salt_left: 0,

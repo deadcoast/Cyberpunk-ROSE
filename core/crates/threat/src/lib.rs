@@ -197,6 +197,10 @@ pub enum Role {
     Crawler,
     /// a crawler a Pen tamed: the city's
     Tamed,
+    /// chapter 3's envoy: waits at its grate, harms nothing, harmed by nothing of the city's
+    Envoy,
+    /// the ally's militia in chapter 7: the city's, at the Heart
+    Militia,
 }
 
 impl Role {
@@ -207,6 +211,8 @@ impl Role {
             Role::Carrier => "carrier",
             Role::Flamer => "flamer",
             Role::Crawler | Role::Tamed => "crawler",
+            Role::Envoy => "envoy",
+            Role::Militia => "militia",
         }
     }
     fn from_key(k: &str) -> Role {
@@ -222,7 +228,12 @@ impl Role {
         matches!(self, Role::Scout | Role::Sprayer | Role::Carrier | Role::Flamer)
     }
     pub fn hostile(self) -> bool {
-        self != Role::Tamed
+        !matches!(self, Role::Tamed | Role::Envoy | Role::Militia)
+    }
+
+    /// The city's own bodies, whom the Oathkeepers' poles and flame find beside them.
+    pub fn friendly(self) -> bool {
+        matches!(self, Role::Tamed | Role::Militia)
     }
 }
 
@@ -248,6 +259,8 @@ pub enum Goal {
     Hunt,
     /// a tamed crawler at its Pen
     Pen(u32),
+    /// stand here (the envoy at its grate; the militia at the Heart, out to an Oathkeeper within 8 and back)
+    Hold(u16, u16),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -318,6 +331,9 @@ pub struct Due {
     pub zone: u16,
     /// city ticks from now
     pub in_ticks: u32,
+    /// the share of its squad (a campaign's scripted Cleansing; Full Design v3.19)
+    #[serde(default = "whole")]
+    pub share: f32,
 }
 
 /// The Flood shift's water (Full Design, Pressure: Floods).
@@ -422,11 +438,17 @@ pub struct Campaign {
     pub decay: f32,
     pub any_cleansing: bool,
     pub mapped: bool,
+    /// no stage is chosen for a shift up to this one (an accepted accord's two shifts of calm)
+    #[serde(default)]
+    pub calm_until: u32,
+    /// every zone's gain multiplied (Endless Sump: 1 + the Mat's cells / 2,000)
+    #[serde(default = "whole")]
+    pub gain_mult: f32,
 }
 
 impl Default for Campaign {
     fn default() -> Self {
-        Campaign { decay: 2.0, any_cleansing: false, mapped: false }
+        Campaign { decay: 2.0, any_cleansing: false, mapped: false, calm_until: 0, gain_mult: 1.0 }
     }
 }
 
@@ -937,6 +959,7 @@ impl Threats {
             if reached {
                 gain += self.stratum.saturating_sub(1) as f32;
             }
+            gain *= self.campaign.gain_mult;
             let z = &mut self.zones[k];
             z.gained = gain;
             let decay = self.campaign.decay + if reliquary { 1.0 } else { 0.0 };
@@ -958,10 +981,14 @@ impl Threats {
                 }
             }
         }
-        // the next shift's events: the highest stage due in each zone, outside its quiet spells
+        // the next shift's events: the highest stage due in each zone, outside its quiet spells (and an accepted
+        // accord's calm)
         self.due.clear();
         let next = self.shift + 1;
         for k in 0..self.zones.len() {
+            if next <= self.campaign.calm_until {
+                break;
+            }
             let a = self.zones[k].attention;
             let mut pick = None;
             for st in (0..self.rules.stage.len()).rev() {
@@ -978,7 +1005,7 @@ impl Threats {
             if let Some(st) = pick {
                 let mut r = self.rng(100 + k as u64);
                 let in_ticks = r.below(self.rules.stage[st].arrive_in.max(1));
-                self.due.push(Due { stage: st, zone: k as u16, in_ticks });
+                self.due.push(Due { stage: st, zone: k as u16, in_ticks, share: 1.0 });
                 out.notes.push(Note { loss: false, decision: true, what: format!("grate {} is loud enough for a {}", self.grate_label(&city.sim, k), self.rules.stage[st].name) });
             }
         }
@@ -1000,6 +1027,34 @@ impl Threats {
         self.next_id += 1;
         self.bodies.push(Body { id, role, x, y, hp, max_hp: hp, event, zone, goal, foe: None, cd: 0.0, step: 0, mapping: 0.0, home: 0, pen: None, dead: false, gone: false });
         id
+    }
+
+    /// Chapter 3's envoy comes down a zone's grate and waits there (Full Design v3.19, the accord). Returns its id.
+    pub fn send_envoy(&mut self, sim: &MatSim, zone: usize) -> u32 {
+        let (x, y) = self.grate_xy(sim, zone);
+        // two tiles down the shaft from the grate where it can stand, else at the grate's foot
+        let w = sim.w;
+        let stand = (2..=4u16).map(|d| y + d).find(|&yy| (yy as usize) < sim.h && walkable(sim, yy as usize * w + x as usize)).unwrap_or(y + 1);
+        self.spawn(Role::Envoy, x, stand, 0, zone as u16, Goal::Hold(x, stand))
+    }
+
+    /// The envoy goes back up its grate.
+    pub fn envoy_leaves(&mut self) {
+        for b in self.bodies.iter_mut().filter(|b| b.role == Role::Envoy && !b.dead && !b.gone) {
+            b.goal = Goal::Leave;
+        }
+    }
+
+    /// The ally's militia stand at the Heart (Full Design v3.19, the Great Cleansing): `n` of them.
+    pub fn send_militia(&mut self, sim: &MatSim, n: u32) {
+        let Some((hx, hy)) = sim.heart else { return };
+        let zone = self.heart_zone(sim).unwrap_or(0) as u16;
+        let walk: Vec<usize> = (0..sim.hy.len()).filter(|&i| walkable(sim, i) && cheb(((i % sim.w) as u16, (i / sim.w) as u16), (hx as u16, hy as u16)) <= 3).collect();
+        for k in 0..n as usize {
+            let i = walk.get(k % walk.len().max(1)).copied().unwrap_or(hy * sim.w + hx);
+            let (x, y) = ((i % sim.w) as u16, (i / sim.w) as u16);
+            self.spawn(Role::Militia, x, y, 0, zone, Goal::Hold(x, y));
+        }
     }
 
     /// Send a stage down a zone's grate now (the scheduler, and the proof's forced Cleansing).
@@ -1144,14 +1199,14 @@ impl Threats {
         let mut send = Vec::new();
         for d in self.due.iter_mut() {
             if d.in_ticks == 0 {
-                send.push((d.stage, d.zone as usize));
+                send.push((d.stage, d.zone as usize, d.share));
             } else {
                 d.in_ticks -= 1;
             }
         }
         self.due.retain(|d| d.in_ticks > 0 || !send.iter().any(|s| s.1 == d.zone as usize));
-        for (st, z) in send {
-            notes.extend(self.send(city, colony, defs, st, z));
+        for (st, z, share) in send {
+            notes.extend(self.send_share(city, colony, defs, st, z, share));
         }
         if self.bodies.is_empty() && self.events.is_empty() && self.stain.iter().all(|s| *s == 0) {
             self.last_step = city.sim.tick;
@@ -1250,6 +1305,16 @@ impl Threats {
                     let prey = prey.or_else(|| colony.structures.iter().filter(|st| st.built).map(|st| (st.x, st.y)).min_by_key(|&t| (dist2(pos, t), t.1, t.0)));
                     prey.filter(|&p| cheb(pos, p) > 1)
                 }
+                Goal::Hold(hx, hy) => {
+                    let hold = (hx, hy);
+                    // the militia go out to an Oathkeeper within 8 of their post until it is in range, then back
+                    let near = if b.role == Role::Militia { self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.oathkeeper() && cheb((o.x, o.y), hold) <= 8).min_by_key(|o| (dist2(pos, (o.x, o.y)), o.id)).map(|o| (o.x, o.y)) } else { None };
+                    match near {
+                        Some(o) if dist2(pos, o) > def.range * def.range => Some(o),
+                        Some(_) => None,
+                        None => (pos != hold).then_some(hold),
+                    }
+                }
                 Goal::Pen(pid) => {
                     let pen = colony.get(pid).map(|st| (st.x, st.y));
                     match pen {
@@ -1331,6 +1396,9 @@ impl Threats {
                             *struct_dmg.entry(sid).or_default() += def.flame * dt;
                         }
                     }
+                    for o in self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.friendly() && cheb(pos, (o.x, o.y)) <= 1) {
+                        body_dmg.entry(o.id).or_insert((0.0, None)).0 += def.flame * dt;
+                    }
                     for (id, p) in slimos.iter().filter(|(_, p)| cheb(pos, *p) <= 1) {
                         let _ = p;
                         *self.hurt.entry(*id).or_default() += def.flame * dt;
@@ -1357,13 +1425,25 @@ impl Threats {
                         }
                     }
                 }
+                Role::Envoy => {}
+                Role::Militia => {
+                    // the faction's pistol at the nearest Oathkeeper in range
+                    if self.bodies[k].cd <= 0.0 {
+                        if let Some(o) = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.oathkeeper() && dist2(pos, (o.x, o.y)) <= def.range * def.range).min_by_key(|o| (dist2(pos, (o.x, o.y)), o.id)) {
+                            let e = body_dmg.entry(o.id).or_insert((0.0, None));
+                            e.0 += def.shot as f32;
+                            e.1 = Some(Foe::Body(b.id));
+                            self.bodies[k].cd = def.shot_s;
+                        }
+                    }
+                }
                 Role::Carrier | Role::Sprayer => {
-                    // a pole for whoever stands beside it: the city's slimos, a tamed crawler
+                    // a pole for whoever stands beside it: the city's slimos, a tamed crawler, the militia
                     if def.strike > 0 && self.bodies[k].cd <= 0.0 {
                         if let Some((id, _)) = slimos.iter().find(|(_, p)| cheb(pos, *p) <= 1) {
                             *self.hurt.entry(*id).or_default() += def.strike as f32;
                             self.bodies[k].cd = def.strike_s;
-                        } else if let Some(t) = self.bodies.iter().find(|o| !o.dead && !o.gone && o.role == Role::Tamed && cheb(pos, (o.x, o.y)) <= 1) {
+                        } else if let Some(t) = self.bodies.iter().find(|o| !o.dead && !o.gone && o.role.friendly() && cheb(pos, (o.x, o.y)) <= 1) {
                             body_dmg.entry(t.id).or_insert((0.0, None)).0 += def.strike as f32;
                             self.bodies[k].cd = def.strike_s;
                         }

@@ -123,6 +123,25 @@ flame = 10.0
 burn = 2.0
 oathkeeper = true
 
+[body.envoy]
+# chapter 3's envoy (Full Design v3.19, the accord): a lamp carrier who neither strikes nor burns, and whom the
+# city's Guards and turrets leave be; it waits at its grate for the answer
+name = "Oathkeeper envoy"
+hp = 60
+walk = 2
+lamp = 0
+oathkeeper = false
+
+[body.militia]
+# the ally's militia in chapter 7 (Full Design v3.19, the Great Cleansing): Fight 6 guards with the faction's pistol
+name = "militia"
+hp = 70
+walk = 2
+shot = 9
+shot_s = 1.2
+range = 6
+oathkeeper = false
+
 [body.crawler]
 name = "Bloom crawler"
 hp = 18

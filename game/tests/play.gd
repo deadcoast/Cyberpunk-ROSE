@@ -27,6 +27,8 @@ func _initialize() -> void:
 	screens = _autoload("Screens", "res://autoload/Screens.gd")
 	sim = _autoload("Sim", "res://autoload/Sim.gd")
 	root.add_child((load("res://Main.tscn") as PackedScene).instantiate())
+	# the campaign's panel sets play when the script shows them, not on their own
+	sim.panel_hold = true
 	out_dir = ProjectSettings.globalize_path("res://../docs/shots")
 	DirAccess.make_dir_recursive_absolute(out_dir)
 
@@ -532,6 +534,67 @@ func _process(_delta: float) -> bool:
 		33:
 			if t % 10 == 5:
 				_shot("26_breach")
+				# chapter 3 (Full Design v3.19): the Culverts reached, the envoy comes down the grate nearest the Heart
+				var rs: RoseSim = sim.ensure()
+				rs.debug_chapter(3)
+				sim.end_shift()
+				sim.day += 1
+				var camp: Dictionary = rs.campaign()
+				print("[play] %s, the envoy %s at %d" % [String(camp.card), String(camp.accord), int(camp.envoy)])
+				var w: int = rs.width()
+				scr.set_view(0)
+				scr.cam.position = Vector2((int(camp.envoy) % w) * 32 + 16, (int(camp.envoy) / w) * 32 + 96)
+				scr.selected = {}
+				scr.card_sig = ""
+				scr._draw_card()
+				scr._refresh_lines(rs)
+				scr.world.threat_bodies.queue_redraw()
+				print("[play] bodies: %s" % str(rs.threat_bodies().map(func(b): return "%s %d,%d" % [String(b.role), int(b.x), int(b.y)])))
+				phase = 34
+		34:
+			if t % 10 == 5:
+				_shot("27_envoy")
+				# the chapter's opening panels, as the screen plays them
+				sim.panel_replay = "ch3.open"
+				sim.panel_return = "colony"
+				screens.show_screen("panels")
+				scr = screens.current
+				phase = 35
+		35:
+			if t % 10 == 5:
+				_shot("28_panel")
+				screens.show_screen("colony")
+				scr = screens.current
+				var why: String = sim.ensure().answer_accord(sim.ensure_people(), true)
+				print("[play] ACCEPT: %s" % ("the accord stands" if why == "" else why))
+				scr._refresh_lines(sim.ensure())
+				phase = 36
+		36:
+			if t % 10 == 5:
+				_shot("29_accord")
+				var rs: RoseSim = sim.ensure()
+				print("[play] the Tithe on the Charter: %s; %s" % [str(rs.laws().any(func(l): return String(l.id) == "tithe" and String(l.state) in ["signed", "spreading"])), String(rs.campaign().card)])
+				# the ending: a Hive strain, chapter 7's Great Cleansing come and gone
+				rs.debug_gene(6, 0.82)
+				rs.debug_gene(8, 0.8)
+				rs.debug_chapter(7)
+				sim.end_shift()
+				sim.day += 1
+				var camp: Dictionary = rs.campaign()
+				print("[play] the ending: %s, the warchest %d" % [String(camp.ending), int(camp.warchest)])
+				sim.panel_replay = "end.%s" % String(camp.ending)
+				screens.show_screen("panels")
+				scr = screens.current
+				phase = 37
+		37:
+			if t % 10 == 5:
+				_shot("30_ending_panel")
+				screens.show_screen("ending")
+				scr = screens.current
+				phase = 38
+		38:
+			if t % 10 == 5:
+				_shot("31_ending")
 				print("[play] %d frames, %d shots -> %s" % [t, shots, out_dir])
 				quit(0)
 				return true

@@ -1,0 +1,217 @@
+# Cyberpunk: ROSE — the campaign's chapters and endings (Full Design v3.19, Narrative and Ivan). Written by
+# tools/gen/gen_panels.py once; this file is the source of truth for captions. A panel's art is its slot in
+# game/assets/manifest/panels.toml. Captions name the world through the string table's tokens; {name} is the
+# chapter-4 newcomer, {teller} the chapter-5 Corpo-Past slimo (or "a Runner").
+
+[[chapter]]
+n = 1
+id = "seepage"
+name = "Seepage"
+opens = "the founding"
+goal = "8 slimos, every one with a bed"
+card = "8 SLIMOS WITH BEDS"
+beat = "Ivan's welcome"
+open = [
+  { slot = "panel.ch1.open.1", caption = "Welcome to the bottom of {city_above}. Whatever you were up there, down here you're one of the {people}." },
+  { slot = "panel.ch1.open.2", caption = "The {order} came down from the Moon with a cure for cyberpsychosis. It cured the chrome right out of us." },
+  { slot = "panel.ch1.open.3", caption = "The ones the cure ruined, they flushed. We grew where the flush landed." },
+  { slot = "panel.ch1.open.4", caption = "That's the Heart. Feed it, and the Mat goes where you point it." },
+]
+close = [
+  { slot = "panel.ch1.close.1", caption = "Eight of us under a roof. In the Sump that's a census." },
+  { slot = "panel.ch1.close.2", caption = "Every one that wakes down here gets a name and a bed, or the drain takes them back." },
+  { slot = "panel.ch1.close.3", caption = "Write it on the wall, tweaker: the Heart is beating." },
+  { slot = "panel.ch1.close.4", caption = "Now let's see what this place can make." },
+]
+
+[[chapter]]
+n = 2
+id = "tweakers"
+name = "Tweakers"
+opens = "chapter 1 closed"
+goal = "a Scrap Forge standing and a sale at a Seep Market"
+card = "A FORGE AND A SALE"
+beat = "the first line about eddies"
+open = [
+  { slot = "panel.ch2.open.1", caption = "Give a tech-tweaker a pile of scrap and a Forge, and stand back." },
+  { slot = "panel.ch2.open.2", caption = "Up the grates there are people who'll pay {currency} for what we pull out of the dark." },
+  { slot = "panel.ch2.open.3", caption = "Every piece of chrome is a choice: sell it up, or feed it down." },
+  { slot = "panel.ch2.open.4", caption = "Sell, and we eat. Feed, and the Mat grows into something that might eat them." },
+]
+close = [
+  { slot = "panel.ch2.close.1", caption = "First {currency} in the till. Smells like rust and other people's money." },
+  { slot = "panel.ch2.close.2", caption = "The Forge is hot, the stall is open, and nobody up top knows our name." },
+  { slot = "panel.ch2.close.3", caption = "Keep it that way as long as you can." },
+  { slot = "panel.ch2.close.4", caption = "It won't be long." },
+]
+
+[[chapter]]
+n = 3
+id = "the_hand"
+name = "The Hand"
+opens = "chapter 2 closed and the Culverts reached"
+goal = "the envoy answered and the accord's Cleansing gone"
+card = "ANSWER THE ENVOY"
+beat = "the betrayal"
+open = [
+  { slot = "panel.ch3.open.1", caption = "White light at the grate, and nobody's shooting. That's new." },
+  { slot = "panel.ch3.open.2", caption = "An envoy of the {order}. Says they can keep the Gangs and the Badges off us." },
+  { slot = "panel.ch3.open.3", caption = "All it costs is a tithe: a tenth of our junk up the grate, every shift." },
+  { slot = "panel.ch3.open.4", caption = "Accept, and we get two quiet shifts. Refuse, and we find out how they say no." },
+]
+close = [
+  { slot = "panel.ch3.close.1", caption = "They took the tithe, drew the map, and came back with bleach. Write it down somewhere." },
+  { slot = "panel.ch3.close.2", caption = "Now they know the way to the Heart, and they'll never forget it." },
+  { slot = "panel.ch3.close.3", caption = "We buried the burned and counted the living. More of the second than they planned." },
+  { slot = "panel.ch3.close.4", caption = "No more envoys. Next time they come, they come for all of it." },
+]
+close_refused = [
+  { slot = "panel.ch3.close.1", caption = "They asked once, nicely. Then they came with bleach." },
+  { slot = "panel.ch3.close.2", caption = "We said no, and the white light said it back louder." },
+  { slot = "panel.ch3.close.3", caption = "We buried the burned and counted the living. More of the second than they planned." },
+  { slot = "panel.ch3.close.4", caption = "No more envoys. Next time they come, they come for all of it." },
+]
+
+[[chapter]]
+n = 4
+id = "sewerats"
+name = "Sewerats"
+opens = "chapter 3 closed and the Storm Drains reached"
+goal = "the chapter's Bloom ended, or two of its crawlers tamed"
+card = "END THE BLOOM"
+beat = "a chapter-1 newcomer gone feral"
+open = [
+  { slot = "panel.ch4.open.1", caption = "Something's growing in the Storm Drains that isn't ours." },
+  { slot = "panel.ch4.open.2", caption = "A strain cut off from any Heart: feral, hungry, and coming this way." },
+  { slot = "panel.ch4.open.3", caption = "{ferals}: the lost ones. They still have faces in there somewhere." },
+  { slot = "panel.ch4.open.4", caption = "One of them is {name}. We never reached the drain where they fell." },
+]
+close = [
+  { slot = "panel.ch4.close.1", caption = "The Bloom is done. What it ate, it doesn't give back." },
+  { slot = "panel.ch4.close.2", caption = "The ones we tamed sleep in the Pens now. Don't ask them about before." },
+  { slot = "panel.ch4.close.3", caption = "{name} is on the wall. Spell it right." },
+  { slot = "panel.ch4.close.4", caption = "Up above, the {order} are counting us. Let them count." },
+]
+
+[[chapter]]
+n = 5
+id = "warchest"
+name = "Warchest"
+opens = "chapter 4 closed and the Service Tunnels reached"
+goal = "a Runner home from the Vault with a Rare or better, and a Downer Still standing"
+card = "THE VAULT AND A STILL"
+beat = "what Arasaka left behind"
+open = [
+  { slot = "panel.ch5.open.1", caption = "Under the Service Tunnels there's a vault {fallen_corp} forgot to flood all the way." },
+  { slot = "panel.ch5.open.2", caption = "Corpo chrome, still in the crates. Corpo files, still on the drives." },
+  { slot = "panel.ch5.open.3", caption = "Everything the Moon wants is down there, for the first one who walks out with it." },
+  { slot = "panel.ch5.open.4", caption = "Bring me a Runner home from the Vault, and a Still that turns slime into something they'll beg for." },
+]
+close = [
+  { slot = "panel.ch5.close.1", caption = "{teller} worked down there once. Says the elevators still say good morning." },
+  { slot = "panel.ch5.close.2", caption = "{fallen_corp} built a war chest for a war it never got to fight." },
+  { slot = "panel.ch5.close.3", caption = "Now it's ours. Every crate, every drive, every bad idea." },
+  { slot = "panel.ch5.close.4", caption = "The Still is running. Downer by the drum." },
+]
+
+[[chapter]]
+n = 6
+id = "common_ground"
+name = "Common Ground"
+opens = "chapter 5 closed and the Vault reached"
+goal = "an alliance signed and the Undercroft reached"
+card = "SIGN AN ALLIANCE"
+beat = "the factions that hunted slimos asking for Downer"
+open = [
+  { slot = "panel.ch6.open.1", caption = "The {order} took {city_above} last night. Curfew lamps on every corner." },
+  { slot = "panel.ch6.open.2", caption = "Food paste is half what it was. The streets are scared and hungry." },
+  { slot = "panel.ch6.open.3", caption = "And now the people who hunted us come down the grates, asking for Downer." },
+  { slot = "panel.ch6.open.4", caption = "Pick one to stand with. Their enemies become ours." },
+]
+close = [
+  { slot = "panel.ch6.close.1", caption = "We shook hands in the Undercroft, under their feet." },
+  { slot = "panel.ch6.close.2", caption = "Gangs, Nomads, suits, Badges: everybody's one of the {people} when the white light comes." },
+  { slot = "panel.ch6.close.3", caption = "This is where {city_above} and {city_below} find common ground." },
+  { slot = "panel.ch6.close.4", caption = "Now we get ready." },
+]
+
+[[chapter]]
+n = 7
+id = "rise"
+name = "Rise"
+opens = "chapter 6 closed"
+goal = "the Great Cleansing gone"
+card = "THE GREAT CLEANSING"
+beat = "the ending the genome earned"
+open = [
+  { slot = "panel.ch7.open.1", caption = "They're coming, all of them, for the Great Cleansing." },
+  { slot = "panel.ch7.open.2", caption = "Every lamp the Moon owns, down every grate the Undercroft has." },
+  { slot = "panel.ch7.open.3", caption = "Six shifts. Everything we built, everything we bred, everything we kept." },
+  { slot = "panel.ch7.open.4", caption = "Let them come. We've been waiting under their feet for ten years." },
+]
+close = [
+  { slot = "panel.ch7.close.1", caption = "The lamps are out. The squads are down, or gone back up the grates." },
+  { slot = "panel.ch7.close.2", caption = "Listen. That's the Heart." },
+  { slot = "panel.ch7.close.3", caption = "Whatever we are now, we earned it." },
+  { slot = "panel.ch7.close.4", caption = "Here's what we became." },
+]
+
+[[ending]]
+id = "garden"
+name = "Garden"
+genes = ["lume", "thrift"]
+ally = 0.05
+panels = [
+  { slot = "panel.end.garden.1", caption = "The Mat lit up under {city_above} like a second skyline." },
+  { slot = "panel.end.garden.2", caption = "Clean water, cold light, a cure that doesn't take your chrome. All ours, and all for sale." },
+  { slot = "panel.end.garden.3", caption = "The grates stay open. They need us now." },
+  { slot = "panel.end.garden.4", caption = "Welcome to {city_below}. Mind the glow." },
+]
+
+[[ending]]
+id = "hive"
+name = "Hive"
+genes = ["chrome", "conductance"]
+ally = 0.0
+panels = [
+  { slot = "panel.end.hive.1", caption = "Every cord's a wire, every wire's a wall." },
+  { slot = "panel.end.hive.2", caption = "There's an armoured Mat under the whole of {city_above}, and it remembers every lamp." },
+  { slot = "panel.end.hive.3", caption = "The war chest isn't a stockpile anymore. It's the ground they stand on." },
+  { slot = "panel.end.hive.4", caption = "Knock first." },
+]
+
+[[ending]]
+id = "world_eater"
+name = "World-Eater"
+genes = ["appetite", "feral"]
+ally = -0.05
+panels = [
+  { slot = "panel.end.world_eater.1", caption = "We were hungry. We were always going to be hungry." },
+  { slot = "panel.end.world_eater.2", caption = "The Mat came up through the streets and ate the white light, and then it ate the streets." },
+  { slot = "panel.end.world_eater.3", caption = "The {order} lost. So did everybody else." },
+  { slot = "panel.end.world_eater.4", caption = "I'm still talking. Somebody has to." },
+]
+
+[[ending]]
+id = "accord"
+name = "Accord"
+genes = ["thrift", "toxicity"]
+ally = 0.0
+panels = [
+  { slot = "panel.end.accord.1", caption = "They can't cleanse it and they can't get near it. Every lamp that tried came back sick." },
+  { slot = "panel.end.accord.2", caption = "So the {order} did something they've never done: they signed." },
+  { slot = "panel.end.accord.3", caption = "{city_above} gets its water and its light. {city_below} gets its border." },
+  { slot = "panel.end.accord.4", caption = "First treaty in the history of the Moon. Signed in slime." },
+]
+
+[[ending]]
+id = "scattered"
+name = "Scattered"
+genes = []
+ally = 0.0
+panels = [
+  { slot = "panel.end.scattered.1", caption = "The Heart's gone, and the signal with it." },
+  { slot = "panel.end.scattered.2", caption = "What's left of the Mat went feral in the drains, or went white in the light." },
+  { slot = "panel.end.scattered.3", caption = "But the strain's in my veins, and I'm still breathing in a sump nobody's found yet." },
+  { slot = "panel.end.scattered.4", caption = "Feed me something. We start again." },
+]

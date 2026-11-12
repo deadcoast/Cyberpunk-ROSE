@@ -81,13 +81,20 @@ pub struct World {
     pub raiders: bool,
     /// the sales landed since the caller last took them (`rose economy`'s report)
     pub sales: Vec<cargo::Sale>,
+    /// the campaign (Full Design v3.19, Narrative and Ivan)
+    pub campaign: story::Campaign,
 }
 
 impl World {
     /// The founding (Full Design, The founding): the Sump with the Heart's Mat fifteen tiles out, the city on it,
     /// the roster, the starting haul.
     pub fn found(seed: u64, table: ItemTable) -> World {
-        let city = City::game(logistics::founding(seed), seed);
+        World::found_with(seed, table, story::Campaign::default(), mat::Genome::default())
+    }
+
+    /// The founding of a run in a mode and difficulty, on a genome (New Game+: the strain code's).
+    pub fn found_with(seed: u64, table: ItemTable, campaign: story::Campaign, genome: mat::Genome) -> World {
+        let city = City::game(logistics::founding_with(seed, genome), seed);
         let defs = StructureFile::shipped();
         let mut colony = Colony::new();
         colony.found(&defs, &city.sim).expect("the founding stratum takes the city");
@@ -97,8 +104,9 @@ impl World {
         roster.found(&traits, &names, seed, 1);
         let mut stash = Stash::new();
         starting_haul(&mut stash, &table);
-        let threats = threat::Threats::new(&city.sim, seed);
-        let economy = found_economy(&city.sim, &table, seed);
+        let mut threats = threat::Threats::new(&city.sim, seed);
+        let mut economy = found_economy(&city.sim, &table, seed);
+        crate::campaign::found(&campaign, &mut threats, &mut economy);
         let mut w = World {
             city,
             colony,
@@ -124,6 +132,7 @@ impl World {
             plan: Vec::new(),
             raiders: crate::trade::raiders_walk(1),
             sales: Vec::new(),
+            campaign,
         };
         crate::grow::refresh_mat(&mut w.city, &w.colony);
         let notes = w.threats.start_shift(&mut w.city, &mut w.colony, &w.defs, 1, shift::shift_of_day(1) == 2);
@@ -182,7 +191,9 @@ impl World {
     pub fn end_shift(&mut self) -> Shift {
         let mut folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
         let loop_lines = crate::loops::play(&mut self.colony, &mut folk, &mut self.stash, &self.table, Some(&self.threats), &self.city.sim, self.threats.seed, self.day, self.city.tick, &mut self.log);
-        let town = Town { city: &mut self.city, colony: &mut self.colony, defs: &self.defs, flush_mult: 1.0 };
+        let (flush_mult, gain_mult) = crate::campaign::mults(&self.campaign, &self.city.sim);
+        self.threats.campaign.gain_mult = gain_mult;
+        let town = Town { city: &mut self.city, colony: &mut self.colony, defs: &self.defs, flush_mult };
         let store = Store { stash: &mut self.stash, ledger: &mut self.ledger, bench: &mut self.bench, table: &self.table, recipes: &self.recipes };
         let folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
         let mut s = shift::end_shift(town, store, folk, self.day, &mut self.log);
@@ -194,6 +205,11 @@ impl World {
         // the headless city's runs carry no bodies: a recover link here is laid nowhere
         let (lines, _) = crate::trade::end_shift(&mut self.economy, &mut self.ledger, &mut self.stash, &self.table, &mut self.city, &mut self.colony, &mut self.roster, &self.traits, &self.names, Some(&mut self.threats), None, &s.closed.report.to_faction, self.day, self.raiders, &mut self.log);
         s.stash_lines.extend(lines);
+        // the campaign reads the city's shift: a chapter's goal, the accord, the Great Cleansing, the ending
+        let guards = self.posts.guards.len();
+        let mut parts = crate::campaign::Parts { city: &mut self.city, colony: &mut self.colony, defs: &self.defs, threats: &mut self.threats, economy: &mut self.economy, roster: &mut self.roster, died: &mut self.died, stash: &mut self.stash, table: &self.table, log: &mut self.log, guards };
+        let story = crate::campaign::shift_end(&mut self.campaign, &mut parts, self.day);
+        s.people_lines.extend(story);
         self.day += 1;
         let notes = self.threats.start_shift(&mut self.city, &mut self.colony, &self.defs, self.day, shift::shift_of_day(self.day) == 2);
         self.note(notes);
@@ -210,5 +226,13 @@ impl World {
 
     pub fn alerts(&self) -> Vec<alerts::Alert> {
         alerts::current(&self.colony, &self.defs, &self.city, &self.roster, &self.stash, &self.ledger, self.last.as_ref(), self.jam_since, Some(&self.threats), Some(&self.economy))
+    }
+}
+
+impl World {
+    /// The parts the campaign moves, for a verb (the accord's answer, the alliance) between shift ends.
+    pub fn campaign_parts(&mut self) -> (&mut story::Campaign, crate::campaign::Parts<'_>) {
+        let guards = self.posts.guards.len();
+        (&mut self.campaign, crate::campaign::Parts { city: &mut self.city, colony: &mut self.colony, defs: &self.defs, threats: &mut self.threats, economy: &mut self.economy, roster: &mut self.roster, died: &mut self.died, stash: &mut self.stash, table: &self.table, log: &mut self.log, guards })
     }
 }

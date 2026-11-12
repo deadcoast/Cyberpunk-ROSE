@@ -24,6 +24,8 @@ func _initialize() -> void:
 	sim = _autoload("Sim", "res://autoload/Sim.gd")
 	root.add_child((load("res://Main.tscn") as PackedScene).instantiate())
 	sim.ticks_per_frame = 2
+	# the campaign's panel sets play when the script shows them, not on their own
+	sim.panel_hold = true
 	screen_ids = screens.ids()
 	# the Market first: the colony's shots send a Sweep down grate 5, whose bleach cuts the cord to its market
 	screen_ids.erase("market")

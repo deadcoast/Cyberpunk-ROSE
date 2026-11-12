@@ -66,9 +66,9 @@ id = "tithe"
 name = "Tithe"
 authority = 0
 mood = 0
-effect = "The chapter-3 accord: 10% of T1 to the Oathkeepers each shift."
-cost = "They map the Heart."
-live = "Phase E: the chapter-3 accord"
+effect = "The chapter-3 accord: a tenth of the Junk the Stash gained over the shift goes up the envoy's grate."
+cost = "They map the Heart: every later Sweep and Cleansing walks for it."
+live = "signed only by accepting chapter 3's envoy"
 offered_by = "accord"
 flags = ["tithe_t1_10"]
 

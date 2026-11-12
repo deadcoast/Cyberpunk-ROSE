@@ -1,0 +1,12 @@
+[package]
+name = "story"
+description = "Cyberpunk: ROSE - the campaign: chapters, panels, endings, Ivan's barks, the strain code and the profile"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mat = { path = "../mat" }
+progress = { path = "../progress" }
+serde.workspace = true
+toml.workspace = true

@@ -494,7 +494,7 @@ func _draw_crowd() -> void:
 
 # ---------------------------------------------------------------- Pressure (Full Design v3.14)
 
-const BODY_ART := {"scout": "oath.scout", "carrier": "oath.lamp", "sprayer": "oath.sprayer", "flamer": "oath.flamer", "crawler": "rat.crawler", "tamed": "rat.crawler"}
+const BODY_ART := {"scout": "oath.scout", "carrier": "oath.lamp", "sprayer": "oath.sprayer", "flamer": "oath.flamer", "crawler": "rat.crawler", "tamed": "rat.crawler", "envoy": "oath.envoy", "militia": "faction.militia"}
 const POND_SCUM := Color8(122, 138, 58)
 
 ## The Flood's water: tiles that went under or came back are repainted from the city's substrate.

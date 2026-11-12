@@ -8,6 +8,7 @@ members = [
   "core/crates/bench",
   "core/crates/people",
   "core/crates/progress",
+  "core/crates/story",
   "core/crates/colony",
   "core/crates/threat",
   "core/crates/economy",

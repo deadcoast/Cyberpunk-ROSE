@@ -349,3 +349,31 @@ anchor = "anchor.slimo"
 prompt = "side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle"
 negative = "upright pose, green glow, outline on every edge"
 status = "placeholder"
+
+[[slot]]
+id = "oath.envoy"
+kind = "sprite"
+size = [48, 64]
+frames = 2
+states = [""]
+ramp = "white"
+silhouette = "capsule"
+tag = "OEV"
+anchor = "anchor.slimo"
+prompt = "an Oathkeeper envoy in vestment-white robes with reliquary-gold trim, a lowered pole lamp unlit, one gloved hand open, standing still, 1 px black selective outline, idle 2 frames"
+negative = "purple, pink, grey robes, weapon raised"
+status = "placeholder"
+
+[[slot]]
+id = "faction.militia"
+kind = "sprite"
+size = [32, 48]
+frames = 4
+states = [""]
+ramp = "industrial"
+silhouette = "capsule"
+tag = "MIL"
+anchor = "anchor.slimo"
+prompt = "a Night City street fighter of an allied faction in patched jacket and armour plates, scrap pistol held low, neon-lit edges, standing guard, 1 px black selective outline, idle 4 frames"
+negative = "white robes, purple ooze skin"
+status = "placeholder"

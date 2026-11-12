@@ -77,10 +77,13 @@ impl RoseSim {
         // the tabs
         let mut tabs = VarArray::new();
         for (k, def) in e.file.factions.iter().enumerate() {
-            if def.chapter > game::trade::CHAPTER {
+            if !def.accord && def.chapter > game::trade::chapter(e) || def.accord && e.s.accord_grate.is_none() {
                 continue;
             }
-            let grates: Vec<String> = e.s.streets.iter().filter(|s| s.faction as usize == k).map(|s| format!("G{}", s.number)).collect();
+            let mut grates: Vec<String> = e.s.streets.iter().filter(|s| s.faction as usize == k && !def.accord).map(|s| if s.stratum > 1 { format!("S{}G{}", s.stratum, s.number) } else { format!("G{}", s.number) }).collect();
+            if let (true, Some(g)) = (def.accord, e.s.accord_grate) {
+                grates.push(format!("G{}", city.grate_number(g as usize)));
+            }
             let mut t = VarDictionary::new();
             t.set("index", k as i64);
             t.set("name", def.name.as_str());

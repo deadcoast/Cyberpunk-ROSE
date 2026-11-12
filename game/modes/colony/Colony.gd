@@ -23,6 +23,10 @@ var cam: Camera2D
 var view_index := 0
 var clock_label: Label
 var city_label: Label
+## the chapter's card under the city line, and the envoy's answer while it waits (Full Design v3.19)
+var chapter_frame: Panel
+var chapter_label: Label
+var accord_buttons: Array = []
 var hint_label: Label
 var tool := ""             # "" selects; "build" places Sim.build_tool; "bait", "salt", "sever", "zone"
 var tool_buttons := {}
@@ -93,6 +97,17 @@ func _build_content(c: Control) -> void:
 	var top := make_frame(c, Vector2(0, -2), Vector2(632, 26))
 	clock_label = make_label(top, "", Vector2(4, 2), UiTheme.CYAN)
 	city_label = make_label(top, "", Vector2(4, 13), UiTheme.DUST)
+	chapter_frame = make_frame(c, Vector2(0, 26), Vector2(430, 14))
+	chapter_label = make_label(chapter_frame, "", Vector2(4, 1), UiTheme.OOZE_GLOW)
+	for k in 2:
+		var accept := k == 0
+		var b := make_button(chapter_frame, "ACCEPT" if accept else "REFUSE", Vector2(300 + k * 64, 0), func():
+			var why: String = Sim.ensure().answer_accord(Sim.ensure_people(), accept)
+			if why != "":
+				push_warning(why)
+			_refresh_lines(Sim.ensure()))
+		b.visible = false
+		accord_buttons.append(b)
 	# the alert queue: right edge, newest on top
 	alert_frame = make_frame(c, Vector2(436, 28), Vector2(196, 14))
 	alert_rows = VBoxContainer.new()
@@ -219,6 +234,16 @@ func _refresh_lines(sim: RoseSim) -> void:
 	city_label.text = "%s of %d   %d built  %d ghost%s  %d cut%s   beds %d/%d   %d district%s   AUTHORITY %d" % [
 		String(sim.city_tier_name(pop)).to_upper(), pop, built, ghosts, "" if ghosts == 1 else "s", cuts, "" if cuts == 1 else "s",
 		beds[1], beds[0], ds.size(), "" if ds.size() == 1 else "s", int(sim.authority())]
+	var camp: Dictionary = sim.campaign()
+	chapter_label.text = String(camp.get("card", ""))
+	var waiting := String(camp.get("accord", "")) == "waiting"
+	for b in accord_buttons:
+		b.visible = waiting
+	chapter_frame.visible = chapter_label.text != ""
+	# a panel set waiting plays now (a chapter opens or closes; the ending)
+	if bool(camp.get("waiting", false)) and not Sim.panel_hold:
+		Sim.panel_return = "colony"
+		Screens.show_screen.call_deferred("panels")
 	_refresh_hint()
 
 # ---------------------------------------------------------------- the tools

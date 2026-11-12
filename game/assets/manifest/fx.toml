@@ -27,17 +27,3 @@ anchor = "anchor.item"
 prompt = "a purple ooze drip forming and falling, 6 frames"
 negative = "green, blur"
 status = "placeholder"
-
-[[slot]]
-id = "panel.ch1.01"
-kind = "panel"
-size = [1280, 720]
-frames = 1
-states = [""]
-ramp = "noir"
-silhouette = "frame"
-tag = "P11"
-anchor = "anchor.tile"
-prompt = "chapter 1 panel 1: Ivan Ooze in the Sump welcoming the player, graphic-novel still, hard ink, high contrast, purple ooze light, text box space at the bottom"
-negative = "soft shading, photoreal, bright colours"
-status = "placeholder"

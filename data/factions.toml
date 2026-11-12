@@ -249,6 +249,7 @@ lever = ""
 unique = ""
 rotate = 0
 chapter = 3
+accord = true
 demand = { chrome = 0.6, part = 0.6, organic = 0.6, tech = 0.6, gear = 0.6, contraband = 0.6, curio = 0.6 }
 stock = []
 contracts = []

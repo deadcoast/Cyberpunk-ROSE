@@ -4,6 +4,7 @@
 
 pub mod alerts;
 pub mod breach;
+pub mod campaign;
 pub mod cargo;
 pub mod city;
 pub mod grow;

@@ -39,6 +39,8 @@ func _initialize() -> void:
 	main = scene.instantiate()
 	root.add_child(main)
 	sim.ticks_per_frame = 2
+	# the campaign's panel sets play when the script shows them, not on their own
+	sim.panel_hold = true
 	screen_ids = screens.ids()
 	print("[smoke] extension RoseSim: %s  RoseItems: %s  RoseStash: %s  RoseRun: %s" % [ClassDB.class_exists("RoseSim"), ClassDB.class_exists("RoseItems"), ClassDB.class_exists("RoseStash"), ClassDB.class_exists("RoseRun")])
 
@@ -77,8 +79,14 @@ func _verify_current() -> void:
 	_check(scr != null and scr.has_method("_build_content"), "%s: did not instantiate as a ScreenBase" % id)
 	var slots := _count_slots(scr)
 	# the Colony's art is the world's tiles (checked below) and the Job grid is a table; the rest draw AssetSlots
-	_check(slots > 0 or id in ["colony", "jobs"], "%s: no AssetSlot resolved a texture" % id)
+	_check(slots > 0 or id in ["colony", "jobs", "panels", "ending"], "%s: no AssetSlot resolved a texture" % id)
 	match id:
+		"panels":
+			# the campaign opens on chapter 1's four panels, each with Ivan's caption (Full Design v3.19)
+			var ps: Array = scr.set_data.get("panels", [])
+			_check(ps.size() == 4 and String(scr.set_data.get("key", "")) == "ch1.open", "panels: chapter 1's set is %s with %d" % [String(scr.set_data.get("key", "")), ps.size()])
+			_check(ps.all(func(p): return String(p.caption) != "" and not String(p.caption).contains("{")), "panels: a caption is empty or unfilled")
+			_check(scr.art.texture != null, "panels: no panel art")
 		"colony":
 			var s: Dictionary = sim.ensure().stats()
 			# the founding: the Mat steered from the Heart to the first grate, its market reached
@@ -582,7 +590,7 @@ func _count_slots(n: Node) -> int:
 func _finish() -> bool:
 	var missing: Array = assets.missing()
 	_check(missing.is_empty(), "missing assets: %s" % str(missing))
-	_check(screen_ids.size() == 14, "expected 14 screens, got %d" % screen_ids.size())
+	_check(screen_ids.size() == 16, "expected 16 screens, got %d" % screen_ids.size())
 	var elapsed := Time.get_ticks_msec() - t_start
 	print("[smoke] %d screens, %d textures resolved, %d frames in %d ms" % [screen_ids.size(), assets.resolved_count(), frames, elapsed])
 	if failures.is_empty():
