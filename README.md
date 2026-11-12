@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, closed (PAC-060–063 done: the threats, the surface's factions and the Market, mending); Phase E, progression, closed (PAC-080 done: the tech tree, the organs, the strain classes, the Strainbook, Nerve logic, route loops, the handoff, Authority's deeds, the city tiers and the collections; PAC-081 done: the stack of six strata, the seven chapters, Ivan, the endings, New Run, the strain code, the profile, the Daily Seed and Endless, and `rose campaign` playing each of the five endings headless); Phase F, art, is next (PAC-090, the style anchors).
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, closed (PAC-060–063 done: the threats, the surface's factions and the Market, mending); Phase E, progression, closed (PAC-080 done: the tech tree, the organs, the strain classes, the Strainbook, Nerve logic, route loops, the handoff, Authority's deeds, the city tiers and the collections; PAC-081 done: the stack of six strata, the seven chapters, Ivan, the endings, New Run, the strain code, the profile, the Daily Seed and Endless, and `rose campaign` playing each of the five endings headless). Every backend and feature row in the register is done; the art rows (PAC-090 to 093) wait on the PixelLab agent.
 
     ./run.sh /path/to/godot4.5
 
