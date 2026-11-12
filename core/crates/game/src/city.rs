@@ -178,6 +178,8 @@ pub struct Steward {
     quota_set: bool,
     /// the steering's Relay ghost
     relay: Option<u32>,
+    /// research nodes the caller wants before the cheapest open one (`rose campaign`'s chapters)
+    pub wanted: Vec<&'static str>,
 }
 
 impl Steward {
@@ -279,7 +281,8 @@ impl Steward {
         let parts = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == items::Category::Part).count() as u32;
         let chrome = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == items::Category::Chrome).count() as u32;
         let mut nodes: Vec<&progress::tech::NodeDef> = f.node.iter().filter(|n| w.colony.progress.tech.cannot_pick(&progress::Project::Node(n.id.clone())).is_none()).collect();
-        nodes.sort_by_key(|n| n.tier);
+        // the wanted first, in their order; then the cheapest tier
+        nodes.sort_by_key(|n| (self.wanted.iter().position(|&x| x == n.id).unwrap_or(usize::MAX), n.tier));
         for n in nodes {
             let p = progress::Project::Node(n.id.clone());
             let (cp, cc) = f.cost_of(&p);
@@ -317,7 +320,7 @@ impl Steward {
     }
 
     /// The markets the Mat reaches from the Heart.
-    fn in_reach(w: &World) -> Vec<usize> {
+    pub fn in_reach(w: &World) -> Vec<usize> {
         (0..w.city.markets.len()).filter(|&k| w.city.from_heart(logistics::Kind::Market, k as u32).is_some()).collect()
     }
 

@@ -84,9 +84,19 @@ fn heart_field(w: &World, gates_closed: bool) -> Vec<u16> {
 /// The proof's defence: two Sphincter Gates across the narrowest crossing of the squads' way down from the grate that
 /// the Mat spans — a run of walkable ground at most two wide, wall on both sides, every tile of it Cord or Node a Gate
 /// can stand on — the first such crossing down from the grate (else the first two placeable tiles of the way past 8
-/// and 14 steps); a Scrap Turret within 3 tiles of the way on the Heart's side of the Gates, the nearest them along
-/// the way that its signal allows; a Guard ordered to each, the best Fight first.
-fn defend(w: &mut World, gx: usize) -> Vec<String> {
+/// and 14 steps); a Scrap Turret nearest the Heart that its signal allows; a Guard ordered to each, the best Fight
+/// first. Built at once for the proof; as ghosts the Build job raises (`gates`, the campaign's steward), the Turret
+/// left to the caller.
+pub fn defend(w: &mut World, gx: usize) -> Vec<String> {
+    defend_with(w, gx, true)
+}
+
+/// The Gates of `defend` as ghosts on the way down from the grate `gx` (the campaign steward's): their lines.
+pub fn gates(w: &mut World, gx: usize) -> Vec<String> {
+    defend_with(w, gx, false)
+}
+
+fn defend_with(w: &mut World, gx: usize, now: bool) -> Vec<String> {
     let mut out = Vec::new();
     let f = heart_field(w, false);
     let sw = w.city.sim.w;
@@ -170,9 +180,11 @@ fn defend(w: &mut World, gx: usize) -> Vec<String> {
             }
             for id in &ids {
                 if let Some(st) = w.colony.get_mut(*id) {
-                    st.built = true;
-                    st.paid = true;
-                    st.hp = w.defs.structure[st.def].hp_at(1);
+                    if now {
+                        st.built = true;
+                        st.paid = true;
+                        st.hp = w.defs.structure[st.def].hp_at(1);
+                    }
                     out.push(format!("Sphincter Gate at {},{}{}, across the way {k} steps down from the grate", st.x, st.y, if turned { " turned" } else { "" }));
                 }
             }
@@ -189,37 +201,24 @@ fn defend(w: &mut World, gx: usize) -> Vec<String> {
             if gates.len() == 2 || k < need {
                 continue;
             }
-            if let Ok(id) = w.colony.place_built(&w.defs, &w.city.sim, "gate", (i % sw) as u16, (i / sw) as u16, 1) {
+            let (gx_, gy_) = ((i % sw) as u16, (i / sw) as u16);
+            let placed = if now { w.colony.place_built(&w.defs, &w.city.sim, "gate", gx_, gy_, 1) } else { w.colony.place(&w.defs, &w.city.sim, "gate", gx_, gy_) };
+            if let Ok(id) = placed {
                 gates.push(id);
                 last = k;
                 out.push(format!("Sphincter Gate at {},{}, on the way {k} steps down from the grate (no crossing the Mat spans)", i % sw, i / sw));
             }
         }
     }
-    // the Turret: where it may stand (σ 0.5) within 3 tiles of the way, on the Heart's side of the first Gate, the
-    // nearest the Gate along the way
-    let mut posts = gates.clone();
-    let gate_k = gates.first().and_then(|&g| w.colony.get(g)).and_then(|g| way.iter().position(|&i| i == g.y as usize * sw + g.x as usize)).unwrap_or(0);
-    let mut spot = None;
-    'turret: for &i in way.iter().skip(gate_k + 1) {
-        let (wx, wy) = ((i % sw) as i32, (i / sw) as i32);
-        let mut near: Vec<(i32, usize)> = Vec::new();
-        for dy in -3i32..=3 {
-            for dx in -3i32..=3 {
-                let (x, y) = (wx + dx, wy + dy);
-                if x >= 0 && y >= 0 && (x as usize) < sw && (y as usize) < sh && dx.abs() + dy.abs() <= 3 {
-                    near.push((dx.abs() + dy.abs(), y as usize * sw + x as usize));
-                }
-            }
-        }
-        near.sort_unstable();
-        for (_, j) in near {
-            if w.colony.can_place(&w.defs, &w.city.sim, "turret", (j % sw) as u16, (j / sw) as u16).is_ok() {
-                spot = Some(j);
-                break 'turret;
-            }
-        }
+    if !now {
+        return out;
     }
+    // the Turret: where it may stand (σ 0.5) nearest the Heart, so its six tiles cover the Heart's walls — the flamers'
+    // end of every way (Full Design v3.20: a Turret down the way fires at what walks round its Gate, and at nothing
+    // once the squads are past it)
+    let mut posts = gates.clone();
+    let (hx, hy) = w.city.sim.heart.unwrap_or((0, 0));
+    let spot = crate::city::nearest_spot(w, "turret", (hx as u16, hy as u16)).map(|(x, y)| y as usize * sw + x as usize);
     if let Some(i) = spot {
         if let Ok(id) = w.colony.place_built(&w.defs, &w.city.sim, "turret", (i % sw) as u16, (i / sw) as u16, 1) {
             posts.push(id);

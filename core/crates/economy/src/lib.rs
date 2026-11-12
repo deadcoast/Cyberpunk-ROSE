@@ -795,6 +795,11 @@ impl Economy {
 
     // ------------------------------------------------------------ the stock
 
+    /// The item a stock entry sells (None for a service).
+    pub fn stock_item(&self, f: u8, entry: u16) -> Option<ItemId> {
+        self.stock_items.get(f as usize).and_then(|v| v.get(entry as usize)).copied().flatten()
+    }
+
     /// Today's stock of a faction that the city may buy: (entry, units left, price a unit) at a stall with `trade`.
     pub fn stock(&self, f: u8, table: &ItemTable, trade: u8, past_staff: bool, open_grates: bool) -> Vec<(u16, u16, u32)> {
         let open = self.tier_open(f);

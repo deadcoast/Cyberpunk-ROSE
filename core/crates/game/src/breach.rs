@@ -150,13 +150,14 @@ mod tests {
         w.city.sim.compute_signal();
         let tries: Vec<Result<u32, colony::PlaceError>> = (gy + 1..gy + 4).map(|y| w.colony.place_built(&w.defs, &w.city.sim, "relay", gx as u16, y as u16, 1)).collect();
         assert!(tries.iter().any(|r| r.is_ok()), "a Relay stands in the shaft under the grate: {tries:?}");
-        assert_eq!(shift_end(&mut w.city, &w.colony, &w.defs, Some(&mut w.threats), &mut w.log), None, "open, not yet reached");
+        // the Mat beside it pours in (Full Design v3.20): the slab's tiles are the Culverts' bottom row, reached at once
+        assert_eq!(shift_end(&mut w.city, &w.colony, &w.defs, Some(&mut w.threats), &mut w.log), Some(2));
         assert!(!w.city.sim.sealed(cross));
         assert!(w.log.events.iter().any(|e| e.what.contains("broke the slab") && e.what.contains("the Culverts")));
-        // the Mat up the open shaft: the city stands in the Culverts
-        lay_up_the_shaft(&mut w, g, cross, 3);
-        assert_eq!(shift_end(&mut w.city, &w.colony, &w.defs, Some(&mut w.threats), &mut w.log), Some(2));
         assert_eq!(w.threats.stratum, 2);
+        // up the open shaft: still the Culverts, nothing newly reached
+        lay_up_the_shaft(&mut w, g, cross, 3);
+        assert_eq!(shift_end(&mut w.city, &w.colony, &w.defs, Some(&mut w.threats), &mut w.log), None);
         assert!(w.log.events.iter().any(|e| e.what == "the Mat reached the Culverts (S2)"));
         // another of the Sump's crossings by its key; without the key, refused
         let other = w.city.sim.crossings_of(1).into_iter().find(|&c| w.city.sim.sealed(c)).unwrap();

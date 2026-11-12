@@ -172,9 +172,14 @@ tamed_bite_s = 1.2
 [bloom]
 # feral tissue of a strain with Feral Drive above this is a Bloom (Pass 1)
 feral_drive = 0.5
-# crawlers a Bloom's Node spawns a shift, and the most it keeps standing
+# crawlers a Bloom's Node spawns a shift; a Bloom keeps at most `most` standing for every `most_tiles` of its tiles
+# (rounded up: the chapter's forty-tile Bloom two, a Bloom of four hundred twenty)
 per_node = 1
-most_per_node = 2
+most = 2
+most_tiles = 40
+# a crawler hunts a slimo within 12 of it and chews a structure only this near the Node it came from; else it goes back
+# to it (this design's: a Bloom is a hazard where it grows, eating the route home, not a raid on the Heart)
+territory = 16
 # Quarantine Protocol severs Mat without signal at this many shift ends running (Pass 2: a shift)
 quarantine_after = 2
 # a Bloom borders a district when its tissue is this near the district's hub

@@ -121,7 +121,11 @@ pub struct DefenceRules {
 pub struct BloomRules {
     pub feral_drive: f32,
     pub per_node: u32,
-    pub most_per_node: u32,
+    /// a Bloom keeps at most `most` crawlers standing for every `most_tiles` of its tiles (rounded up)
+    pub most: u32,
+    pub most_tiles: u32,
+    /// how far from the Node it came from a crawler hunts and chews
+    pub territory: i32,
     pub quarantine_after: u32,
     pub borders: i32,
 }
@@ -429,6 +433,9 @@ pub struct ThreatSave {
     #[serde(default)]
     pub campaign: Campaign,
 }
+
+/// The Heart's tile to a tile beside its walls (its 3 × 3 and the ring around it): the militia's reach.
+pub const HEART_REACH: i32 = 2;
 
 /// What the campaign changed of the threats (Full Design v3.19, Narrative and Ivan: the accord, difficulty): the
 /// Attention a zone loses a shift, whether Cleansings come from any stratum (after chapter 3's envoy), and whether
@@ -853,11 +860,46 @@ impl Threats {
                 }
             }
         } else {
-            // `feral` is Bloom tissue already: the strain's past its line, or the campaign's cut-off strain (v3.19)
+            // `feral` is Bloom tissue already: the strain's past its line, or the campaign's cut-off strain (v3.19).
+            // Each Bloom — a piece of it joined along its tissue — spawns from its Nodes, a crawler a Node a shift, until
+            // it has its most standing: two for every forty of its tiles (Full Design v3.20)
             let mut spawned = 0;
-            for &i in feral.iter().filter(|&&i| sim.hy[i] == hy::NODE) {
-                let standing = self.bodies.iter().filter(|b| b.role == Role::Crawler && !b.dead && b.home == i).count() as u32;
-                for _ in 0..self.rules.bloom.per_node.min(self.rules.bloom.most_per_node.saturating_sub(standing)) {
+            let mut part = vec![usize::MAX; sim.hy.len()];
+            let mut pieces: Vec<(Vec<usize>, usize)> = Vec::new();
+            for &s in &feral {
+                if part[s] != usize::MAX {
+                    continue;
+                }
+                let k = pieces.len();
+                part[s] = k;
+                let mut q = std::collections::VecDeque::from([s]);
+                let (mut nodes, mut tiles) = (Vec::new(), 0usize);
+                while let Some(i) = q.pop_front() {
+                    tiles += 1;
+                    if sim.hy[i] == hy::NODE {
+                        nodes.push(i);
+                    }
+                    let (x, y) = (i % sim.w, i / sim.w);
+                    for (nx, ny) in [(x.wrapping_sub(1), y), (x + 1, y), (x, y.wrapping_sub(1)), (x, y + 1)] {
+                        if nx < sim.w && ny < sim.h {
+                            let j = ny * sim.w + nx;
+                            if part[j] == usize::MAX && sim.is_bloom(j) {
+                                part[j] = k;
+                                q.push_back(j);
+                            }
+                        }
+                    }
+                }
+                nodes.sort_unstable();
+                pieces.push((nodes, tiles));
+            }
+            let (per_node, most_each, most_tiles) = (self.rules.bloom.per_node, self.rules.bloom.most, self.rules.bloom.most_tiles.max(1));
+            for (k, (nodes, tiles)) in pieces.iter().enumerate() {
+                let most = most_each * (*tiles as u32).div_ceil(most_tiles);
+                let standing = self.bodies.iter().filter(|b| b.role == Role::Crawler && !b.dead && part.get(b.home).is_some_and(|&p| p == k)).count() as u32;
+                let room = most.saturating_sub(standing);
+                let spawn: Vec<usize> = nodes.iter().copied().flat_map(|i| std::iter::repeat_n(i, per_node as usize)).take(room as usize).collect();
+                for i in spawn {
                     let (x, y) = ((i % sim.w) as u16, (i / sim.w) as u16);
                     let zone = self.zone_at(sim, x, y).unwrap_or(0) as u16;
                     let id = self.spawn(Role::Crawler, x, y, 0, zone, Goal::Hunt);
@@ -1323,9 +1365,16 @@ impl Threats {
                     }
                 }
                 Goal::Hunt => {
-                    let prey = slimos.iter().filter(|(_, p)| cheb(pos, *p) <= 12).min_by_key(|(id, p)| (dist2(pos, *p), *id)).map(|(_, p)| *p);
-                    let prey = prey.or_else(|| colony.structures.iter().filter(|st| st.built).map(|st| (st.x, st.y)).min_by_key(|&t| (dist2(pos, t), t.1, t.0)));
-                    prey.filter(|&p| cheb(pos, p) > 1)
+                    // a Bloom's crawler keeps to its Bloom (Full Design v3.20): a slimo within 12 of it, else a structure
+                    // within its range of the Node it came from, else back to that Node
+                    let home = ((b.home % w) as u16, (b.home / w) as u16);
+                    let range = self.rules.bloom.territory;
+                    let prey = slimos.iter().filter(|(_, p)| cheb(pos, *p) <= 12 && cheb(home, *p) <= range).min_by_key(|(id, p)| (dist2(pos, *p), *id)).map(|(_, p)| *p);
+                    let prey = prey.or_else(|| colony.structures.iter().filter(|st| st.built && cheb(home, (st.x, st.y)) <= range).map(|st| (st.x, st.y)).min_by_key(|&t| (dist2(pos, t), t.1, t.0)));
+                    match prey {
+                        Some(p) => (cheb(pos, p) > 1).then_some(p),
+                        None => (cheb(pos, home) > 1).then_some(home),
+                    }
                 }
                 Goal::Hold(hx, hy) => {
                     let hold = (hx, hy);
@@ -1527,32 +1576,36 @@ impl Threats {
             }
         }
         let fight = |id: u32| posts.fight.get(&id).copied().unwrap_or(0);
-        let mut strikers: Vec<(u32, (u16, u16))> = Vec::new();
+        // (slimo, where it strikes from, the reach of its post)
+        let mut strikers: Vec<(u32, (u16, u16), i32)> = Vec::new();
         for st in colony.structures.iter().filter(|st| st.built && Some(st.def) == gate_def) {
             if let Some(g) = posts.guards.iter().find(|g| g.1 == st.id) {
-                strikers.push((g.0, (st.x, st.y)));
+                strikers.push((g.0, (st.x, st.y), 1));
             }
         }
-        if conscription && self.events.iter().any(|e| e.phase != Phase::Done) {
-            for (id, p) in &slimos {
+        // Conscription's militia muster at the Heart: every D2 off another post stands Guard at it while a Patrol or
+        // worse is down, and strikes whoever comes within a tile of its walls (Full Design v3.20)
+        let heart = city.sim.heart.filter(|_| !city.sim.heart_lost).map(|(x, y)| (x as u16, y as u16));
+        if let (true, Some(h)) = (conscription && self.events.iter().any(|e| e.phase != Phase::Done), heart) {
+            for (id, _) in &slimos {
                 if posts.d2.contains(id) && !strikers.iter().any(|s| s.0 == *id) {
-                    strikers.push((*id, *p));
+                    strikers.push((*id, h, HEART_REACH));
                 }
             }
         }
-        // a Nerve rule's alarm: its district's D2s are militia while it holds
+        // a Nerve rule's alarm: its district's D2s are militia where they stand while it holds
         for (id, p) in &slimos {
             if colony.nerve.alarm.contains(id) && posts.d2.contains(id) && !strikers.iter().any(|s| s.0 == *id) {
-                strikers.push((*id, *p));
+                strikers.push((*id, *p, 1));
             }
         }
-        for (id, at) in strikers {
+        for (id, at, reach) in strikers {
             let cd = self.cds.entry((id, 1)).or_insert(0.0);
             *cd = (*cd - dt).max(0.0);
             if *cd > 0.0 {
                 continue;
             }
-            if let Some(t) = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.hostile() && cheb(at, (o.x, o.y)) <= 1).min_by_key(|o| o.id) {
+            if let Some(t) = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.hostile() && cheb(at, (o.x, o.y)) <= reach).min_by_key(|o| o.id) {
                 let e = body_dmg.entry(t.id).or_insert((0.0, None));
                 e.0 += (self.rules.defence.guard_strike + fight(id) + if blackline { 2 } else { 0 }) as f32;
                 e.1 = Some(Foe::Slimo(id));

@@ -15,6 +15,7 @@ pub mod log;
 pub mod loops;
 pub mod meta;
 pub mod nerve;
+pub mod proof;
 pub mod pressure;
 pub mod shift;
 pub mod siege;
