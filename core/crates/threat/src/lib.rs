@@ -488,6 +488,10 @@ pub struct Threats {
     pub killed: Vec<String>,
     pub repelled: Vec<String>,
     pub lived: Vec<String>,
+    /// the city's other bodies the squads find among its slimos: Ivan (Full Design v3.19), by his id and tile
+    pub others: Vec<(u32, (u16, u16))>,
+    /// the stages sent down since the caller last took them, and the Blooms that spawned crawlers (Ivan's barks)
+    pub sent: Vec<String>,
 }
 
 const NONE16: u16 = u16::MAX;
@@ -569,6 +573,8 @@ impl Threats {
             killed: Vec::new(),
             repelled: Vec::new(),
             lived: Vec::new(),
+            others: Vec::new(),
+            sent: Vec::new(),
         };
         t.rezone(sim);
         t
@@ -834,7 +840,8 @@ impl Threats {
                     self.lived.push("bloom".into());
                 }
             }
-        } else if sim.genome.0[mat::genome::FERAL] > self.rules.bloom.feral_drive {
+        } else {
+            // `feral` is Bloom tissue already: the strain's past its line, or the campaign's cut-off strain (v3.19)
             let mut spawned = 0;
             for &i in feral.iter().filter(|&&i| sim.hy[i] == hy::NODE) {
                 let standing = self.bodies.iter().filter(|b| b.role == Role::Crawler && !b.dead && b.home == i).count() as u32;
@@ -850,6 +857,7 @@ impl Threats {
             }
             if spawned > 0 {
                 out.notes.push(Note::loss(format!("a Bloom spawned {spawned} crawler{}", if spawned == 1 { "" } else { "s" })));
+                self.sent.push("bloom".into());
             }
         }
         // the Spore Sacs (Full Design v3.18, Organs): every 4 shifts a crawler from each in a Bloom; in a Bramble strain
@@ -1068,6 +1076,7 @@ impl Threats {
         let id = self.next_id;
         self.next_id += 1;
         self.zones[zone].last[stage] = Some(self.shift);
+        self.sent.push(st.id.clone());
         let lungs = colony.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "lung").count() as f32;
         let flood_left = (st.flood_steps as f32 * (1.0 - st.lung_cut * lungs).max(0.0)).round() as u32;
         let phase = if flood_left > 0 { Phase::Flood } else { Phase::Bodies };
@@ -1244,7 +1253,8 @@ impl Threats {
         let gates: Vec<usize> = colony.structures.iter().filter(|st| st.built && shut(st)).flat_map(|st| st.tiles(&defs.structure[st.def])).map(|(x, y)| y as usize * city.sim.w + x as usize).collect();
         let w = city.sim.w;
         let heart = city.sim.heart.map(|(x, y)| (x as u16, y as u16)).unwrap_or((0, 0));
-        let slimos: Vec<(u32, (u16, u16))> = city.ids.iter().zip(city.pos.iter()).map(|(&id, &p)| (id, ((p as usize % w) as u16, (p as usize / w) as u16))).collect();
+        let mut slimos: Vec<(u32, (u16, u16))> = city.ids.iter().zip(city.pos.iter()).map(|(&id, &p)| (id, ((p as usize % w) as u16, (p as usize / w) as u16))).collect();
+        slimos.extend(self.others.iter().copied());
         let dt = 1.0 / HZ;
         // ---- the bodies: goals, steps
         for k in 0..self.bodies.len() {

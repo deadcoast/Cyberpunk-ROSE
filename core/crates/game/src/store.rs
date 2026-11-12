@@ -35,14 +35,14 @@ pub fn take_cost(stash: &mut Stash, ledger: &mut Ledger, table: &ItemTable, cost
     true
 }
 
-/// Identify up to `n` unidentified items, where they lie (the Appraisal Table's shift). Returns how many.
-pub fn identify_n(stash: &mut Stash, n: usize) -> usize {
+/// Identify up to `n` unidentified items, where they lie (the Appraisal Table's shift). Returns what it named.
+pub fn identify_n(stash: &mut Stash, n: usize) -> Vec<items::ItemId> {
     let handles: Vec<u32> = stash.handles().into_iter().filter(|(_, _, it)| it.ident != Ident::Full).map(|(h, _, _)| h).take(n).collect();
-    let mut done = 0;
+    let mut done = Vec::new();
     for h in handles {
         if let Some(it) = stash.get_any_mut(h) {
             it.ident = Ident::Full;
-            done += 1;
+            done.push(it.def);
         }
     }
     done

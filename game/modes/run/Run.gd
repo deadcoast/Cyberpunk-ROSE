@@ -76,6 +76,8 @@ var ring_channel := -1.0
 var ring_channel_color := UiTheme.OOZE_GLOW
 var clock_label: Label
 var route_label: Label
+## Ivan over the comm (Full Design v3.19: barks during runs are his), under the route strip
+var bark_label: Label
 var kills_label: Label
 var strip: Control
 var strip_cells: Array[ColorRect] = []
@@ -223,6 +225,7 @@ func _build_content(c: Control) -> void:
 	# top: the route, the shift clock over the route strip, kills — each in a small frame so it reads over lit tiles
 	var tl := make_frame(c, Vector2(0, 0), Vector2(120, 14))
 	route_label = make_label(tl, "", Vector2(4, 2), UiTheme.DUST)
+	bark_label = make_label(c, "", Vector2(2, 16), UiTheme.OOZE_GLOW)
 	var strip_w := maxi(64, route.chunk_count() * 8)
 	var tc := make_frame(c, Vector2(316 - strip_w / 2 - 4, 0), Vector2(strip_w + 8, 22))
 	clock_label = make_label(tc, "", Vector2(4, 2), UiTheme.CYAN)
@@ -372,6 +375,8 @@ func _process(delta: float) -> void:
 		lantern_pressed = false
 		order_pressed = 0
 		steps += 1
+	var line: String = Sim.ensure().bark()
+	bark_label.text = ("IVAN: " + line) if line != "" else ""
 	# manifest unroll: one tile per beat, the notable last on a longer one
 	if loot_panel.visible and loot_shown < loot_items.size():
 		loot_t += delta
@@ -522,6 +527,7 @@ func _handle_events() -> void:
 					_flash(n2.position + Vector2(0, -20), "!" if e.phase == "alert" else "?", UiTheme.VESTMENT)
 			"down":
 				_flash(runner.position + Vector2(0, -28), "DOWN", UiTheme.HOT_PINK)
+				Sim.ensure().bark_event("runner_down", String(Sim.launch.get("runner_name", "the Runner")))
 			"dead":
 				over = "died"
 				over_t = 0.0

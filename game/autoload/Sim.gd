@@ -34,7 +34,12 @@ func _process(delta: float) -> void:
 		return
 	if paused:
 		return
-	accum += delta
+	# Ivan's ooze-time (Full Design v3.19): the clock at a fifth for six of the player's seconds
+	var scale := 1.0
+	if ooze_left > 0.0:
+		ooze_left -= delta
+		scale = 0.2
+	accum += delta * scale
 	var period := 1.0 / tick_hz
 	var n := 0
 	while accum >= period and n < 8:
@@ -76,6 +81,16 @@ func _write_city_log() -> void:
 
 func set_speed(hz: float) -> void:
 	tick_hz = hz
+
+## Seconds of ooze-time left on the player's clock.
+var ooze_left := 0.0
+
+## Ivan's ooze-time: "" when it holds, else why not.
+func ooze() -> String:
+	var why: String = ensure().ivan_ooze()
+	if why == "":
+		ooze_left = 6.0
+	return why
 
 # ---------------------------------------------------------------- the colony's clock and the run hand-off
 ## Day counter for provenance and the raider roll; a shift is a sim day for now.
@@ -238,6 +253,8 @@ func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Diction
 	var st: RoseStash = ensure_stash()
 	var before: int = st.count()
 	var held := 0
+	# Ivan's line on the run, and the campaign's note of it (chapter 5 reads a Vault run's best item)
+	ensure().campaign_run_home(stratum, runner_name, String(o.get("result", "")) == "extracted", String(o.get("result", "")) == "died", o.get("rig", PackedByteArray()))
 	if String(o.get("result", "")) == "extracted":
 		# a run by hand home: it counts toward a loop on the route (Full Design v3.18, Route loops)
 		ensure().note_route_home(stratum)

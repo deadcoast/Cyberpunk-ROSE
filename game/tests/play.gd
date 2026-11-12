@@ -534,6 +534,62 @@ func _process(_delta: float) -> bool:
 		33:
 			if t % 10 == 5:
 				_shot("26_breach")
+				# Ivan on the map (Full Design v3.19): selected by his portrait, sent along the Mat to the first market
+				screens.show_screen("colony")
+				scr = screens.current
+				var rs: RoseSim = sim.ensure()
+				var w: int = rs.width()
+				var v: Dictionary = rs.ivan()
+				# Rally at the Heart, where the founders sleep
+				print("[play] RALLY: %s" % rs.ivan_rally(sim.ensure_people()))
+				# the first market's cell: the tile of Mat nearest its grate
+				var g: int = int(rs.attention().filter(func(z): return bool(z.reached))[0].grate)
+				var best := Vector2i(int(v.x), int(v.y))
+				var bd := 1 << 30
+				for dy in range(0, 6):
+					for dx in range(-4, 5):
+						var x := (g % w) + dx
+						var y := (g / w) + dy
+						var ti: Dictionary = rs.tile_info(x, y)
+						if String(ti.get("mat", "")) in ["cord", "node", "tip"] and absi(dx) + dy < bd:
+							bd = absi(dx) + dy
+							best = Vector2i(x, y)
+				print("[play] Ivan sent to %d,%d: %s" % [best.x, best.y, rs.ivan_order(best.x, best.y)])
+				var walked := 0
+				while walked < 2000 and int(rs.ivan().goal_x) >= 0:
+					rs.step()
+					walked += 1
+				v = rs.ivan()
+				print("[play] Ivan at %d,%d after %d ticks, at market %d" % [int(v.x), int(v.y), walked, int(v.at_market)])
+				scr.selected = {"kind": "ivan"}
+				scr.cam.position = Vector2(int(v.x) * 32 + 16, int(v.y) * 32 + 64)
+				scr.card_sig = ""
+				scr._draw_card()
+				phase = 40
+		40:
+			if t % 10 == 5:
+				_shot("26a_ivan")
+				var rs: RoseSim = sim.ensure()
+				rs.debug_earn(2)
+				print("[play] PARLEY: %s" % rs.ivan_parley())
+				rs.bark_event("law", "Curfew")
+				var said := ""
+				for k in 60:
+					rs.step()
+					if String(rs.bark()) != "":
+						said = rs.bark()
+						break
+				print("[play] Ivan says: %s" % said)
+				scr.card_sig = ""
+				scr._draw_card()
+				scr._refresh_lines(rs)
+				phase = 41
+		41:
+			if t % 10 == 5:
+				_shot("26b_parley")
+				phase = 42
+		42:
+			if t % 10 == 5:
 				# chapter 3 (Full Design v3.19): the Culverts reached, the envoy comes down the grate nearest the Heart
 				var rs: RoseSim = sim.ensure()
 				rs.debug_chapter(3)

@@ -27,6 +27,10 @@ var city_label: Label
 var chapter_frame: Panel
 var chapter_label: Label
 var accord_buttons: Array = []
+## Ivan's portrait over the tool bar and his bark box beside it (Full Design v3.19)
+var ivan_frame: Panel
+var ivan_portrait: AssetSlot
+var bark_label: Label
 var hint_label: Label
 var tool := ""             # "" selects; "build" places Sim.build_tool; "bait", "salt", "sever", "zone"
 var tool_buttons := {}
@@ -135,6 +139,27 @@ func _build_content(c: Control) -> void:
 		zb.add_child(b)
 	zone_bar.visible = false
 	# the hint line and the tool bar
+	ivan_frame = make_frame(c, Vector2(304, 216), Vector2(128, 54))
+	ivan_portrait = make_slot(ivan_frame, "ivan.portrait", Vector2(2, 2), 0, 0, 0.0, "a1")
+	ivan_portrait.scale = Vector2(0.5, 0.5)
+	var pick := Button.new()
+	pick.flat = true
+	pick.focus_mode = Control.FOCUS_NONE
+	pick.position = Vector2(2, 2)
+	pick.size = Vector2(32, 32)
+	pick.tooltip_text = "Ivan"
+	pick.pressed.connect(func():
+		selected = {"kind": "ivan"}
+		var v: Dictionary = Sim.ensure().ivan()
+		if not v.is_empty():
+			cam.position = Vector2(int(v.x) * WorldView.TILE + 16, int(v.y) * WorldView.TILE + 16)
+		card_sig = ""
+		_draw_card())
+	ivan_frame.add_child(pick)
+	make_label(ivan_frame, "IVAN", Vector2(3, 36), UiTheme.OOZE_GLOW)
+	bark_label = make_label(ivan_frame, "", Vector2(38, 2), UiTheme.CHALK)
+	bark_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	bark_label.size = Vector2(86, 50)
 	var hint := make_frame(c, Vector2(0, 272), Vector2(432, 15))
 	hint_label = make_label(hint, "", Vector2(4, 2), UiTheme.DUST)
 	var bar := make_frame(c, Vector2(0, 288), Vector2(432, 18))
@@ -234,6 +259,15 @@ func _refresh_lines(sim: RoseSim) -> void:
 	city_label.text = "%s of %d   %d built  %d ghost%s  %d cut%s   beds %d/%d   %d district%s   AUTHORITY %d" % [
 		String(sim.city_tier_name(pop)).to_upper(), pop, built, ghosts, "" if ghosts == 1 else "s", cuts, "" if cuts == 1 else "s",
 		beds[1], beds[0], ds.size(), "" if ds.size() == 1 else "s", int(sim.authority())]
+	# Ivan's line, his portrait by his Authority state
+	bark_label.text = String(sim.bark())
+	var v: Dictionary = sim.ivan()
+	if not v.is_empty():
+		var st := "a%d" % clampi(int(v.state), 1, 4)
+		if ivan_portrait.state != st:
+			ivan_portrait.state = st
+			ivan_portrait.refresh()
+		ivan_portrait.modulate = Color(0.35, 0.35, 0.4) if bool(v.fell) else Color.WHITE
 	var camp: Dictionary = sim.campaign()
 	chapter_label.text = String(camp.get("card", ""))
 	var waiting := String(camp.get("accord", "")) == "waiting"
@@ -464,6 +498,11 @@ func right_click(tx: int, ty: int) -> void:
 	var t: Dictionary = sim.tile_info(tx, ty)
 	if t.is_empty():
 		return
+	# Ivan selected: send him along the Mat
+	if selected.get("kind", "") == "ivan":
+		var why: String = sim.ivan_order(tx, ty)
+		_say(why, "Ivan walks to %d,%d" % [tx, ty])
+		return
 	if selected.get("kind", "") == "slimo" and int(t.structure) >= 0:
 		var info: Dictionary = sim.structure_info(int(t.structure), Sim.ensure_people().count())
 		_say(String(sim.order(int(selected.id), int(t.structure))), "%s works the %s next shift" % [Sim.slimo_name(int(selected.id)), String(info.get("name", ""))])
@@ -550,6 +589,9 @@ func _card_info() -> Dictionary:
 			if orders.has(id):
 				info.ordered = String(sim.structure_info(int(orders[id]), 0).get("name", ""))
 			info.following = following
+		"ivan":
+			info.v = sim.ivan()
+			info.bark = String(sim.bark())
 		"structure":
 			info.s = sim.structure_info(int(selected.id), people.count())
 			if info.s.is_empty():
@@ -585,9 +627,64 @@ func _draw_card() -> void:
 		card_sig = ""
 		_draw_card())
 	match String(info.kind):
+		"ivan": _card_ivan(info)
 		"slimo": _card_slimo(info)
 		"structure": _card_structure(info)
 		"tile": _card_tile(info)
+
+## Ivan's card: where he is, his HP and Authority state, his four verbs (Full Design v3.19, Narrative and Ivan).
+func _card_ivan(info: Dictionary) -> void:
+	var v: Dictionary = info.v
+	var sim: RoseSim = Sim.ensure()
+	if bool(v.get("fell", false)):
+		make_label(card, "IVAN OOZE HAS FALLEN", Vector2(6, 4), UiTheme.HOT_PINK)
+		make_label(card, "the city goes on without his voice", Vector2(6, 16), UiTheme.DUST)
+		return
+	make_label(card, "IVAN OOZE   HP %d/%d   AUTHORITY STATE %d" % [int(v.hp), int(v.hp_max), int(v.state)], Vector2(6, 4), UiTheme.OOZE_GLOW)
+	var where := "at %d,%d" % [int(v.x), int(v.y)]
+	if int(v.goal_x) >= 0:
+		where += ", walking to %d,%d" % [int(v.goal_x), int(v.goal_y)]
+	if int(v.at_market) >= 0:
+		where += ", at %s" % Sim.market_name(int(v.at_market))
+	if int(v.at_pit) >= 0:
+		where += ", at a Pit"
+	make_label(card, where, Vector2(6, 15), UiTheme.CHALK)
+	var verbs := [["RALLY", "rally", true], ["PARLEY", "parley", int(v.at_market) >= 0], ["OOZE-TIME", "ooze", bool(v.hostile_near)]]
+	var x := 6
+	for vb in verbs:
+		var ready: bool = bool(v[vb[1]]) and bool(vb[2])
+		var key: String = vb[1]
+		var b := make_button(card, vb[0], Vector2(x, 28), func():
+			var why: String
+			match key:
+				"rally": why = sim.ivan_rally(Sim.ensure_people())
+				"parley": why = sim.ivan_parley()
+				"ooze": why = Sim.ooze()
+			_say("" if why.begins_with("+") or why == "" else why, why.trim_prefix("+") if why.begins_with("+") else "%s" % key.to_upper())
+			card_sig = ""
+			_draw_card())
+		b.disabled = not ready
+		x += 70
+	# Feed the Heart: at a Pit, the Stash's feeds with the gene each steers
+	if int(v.at_pit) >= 0 and bool(v.feed):
+		var feeds: Array = []
+		for it in Sim.ensure_stash().items():
+			if String(it.get("category", "")) == "chrome" and bool(it.get("identified", true)):
+				feeds.append(it)
+		make_label(card, "FEED THE HEART: an item at three times its bias", Vector2(6, 44), UiTheme.CYAN)
+		var fx := 6
+		for k in mini(3, feeds.size()):
+			var it: Dictionary = feeds[k]
+			var h := int(it.handle)
+			make_button(card, String(it.name).to_upper().left(14), Vector2(fx, 56), func():
+				var why: String = sim.ivan_feed(h)
+				_say("" if why.begins_with("+") else why, why.trim_prefix("+"))
+				card_sig = ""
+				_draw_card())
+			fx += 96
+	else:
+		make_label(card, "FEED THE HEART: walk him to a Pit" if bool(v.feed) else "FEED THE HEART: spent this shift", Vector2(6, 44), UiTheme.DUST)
+	make_label(card, "RIGHT-CLICK THE MAT: SEND HIM", Vector2(6, 72), UiTheme.DUST)
 
 func _card_slimo(info: Dictionary) -> void:
 	var rec: Dictionary = info.rec

@@ -40,6 +40,8 @@ var bind_sim := true   # false: a Run paints its own grid and nothing ticks
 var strata_info: Array = []
 var top_row := 0
 var strata_names: Node2D
+## Ivan on the map (Full Design v3.19): his sprite by his Authority state, his goal dashed, his HP when hurt
+var ivan_node: Node2D
 
 func _ready() -> void:
 	tileset = TileSet.new()
@@ -87,6 +89,10 @@ func _ready() -> void:
 	gauges.z_index = 10
 	gauges.draw.connect(_draw_gauges)
 	add_child(gauges)
+	ivan_node = Node2D.new()
+	ivan_node.z_index = 5
+	ivan_node.draw.connect(_draw_ivan)
+	add_child(ivan_node)
 	strata_names = Node2D.new()
 	strata_names.z_index = 9
 	strata_names.draw.connect(_draw_strata_names)
@@ -211,6 +217,7 @@ func _on_tick() -> void:
 	cargo.queue_redraw()
 	threat_fx.queue_redraw()
 	threat_bodies.queue_redraw()
+	ivan_node.queue_redraw()
 	gauges.queue_redraw()
 	if view_level == 2:
 		paint_traffic()
@@ -648,3 +655,26 @@ func _draw_strata_names() -> void:
 			strata_names.draw_string(font, Vector2(-name.length() * 2, 3), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.DUST)
 			strata_names.draw_string(font, Vector2(-38, 13), "NOT YET REACHED", HORIZONTAL_ALIGNMENT_LEFT, -1, 6, UiTheme.DUST)
 	strata_names.draw_set_transform(Vector2.ZERO)
+
+## Ivan: a 48 x 64 figure standing on his tile, his Authority state the frame (ivan.idle's four), Ooze Glow where he is
+## going, his HP under him when hurt; nothing once he has fallen.
+func _draw_ivan() -> void:
+	if not bind_sim or view_level == 2:
+		return
+	var v: Dictionary = Sim.ensure().ivan()
+	if v.is_empty() or bool(v.fell):
+		return
+	var tex := Assets.texture("ivan.idle", "a%d" % clampi(int(v.state), 1, 4))
+	var x := int(v.x) * TILE + TILE / 2 - 24
+	var y := int(v.y) * TILE + TILE - 64
+	if tex != null:
+		var frames := maxi(1, tex.get_width() / 48)
+		var f := int(Time.get_ticks_msec() / 250) % frames
+		ivan_node.draw_texture_rect_region(tex, Rect2(x, y, 48, 64), Rect2(f * 48, 0, 48, 64))
+	if int(v.goal_x) >= 0:
+		var g := Vector2(int(v.goal_x) * TILE + TILE / 2, int(v.goal_y) * TILE + TILE / 2)
+		ivan_node.draw_dashed_line(Vector2(int(v.x) * TILE + TILE / 2, int(v.y) * TILE + TILE / 2), g, UiTheme.OOZE_GLOW, 2.0, 6.0)
+		ivan_node.draw_rect(Rect2(g - Vector2(6, 6), Vector2(12, 12)), UiTheme.OOZE_GLOW, false, 2.0)
+	if float(v.hp) < float(v.hp_max):
+		ivan_node.draw_rect(Rect2(int(v.x) * TILE + 2, int(v.y) * TILE + TILE + 1, TILE - 4, 3), UiTheme.SUMP)
+		ivan_node.draw_rect(Rect2(int(v.x) * TILE + 2, int(v.y) * TILE + TILE + 1, (TILE - 4) * clampf(float(v.hp) / float(v.hp_max), 0.0, 1.0), 3), UiTheme.OOZE_GLOW)

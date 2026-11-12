@@ -281,6 +281,9 @@ pub fn shift_end(c: &mut Campaign, p: &mut Parts, day: u32) -> Vec<String> {
         let n = c.chapter;
         c.closed.push((n, day));
         p.colony.charter.earn(BEAT_AUTHORITY as u32);
+        let beat = n.to_string();
+        let feral = if c.feral_name.is_empty() { "one of ours".to_string() } else { c.feral_name.clone() };
+        p.log.bark("beat", &[("beat", &beat), ("name", &feral)]);
         let name = f.get(n).map(|d| d.name.clone()).unwrap_or_default();
         let line = format!("chapter {n}, {name}, closes: Authority +{BEAT_AUTHORITY}");
         p.log.push(p.city.tick, Class::Landing, line.clone());

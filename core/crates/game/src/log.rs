@@ -36,11 +36,18 @@ pub struct CityLog {
     pub events: Vec<Event>,
     /// how many the view has already taken
     pub shown: usize,
+    /// what Ivan has something to say about, since he last spoke: (event, its tokens) — Full Design v3.19, barks
+    pub barks: Vec<(String, Vec<(String, String)>)>,
 }
 
 impl CityLog {
     pub fn push(&mut self, tick: u64, class: Class, what: String) {
         self.events.push(Event { tick, class, what });
+    }
+
+    /// An event for Ivan's barks, with its tokens ({name}, {stratum}, beat).
+    pub fn bark(&mut self, event: &str, extra: &[(&str, &str)]) {
+        self.barks.push((event.to_string(), extra.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()));
     }
 
     /// The events the view has not taken yet.

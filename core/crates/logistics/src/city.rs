@@ -141,6 +141,8 @@ pub struct City {
     // agents (SoA): the roster's movers, or the scale proof's crowd
     pub ids: Vec<u32>,
     pub pos: Vec<u32>,
+    /// movers Ivan rallied this shift: half again as fast (Full Design v3.19)
+    pub rallied: Vec<u32>,
     pub state: Vec<u8>,
     pub home: Vec<u32>,
     pub goal: Vec<u32>,
@@ -201,6 +203,7 @@ impl City {
             passable,
             ids: Vec::new(),
             pos: Vec::new(),
+            rallied: Vec::new(),
             state: Vec::new(),
             home: Vec::new(),
             goal: Vec::new(),
@@ -486,7 +489,10 @@ impl City {
         if self.synthetic() {
             self.step_crowd();
         } else if self.tick % WALK_EVERY == 0 {
-            self.step_movers();
+            self.step_movers(false);
+        } else if self.tick % (2 * WALK_EVERY) == 1 && !self.rallied.is_empty() {
+            // a rallied mover takes a step more every four ticks: half again as fast
+            self.step_movers(true);
         }
         self.recount_load();
         self.release();
@@ -504,9 +510,12 @@ impl City {
         self.stats()
     }
 
-    fn step_movers(&mut self) {
+    fn step_movers(&mut self, rallied_only: bool) {
         let (w, h) = (self.sim.w, self.sim.h);
         for i in 0..self.pos.len() {
+            if rallied_only && !self.rallied.contains(&self.ids[i]) {
+                continue;
+            }
             let goal = self.goal[i] as usize;
             let p = self.pos[i] as usize;
             if p == goal {

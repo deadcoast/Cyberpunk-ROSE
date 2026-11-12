@@ -1,0 +1,1786 @@
+# Cyberpunk: ROSE — Ivan's bark pools (Full Design v3.19, Narrative and Ivan: Bark pools). Written by
+# tools/gen/gen_barks.py once; this file is the source of truth. A line: event, and optionally state (1-4, Ivan's
+# Authority state), class (the strain's dominant class), rite (the Dissolution Rite signed), beat (a chapter).
+
+[[bark]]
+event = "haul"
+text = "Rig's heavy and the Runner's breathing. That's a good night down here."
+
+[[bark]]
+event = "haul"
+text = "Spread it out on the floor. Let's see what the dark coughed up."
+
+[[bark]]
+event = "haul"
+text = "Scrap in, Runner home. Write it in the book."
+
+[[bark]]
+event = "haul"
+text = "Half of that's junk and the other half is junk we can sell."
+
+[[bark]]
+event = "haul"
+text = "Every haul's a vote. Sell it, feed it, keep it: choose."
+
+[[bark]]
+event = "haul"
+text = "Something in there rattles like money."
+
+[[bark]]
+event = "haul"
+text = "Out of the dark and into the Stash. My favourite trip."
+
+[[bark]]
+event = "haul"
+text = "Wet, filthy, unidentified. Just how I like my presents."
+
+[[bark]]
+event = "haul"
+state = 1
+text = "Not much, but it's ours. Nobody gave us a thing down here."
+
+[[bark]]
+event = "haul"
+state = 1
+text = "Keep them coming and maybe we eat this week."
+
+[[bark]]
+event = "haul"
+state = 2
+text = "The district's watching that haul come in. Good. Let them see it."
+
+[[bark]]
+event = "haul"
+state = 2
+text = "We're getting good at this. Don't let it make you careless."
+
+[[bark]]
+event = "haul"
+state = 3
+text = "A city runs on hauls like that. Mine runs better."
+
+[[bark]]
+event = "haul"
+state = 3
+text = "Log it, sort it, and send the Runner to a bed."
+
+[[bark]]
+event = "haul"
+state = 4
+text = "The empire eats tonight. Again."
+
+[[bark]]
+event = "haul"
+state = 4
+text = "There's {people} up and down the stack who'd kill for that haul. They work for me instead."
+
+[[bark]]
+event = "haul"
+class = "garden"
+text = "Anything that glows goes to the Pits. Let the Mat drink the light."
+
+[[bark]]
+event = "haul"
+class = "garden"
+text = "Clean water and cold light: that's what we sell them later."
+
+[[bark]]
+event = "haul"
+class = "hive"
+text = "Chrome for the cords. The walls want feeding."
+
+[[bark]]
+event = "haul"
+class = "hive"
+text = "Every scrap of metal is armour we haven't grown yet."
+
+[[bark]]
+event = "haul"
+class = "runner"
+text = "Fast in, fast out. That's the Runner strain talking."
+
+[[bark]]
+event = "haul"
+class = "runner"
+text = "The cords are already reaching for the next one."
+
+[[bark]]
+event = "haul"
+class = "bramble"
+text = "Feed the thorns. The sewerats like a thick Mat."
+
+[[bark]]
+event = "haul"
+class = "bramble"
+text = "More for the Pens and more for the brambles."
+
+[[bark]]
+event = "haul"
+class = "world_eater"
+text = "The Mat's hungry. It's always hungry."
+
+[[bark]]
+event = "haul"
+class = "world_eater"
+text = "Toss it in. It'll eat the crate too."
+
+[[bark]]
+event = "rare"
+text = "Now that's a Rare. Somebody up top is missing it."
+
+[[bark]]
+event = "rare"
+text = "Look at the finish on that. Somebody paid real {currency} for it once."
+
+[[bark]]
+event = "rare"
+text = "A Rare. Don't sell it to the first stall that blinks."
+
+[[bark]]
+event = "rare"
+text = "That's the good stuff. Pin it before somebody feeds it to a Pit."
+
+[[bark]]
+event = "rare"
+text = "Identified and worth it. Unlike most of my relatives."
+
+[[bark]]
+event = "rare"
+text = "Rare. The {order} would call that contraband, which means it's valuable."
+
+[[bark]]
+event = "rare"
+text = "Somebody's clinic is short one of those."
+
+[[bark]]
+event = "rare"
+text = "Hold it up to the light. Not too long; somebody might see it."
+
+[[bark]]
+event = "rare"
+state = 1
+text = "A Rare, in this dump. Maybe we're not dying after all."
+
+[[bark]]
+event = "rare"
+state = 1
+text = "Keep that one close. We can't afford to lose it."
+
+[[bark]]
+event = "rare"
+state = 2
+text = "The districts will hear about that one by dinner."
+
+[[bark]]
+event = "rare"
+state = 2
+text = "That buys us a law, or a lot of friends."
+
+[[bark]]
+event = "rare"
+state = 3
+text = "Rares like that keep a city honest. Mostly."
+
+[[bark]]
+event = "rare"
+state = 3
+text = "Put it in the Vault, not on the floor."
+
+[[bark]]
+event = "rare"
+state = 4
+text = "Another Rare for the empire. I'm starting to expect them."
+
+[[bark]]
+event = "rare"
+state = 4
+text = "File it with the others. The crown jewels are getting crowded."
+
+[[bark]]
+event = "rare"
+class = "garden"
+text = "Feed it and the Mat'll glow for a week."
+
+[[bark]]
+event = "rare"
+class = "garden"
+text = "Light like that sells better than it burns."
+
+[[bark]]
+event = "rare"
+class = "hive"
+text = "Plate the cords with that and they'll stop bullets."
+
+[[bark]]
+event = "rare"
+class = "hive"
+text = "Rare chrome makes rare armour."
+
+[[bark]]
+event = "rare"
+class = "runner"
+text = "That'll stretch the tips another block."
+
+[[bark]]
+event = "rare"
+class = "runner"
+text = "Faster Mat, faster Runners. Feed it."
+
+[[bark]]
+event = "rare"
+class = "bramble"
+text = "The thorns would love that."
+
+[[bark]]
+event = "rare"
+class = "bramble"
+text = "Sharp enough for the brambles."
+
+[[bark]]
+event = "rare"
+class = "world_eater"
+text = "The Mat could eat that and ask for seconds."
+
+[[bark]]
+event = "rare"
+class = "world_eater"
+text = "Shame to feed it. Shame not to."
+
+[[bark]]
+event = "blackline"
+text = "That's Moon-make. Hold it close and they'll find you by the smell of their own money."
+
+[[bark]]
+event = "blackline"
+text = "Blackline. The {order} count every piece, and now they're one short."
+
+[[bark]]
+event = "blackline"
+text = "Holy hardware. Hide it before it hides you."
+
+[[bark]]
+event = "blackline"
+text = "That's the kind of chrome that comes with a search warrant."
+
+[[bark]]
+event = "blackline"
+text = "Blackline in the Stash. Somewhere a priest is checking an inventory."
+
+[[bark]]
+event = "blackline"
+text = "Don't sell that topside. They'll smell it from orbit."
+
+[[bark]]
+event = "blackline"
+text = "Moon-steel. It hums when you hold it. That's not a good sign."
+
+[[bark]]
+event = "blackline"
+text = "Every Blackline we keep is a lamp that comes looking."
+
+[[bark]]
+event = "blackline"
+state = 1
+text = "We're not ready for what that brings. Bury it deep."
+
+[[bark]]
+event = "blackline"
+state = 1
+text = "Lovely. Now we have something worth killing us for."
+
+[[bark]]
+event = "blackline"
+state = 2
+text = "Put it in a Vault and put a Guard on the Vault."
+
+[[bark]]
+event = "blackline"
+state = 2
+text = "That's leverage. Let's not waste it."
+
+[[bark]]
+event = "blackline"
+state = 3
+text = "Let them come for it. We've got walls now."
+
+[[bark]]
+event = "blackline"
+state = 3
+text = "Their gear, our city. Fair trade."
+
+[[bark]]
+event = "blackline"
+state = 4
+text = "Add it to the war chest. The Moon's paying for its own funeral."
+
+[[bark]]
+event = "blackline"
+state = 4
+text = "I've got a whole room of that now. They must be furious."
+
+[[bark]]
+event = "blackline"
+class = "garden"
+text = "Even Moon-steel glows when the Mat gets into it."
+
+[[bark]]
+event = "blackline"
+class = "garden"
+text = "Feed it slow. Blackline makes the light jumpy."
+
+[[bark]]
+event = "blackline"
+class = "hive"
+text = "The cords will wear their own armour. Fitting."
+
+[[bark]]
+event = "blackline"
+class = "hive"
+text = "Their plating on our walls. I love it."
+
+[[bark]]
+event = "blackline"
+class = "runner"
+text = "Blackline in the Pit and the tips will run like rats."
+
+[[bark]]
+event = "blackline"
+class = "runner"
+text = "That'll carry us up a stratum."
+
+[[bark]]
+event = "blackline"
+class = "bramble"
+text = "Thorns with Moon-steel in them. Let them try the brambles now."
+
+[[bark]]
+event = "blackline"
+class = "bramble"
+text = "Sharpen the hedges with it."
+
+[[bark]]
+event = "blackline"
+class = "world_eater"
+text = "The Mat eats their gear. Next it eats them."
+
+[[bark]]
+event = "blackline"
+class = "world_eater"
+text = "Feed it to the hunger. The hunger knows what to do."
+
+[[bark]]
+event = "runner_down"
+text = "{name} is down! Somebody get to them."
+
+[[bark]]
+event = "runner_down"
+text = "Runner down. Sixty seconds, then it's a body."
+
+[[bark]]
+event = "runner_down"
+text = "{name}, stay with me. Crawl if you have to."
+
+[[bark]]
+event = "runner_down"
+text = "Down in the dark. Get up, {name}. Get up."
+
+[[bark]]
+event = "runner_down"
+text = "They hit {name}. Find the shooter or find the exit."
+
+[[bark]]
+event = "runner_down"
+text = "That's a lot of blood for one Runner. Move."
+
+[[bark]]
+event = "runner_down"
+text = "{name}'s on the floor. Followers, earn your rations."
+
+[[bark]]
+event = "runner_down"
+text = "Talk to me, {name}. Say something rude."
+
+[[bark]]
+event = "runner_down"
+state = 1
+text = "Don't you die on me, {name}. We can't spare you."
+
+[[bark]]
+event = "runner_down"
+state = 1
+text = "Get up. There's nobody coming."
+
+[[bark]]
+event = "runner_down"
+state = 2
+text = "The district's got a bed and a Medic waiting. Get there."
+
+[[bark]]
+event = "runner_down"
+state = 2
+text = "{name}, you've got people. Crawl to them."
+
+[[bark]]
+event = "runner_down"
+state = 3
+text = "Every Runner's a citizen. Bring {name} home."
+
+[[bark]]
+event = "runner_down"
+state = 3
+text = "I'll trade every crate on that route for {name}."
+
+[[bark]]
+event = "runner_down"
+state = 4
+text = "The empire doesn't leave its Runners on the floor."
+
+[[bark]]
+event = "runner_down"
+state = 4
+text = "{name}. Up. That's an order."
+
+[[bark]]
+event = "runner_down"
+class = "garden"
+text = "Follow the light home, {name}."
+
+[[bark]]
+event = "runner_down"
+class = "garden"
+text = "Think of the glow at the Heart. Crawl toward it."
+
+[[bark]]
+event = "runner_down"
+class = "hive"
+text = "The cords can carry you if you reach them."
+
+[[bark]]
+event = "runner_down"
+class = "hive"
+text = "Armour up, {name}. Too late for that? Crawl."
+
+[[bark]]
+event = "runner_down"
+class = "runner"
+text = "The Mat's close, {name}. Reach for it."
+
+[[bark]]
+event = "runner_down"
+class = "runner"
+text = "Run, crawl, slither. Just move."
+
+[[bark]]
+event = "runner_down"
+class = "bramble"
+text = "Get behind the thorns, {name}."
+
+[[bark]]
+event = "runner_down"
+class = "bramble"
+text = "The brambles will cover you. Crawl."
+
+[[bark]]
+event = "runner_down"
+class = "world_eater"
+text = "Don't let the Mat find you first, {name}."
+
+[[bark]]
+event = "runner_down"
+class = "world_eater"
+text = "Get up before something hungry does."
+
+[[bark]]
+event = "runner_dead"
+text = "{name}'s in the east drain. I'll tell the bunk. You tell me what they were carrying."
+
+[[bark]]
+event = "runner_dead"
+text = "{name} didn't come home. Put the name on the wall."
+
+[[bark]]
+event = "runner_dead"
+text = "We lost {name}. The route remembers where."
+
+[[bark]]
+event = "runner_dead"
+text = "That's {name} done. The rig's still down there."
+
+[[bark]]
+event = "runner_dead"
+text = "Dead in the dark. That's how most of us go."
+
+[[bark]]
+event = "runner_dead"
+text = "{name}. Somebody sing something. Not you."
+
+[[bark]]
+event = "runner_dead"
+text = "I'll miss {name}. I'll miss the haul more, and I'll hate myself for it."
+
+[[bark]]
+event = "runner_dead"
+text = "Write it down: {name}, a Runner, never came back."
+
+[[bark]]
+event = "runner_dead"
+state = 1
+text = "We can't afford funerals. We can barely afford {name}."
+
+[[bark]]
+event = "runner_dead"
+state = 1
+text = "One less mouth. I hate that I said that."
+
+[[bark]]
+event = "runner_dead"
+state = 2
+text = "The district will want a name for the wall. Give them {name}."
+
+[[bark]]
+event = "runner_dead"
+state = 2
+text = "{name} ran for us. Remember the route."
+
+[[bark]]
+event = "runner_dead"
+state = 3
+text = "A city mourns its Runners. This one will."
+
+[[bark]]
+event = "runner_dead"
+state = 3
+text = "Bring {name}'s rig home if it costs us another run."
+
+[[bark]]
+event = "runner_dead"
+state = 4
+text = "The empire built itself on names like {name}."
+
+[[bark]]
+event = "runner_dead"
+state = 4
+text = "Carve {name} deep. Emperors have long memories."
+
+[[bark]]
+event = "runner_dead"
+class = "garden"
+text = "Put a light on the wall for {name}."
+
+[[bark]]
+event = "runner_dead"
+class = "garden"
+text = "The Mat will glow a little dimmer tonight."
+
+[[bark]]
+event = "runner_dead"
+class = "hive"
+text = "{name} should have had thicker plates. We'll grow them."
+
+[[bark]]
+event = "runner_dead"
+class = "hive"
+text = "Steel doesn't help the dead. Grow it anyway."
+
+[[bark]]
+event = "runner_dead"
+class = "runner"
+text = "Too fast, too far. That's the Runner strain's price."
+
+[[bark]]
+event = "runner_dead"
+class = "runner"
+text = "{name} ran ahead of the Mat. Never again."
+
+[[bark]]
+event = "runner_dead"
+class = "bramble"
+text = "The thorns weren't there for {name}. Grow them further."
+
+[[bark]]
+event = "runner_dead"
+class = "bramble"
+text = "Plant something sharp where {name} fell."
+
+[[bark]]
+event = "runner_dead"
+class = "world_eater"
+text = "The Mat will find the body before we do."
+
+[[bark]]
+event = "runner_dead"
+class = "world_eater"
+text = "Hunger takes. Today it took {name}."
+
+[[bark]]
+event = "newcomer"
+text = "Another one wakes. Give them a name and a bed."
+
+[[bark]]
+event = "newcomer"
+text = "Fresh out of the flush. Welcome to the bottom."
+
+[[bark]]
+event = "newcomer"
+text = "{name} just opened their eyes. Somebody explain the smell."
+
+[[bark]]
+event = "newcomer"
+text = "New body, new name. {name}, you live here now."
+
+[[bark]]
+event = "newcomer"
+text = "The cure got another one. Their loss, our labour."
+
+[[bark]]
+event = "newcomer"
+text = "{name}'s awake. Chrome scars and all."
+
+[[bark]]
+event = "newcomer"
+text = "Somebody up there threw away a perfectly good {people}."
+
+[[bark]]
+event = "newcomer"
+text = "Welcome, {name}. Rule one: never drink the black water."
+
+[[bark]]
+event = "newcomer"
+state = 1
+text = "One more mouth. One more pair of hands. Fine."
+
+[[bark]]
+event = "newcomer"
+state = 1
+text = "{name}, we've got almost nothing. Now you've got almost nothing too."
+
+[[bark]]
+event = "newcomer"
+state = 2
+text = "The district's got room. Get {name} to a Pod."
+
+[[bark]]
+event = "newcomer"
+state = 2
+text = "We're growing. {name} makes us bigger."
+
+[[bark]]
+event = "newcomer"
+state = 3
+text = "{name} joins a city, not a sump. Lucky."
+
+[[bark]]
+event = "newcomer"
+state = 3
+text = "Every newcomer is a citizen the {order} failed to kill."
+
+[[bark]]
+event = "newcomer"
+state = 4
+text = "The empire grows by one. {name}, bow if you like."
+
+[[bark]]
+event = "newcomer"
+state = 4
+text = "Another subject. I'll try to be a good king."
+
+[[bark]]
+event = "newcomer"
+class = "garden"
+text = "Show {name} the light first. It helps."
+
+[[bark]]
+event = "newcomer"
+class = "garden"
+text = "{name}'ll want to see the Lume Farms. Everybody does."
+
+[[bark]]
+event = "newcomer"
+class = "hive"
+text = "Get {name} some plating. It's dangerous out there."
+
+[[bark]]
+event = "newcomer"
+class = "hive"
+text = "Welcome to the Hive, {name}. The walls hum."
+
+[[bark]]
+event = "newcomer"
+class = "runner"
+text = "{name} looks fast. Good."
+
+[[bark]]
+event = "newcomer"
+class = "runner"
+text = "Point {name} at the Route Board."
+
+[[bark]]
+event = "newcomer"
+class = "bramble"
+text = "Mind the thorns, {name}."
+
+[[bark]]
+event = "newcomer"
+class = "bramble"
+text = "{name}, meet the sewerats. They're friendly now. Mostly."
+
+[[bark]]
+event = "newcomer"
+class = "world_eater"
+text = "Don't let the Mat taste you, {name}."
+
+[[bark]]
+event = "newcomer"
+class = "world_eater"
+text = "Feed {name} before the Mat gets ideas."
+
+[[bark]]
+event = "d5_fed"
+text = "Dropping one of ours in the Pit. Write the name on the wall first."
+
+[[bark]]
+event = "d5_fed"
+text = "{name} goes back to the Mat. That's the only funeral we can afford."
+
+[[bark]]
+event = "d5_fed"
+text = "He'd have done the same to me. Doesn't mean I'll sleep."
+
+[[bark]]
+event = "d5_fed"
+text = "Into the Pit. The Mat remembers everything it eats."
+
+[[bark]]
+event = "d5_fed"
+text = "{name} feeds the Heart now. Don't look at me like that."
+
+[[bark]]
+event = "d5_fed"
+text = "Somebody hold the wake. I'll hold the grudge."
+
+[[bark]]
+event = "d5_fed"
+text = "Not a slimo anymore. Just nutrient. God, I hate this place."
+
+[[bark]]
+event = "d5_fed"
+text = "We'll grow a cord where {name} goes in. That's the best I've got."
+
+[[bark]]
+event = "d5_fed"
+state = 1
+text = "We're starving. That's the excuse. It's a bad one."
+
+[[bark]]
+event = "d5_fed"
+state = 1
+text = "Forgive us, {name}. Or don't."
+
+[[bark]]
+event = "d5_fed"
+state = 2
+text = "The district won't like it. They'll like starving less."
+
+[[bark]]
+event = "d5_fed"
+state = 2
+text = "Write it in the book with the rest of the bad decisions."
+
+[[bark]]
+event = "d5_fed"
+state = 3
+text = "A city that eats its dead. Lovely. It's still a city."
+
+[[bark]]
+event = "d5_fed"
+state = 3
+text = "The law says it's fine. The law is a liar."
+
+[[bark]]
+event = "d5_fed"
+state = 4
+text = "Empires are built on worse. That's not a comfort."
+
+[[bark]]
+event = "d5_fed"
+state = 4
+text = "Even kings feed their own to the dark."
+
+[[bark]]
+event = "d5_fed"
+class = "garden"
+text = "{name}'s light goes into the Mat."
+
+[[bark]]
+event = "d5_fed"
+class = "garden"
+text = "Something will glow where {name} goes."
+
+[[bark]]
+event = "d5_fed"
+class = "hive"
+text = "Chrome in the bones. The cords will take it."
+
+[[bark]]
+event = "d5_fed"
+class = "hive"
+text = "{name}'s plating goes into the walls."
+
+[[bark]]
+event = "d5_fed"
+class = "runner"
+text = "{name} will run with the tips now."
+
+[[bark]]
+event = "d5_fed"
+class = "runner"
+text = "Feed the reach. {name} would've wanted to travel."
+
+[[bark]]
+event = "d5_fed"
+class = "bramble"
+text = "The thorns will have a new root."
+
+[[bark]]
+event = "d5_fed"
+class = "bramble"
+text = "{name} feeds the brambles."
+
+[[bark]]
+event = "d5_fed"
+class = "world_eater"
+text = "The hunger takes {name}. It always takes."
+
+[[bark]]
+event = "d5_fed"
+class = "world_eater"
+text = "Feed it. It's never full."
+
+[[bark]]
+event = "patrol"
+text = "White light in the culverts. The Moon sent a cleaning crew."
+
+[[bark]]
+event = "patrol"
+text = "Two lamps, coming down. Douse the Bulbs."
+
+[[bark]]
+event = "patrol"
+text = "A Patrol. They map, they leave. Let them leave."
+
+[[bark]]
+event = "patrol"
+text = "Scouts at the grate. Don't shoot unless you mean it."
+
+[[bark]]
+event = "patrol"
+text = "The {order} are counting cords again."
+
+[[bark]]
+event = "patrol"
+text = "Lamps on the ladder. Everybody be boring for a minute."
+
+[[bark]]
+event = "patrol"
+text = "White light means somebody's writing us down."
+
+[[bark]]
+event = "patrol"
+text = "Here comes the census, robes and all."
+
+[[bark]]
+event = "patrol"
+state = 1
+text = "Hide everything. They'll see a dump and leave."
+
+[[bark]]
+event = "patrol"
+state = 1
+text = "Don't let them find the Heart. Not yet."
+
+[[bark]]
+event = "patrol"
+state = 2
+text = "Let them map. Maps get old."
+
+[[bark]]
+event = "patrol"
+state = 2
+text = "They're looking for a city. Let's not show them one."
+
+[[bark]]
+event = "patrol"
+state = 3
+text = "A Patrol. Cute. Let them count the turrets too."
+
+[[bark]]
+event = "patrol"
+state = 3
+text = "They can map what they like. It'll be different tomorrow."
+
+[[bark]]
+event = "patrol"
+state = 4
+text = "Two scouts for an empire. They're insulting me."
+
+[[bark]]
+event = "patrol"
+state = 4
+text = "Let them map the edge of my kingdom. They'll never see the middle."
+
+[[bark]]
+event = "patrol"
+class = "garden"
+text = "Kill the light. All of it. Now."
+
+[[bark]]
+event = "patrol"
+class = "garden"
+text = "Every Bulb's a beacon. Dim them."
+
+[[bark]]
+event = "patrol"
+class = "hive"
+text = "Let them look at the walls. Let them worry."
+
+[[bark]]
+event = "patrol"
+class = "hive"
+text = "Scouts on our armour. Good. Let them report it."
+
+[[bark]]
+event = "patrol"
+class = "runner"
+text = "The tips will be somewhere else by the time they draw it."
+
+[[bark]]
+event = "patrol"
+class = "runner"
+text = "Map that, you slow bastards."
+
+[[bark]]
+event = "patrol"
+class = "bramble"
+text = "Walk into the thorns, I dare you."
+
+[[bark]]
+event = "patrol"
+class = "bramble"
+text = "The brambles don't need light to bite."
+
+[[bark]]
+event = "patrol"
+class = "world_eater"
+text = "Careful where you stand, scouts. The ground's hungry."
+
+[[bark]]
+event = "patrol"
+class = "world_eater"
+text = "Lamps make good snacks."
+
+[[bark]]
+event = "sweep"
+text = "A Sweep. Bleach and lamps. Salt the cords."
+
+[[bark]]
+event = "sweep"
+text = "Six of them coming down. That's not a census, that's a cleaning."
+
+[[bark]]
+event = "sweep"
+text = "Sprayers. Keep the water off the cords."
+
+[[bark]]
+event = "sweep"
+text = "They're sweeping the brightest thing they can find. Don't be it."
+
+[[bark]]
+event = "sweep"
+text = "Here comes the bleach. Every Guard, up."
+
+[[bark]]
+event = "sweep"
+text = "A Sweep down the grate. They mean it this time."
+
+[[bark]]
+event = "sweep"
+text = "Get the slimos out of the light. Panic later."
+
+[[bark]]
+event = "sweep"
+text = "Bleach in the water. Somebody close a Gate."
+
+[[bark]]
+event = "sweep"
+state = 1
+text = "We can't fight that. Run, hide, regrow."
+
+[[bark]]
+event = "sweep"
+state = 1
+text = "Let them burn the edge. Save the Heart."
+
+[[bark]]
+event = "sweep"
+state = 2
+text = "The districts can hold. Tell them I said so."
+
+[[bark]]
+event = "sweep"
+state = 2
+text = "Guards to the Gates. Make it cost them."
+
+[[bark]]
+event = "sweep"
+state = 3
+text = "A Sweep against a city. Let's teach them arithmetic."
+
+[[bark]]
+event = "sweep"
+state = 3
+text = "Turrets, Gates, salt. We built this for today."
+
+[[bark]]
+event = "sweep"
+state = 4
+text = "Six Oathkeepers against an empire. Send them home in a bucket."
+
+[[bark]]
+event = "sweep"
+state = 4
+text = "My city doesn't get swept. It sweeps back."
+
+[[bark]]
+event = "sweep"
+class = "garden"
+text = "The light gave us away. Worth it. Dim it now."
+
+[[bark]]
+event = "sweep"
+class = "garden"
+text = "Save the Lungs. Lose the Bulbs if you have to."
+
+[[bark]]
+event = "sweep"
+class = "hive"
+text = "Let the bleach hit armour. It'll bounce."
+
+[[bark]]
+event = "sweep"
+class = "hive"
+text = "The walls hold. That's what they're for."
+
+[[bark]]
+event = "sweep"
+class = "runner"
+text = "Grow around them. They're slow."
+
+[[bark]]
+event = "sweep"
+class = "runner"
+text = "Cut and regrow. The Mat's faster than bleach."
+
+[[bark]]
+event = "sweep"
+class = "bramble"
+text = "Thorns at every crossing. Let them spray those."
+
+[[bark]]
+event = "sweep"
+class = "bramble"
+text = "The sewerats will greet them."
+
+[[bark]]
+event = "sweep"
+class = "world_eater"
+text = "Six more mouths for the Mat. Let it eat."
+
+[[bark]]
+event = "sweep"
+class = "world_eater"
+text = "Bleach doesn't stop hunger."
+
+[[bark]]
+event = "cleansing"
+text = "They're coming down with fire. This is a Cleansing."
+
+[[bark]]
+event = "cleansing"
+text = "Lamps first, then the bleach, then the flamers. Know the order."
+
+[[bark]]
+event = "cleansing"
+text = "The sluice is open. Get the cords out of the water."
+
+[[bark]]
+event = "cleansing"
+text = "Flamers on the ladder. Every Gate, every Guard."
+
+[[bark]]
+event = "cleansing"
+text = "This is what they came from the Moon for."
+
+[[bark]]
+event = "cleansing"
+text = "White light, white robes, white fire. Hold the Heart."
+
+[[bark]]
+event = "cleansing"
+text = "Here comes the cure, the whole dose."
+
+[[bark]]
+event = "cleansing"
+text = "If you're going to pray, pray to the Gates."
+
+[[bark]]
+event = "cleansing"
+state = 1
+text = "We're not ready. We were never going to be ready."
+
+[[bark]]
+event = "cleansing"
+state = 1
+text = "Hold the Heart. Everything else regrows."
+
+[[bark]]
+event = "cleansing"
+state = 2
+text = "Districts, this is what you built your walls for."
+
+[[bark]]
+event = "cleansing"
+state = 2
+text = "Make them pay for every tile."
+
+[[bark]]
+event = "cleansing"
+state = 3
+text = "A city doesn't burn easy. Prove it."
+
+[[bark]]
+event = "cleansing"
+state = 3
+text = "Every turret, every Gate, every Guard: now."
+
+[[bark]]
+event = "cleansing"
+state = 4
+text = "They want to cleanse an empire. Let them try."
+
+[[bark]]
+event = "cleansing"
+state = 4
+text = "Come down, then. I've waited years for this."
+
+[[bark]]
+event = "cleansing"
+class = "garden"
+text = "They'll burn the light first. Let them find the Lungs instead."
+
+[[bark]]
+event = "cleansing"
+class = "garden"
+text = "Dim everything. Make them hunt in the dark."
+
+[[bark]]
+event = "cleansing"
+class = "hive"
+text = "Let the fire hit the armour. Let it hit it all night."
+
+[[bark]]
+event = "cleansing"
+class = "hive"
+text = "Walls and wires. Let them melt their flamers on us."
+
+[[bark]]
+event = "cleansing"
+class = "runner"
+text = "Grow faster than they burn."
+
+[[bark]]
+event = "cleansing"
+class = "runner"
+text = "Every tile they torch, grow two."
+
+[[bark]]
+event = "cleansing"
+class = "bramble"
+text = "Feed them to the thorns."
+
+[[bark]]
+event = "cleansing"
+class = "bramble"
+text = "Let the sewerats out. All of them."
+
+[[bark]]
+event = "cleansing"
+class = "world_eater"
+text = "Let the Mat taste a flamer. It's been curious."
+
+[[bark]]
+event = "cleansing"
+class = "world_eater"
+text = "They brought fire to a hunger fight."
+
+[[bark]]
+event = "bloom"
+text = "That one's gone sewerat. It still has your face in its head somewhere."
+
+[[bark]]
+event = "bloom"
+text = "A Bloom. Cut-off tissue gone wild."
+
+[[bark]]
+event = "bloom"
+text = "Something feral is eating the edge."
+
+[[bark]]
+event = "bloom"
+text = "Crawlers out of a Bloom. Guards to the Pens."
+
+[[bark]]
+event = "bloom"
+text = "The Mat out there isn't ours anymore."
+
+[[bark]]
+event = "bloom"
+text = "Feral strain. It'll eat the route home if we let it."
+
+[[bark]]
+event = "bloom"
+text = "A Bloom. Somewhere a Relay failed and nobody noticed."
+
+[[bark]]
+event = "bloom"
+text = "Lost tissue, lost minds. Watch the drains."
+
+[[bark]]
+event = "bloom"
+state = 1
+text = "We can't fight a Bloom and the {order}. Pick one."
+
+[[bark]]
+event = "bloom"
+state = 1
+text = "Sever it, or starve it, or run."
+
+[[bark]]
+event = "bloom"
+state = 2
+text = "The districts on the edge won't sleep tonight."
+
+[[bark]]
+event = "bloom"
+state = 2
+text = "Get a Pen near it. Tame what comes."
+
+[[bark]]
+event = "bloom"
+state = 3
+text = "A Bloom inside city limits. Unacceptable."
+
+[[bark]]
+event = "bloom"
+state = 3
+text = "Reclaim it or burn it. I don't care which."
+
+[[bark]]
+event = "bloom"
+state = 4
+text = "Even the wild parts of my empire answer eventually."
+
+[[bark]]
+event = "bloom"
+state = 4
+text = "Bring the Bloom to heel. It's still ours underneath."
+
+[[bark]]
+event = "bloom"
+class = "garden"
+text = "Shine the signal at it. Maybe it remembers."
+
+[[bark]]
+event = "bloom"
+class = "garden"
+text = "Light it up and take it back."
+
+[[bark]]
+event = "bloom"
+class = "hive"
+text = "Wall it off. Let it eat the armour."
+
+[[bark]]
+event = "bloom"
+class = "hive"
+text = "The cords are walls. Make them one."
+
+[[bark]]
+event = "bloom"
+class = "runner"
+text = "Reach it first and it's ours again."
+
+[[bark]]
+event = "bloom"
+class = "runner"
+text = "Outgrow it."
+
+[[bark]]
+event = "bloom"
+class = "bramble"
+text = "A Bloom? That's just a bramble with no manners."
+
+[[bark]]
+event = "bloom"
+class = "bramble"
+text = "The Pens are hungry. Bring me crawlers."
+
+[[bark]]
+event = "bloom"
+class = "world_eater"
+text = "Two hungers in one drain. Ours is bigger."
+
+[[bark]]
+event = "bloom"
+class = "world_eater"
+text = "Let ours eat theirs."
+
+[[bark]]
+event = "flood"
+text = "Rain up top. Down here that's a tide."
+
+[[bark]]
+event = "flood"
+text = "The water's rising. Get the Pods off the floor."
+
+[[bark]]
+event = "flood"
+text = "Flood shift. Lungs, do your job."
+
+[[bark]]
+event = "flood"
+text = "Here comes the tide. Everything low gets wet."
+
+[[bark]]
+event = "flood"
+text = "Rain on {city_above}, rivers in {city_below}."
+
+[[bark]]
+event = "flood"
+text = "Black water's coming up. Mind the Deposits."
+
+[[bark]]
+event = "flood"
+text = "The Sump drinks tonight."
+
+[[bark]]
+event = "flood"
+text = "Water at the doors. Close the Gates on it."
+
+[[bark]]
+event = "flood"
+state = 1
+text = "We'll lose a Pod. We always lose a Pod."
+
+[[bark]]
+event = "flood"
+state = 1
+text = "Climb. Just climb."
+
+[[bark]]
+event = "flood"
+state = 2
+text = "The districts know the drill. Up and dry."
+
+[[bark]]
+event = "flood"
+state = 2
+text = "Count the Lungs. Grow another."
+
+[[bark]]
+event = "flood"
+state = 3
+text = "A city with Lungs laughs at rain."
+
+[[bark]]
+event = "flood"
+state = 3
+text = "Let it rise. We built high."
+
+[[bark]]
+event = "flood"
+state = 4
+text = "The tide comes in and the empire stays dry."
+
+[[bark]]
+event = "flood"
+state = 4
+text = "Rain is for peasants."
+
+[[bark]]
+event = "flood"
+class = "garden"
+text = "The Lungs will take it. That's what they're for."
+
+[[bark]]
+event = "flood"
+class = "garden"
+text = "Clean water later, if we live."
+
+[[bark]]
+event = "flood"
+class = "hive"
+text = "The walls hold water too."
+
+[[bark]]
+event = "flood"
+class = "hive"
+text = "Gate it out."
+
+[[bark]]
+event = "flood"
+class = "runner"
+text = "The cords will reach the dry tiles."
+
+[[bark]]
+event = "flood"
+class = "runner"
+text = "Grow up the walls. Out of the wet."
+
+[[bark]]
+event = "flood"
+class = "bramble"
+text = "The sewerats can swim. Can you?"
+
+[[bark]]
+event = "flood"
+class = "bramble"
+text = "Wet thorns are still thorns."
+
+[[bark]]
+event = "flood"
+class = "world_eater"
+text = "The Mat drinks. It's fine."
+
+[[bark]]
+event = "flood"
+class = "world_eater"
+text = "Hungry and wet. Lovely."
+
+[[bark]]
+event = "law"
+text = "Signed. The wave's leaving the Heart."
+
+[[bark]]
+event = "law"
+text = "{name} is law now. The far districts will hear it soon."
+
+[[bark]]
+event = "law"
+text = "There. A law. Somebody frame it."
+
+[[bark]]
+event = "law"
+text = "The Charter grows. So does the paperwork."
+
+[[bark]]
+event = "law"
+text = "Signed in slime. It's binding."
+
+[[bark]]
+event = "law"
+text = "{name}. Let's see who complains first."
+
+[[bark]]
+event = "law"
+text = "A law down here is a promise up the cords."
+
+[[bark]]
+event = "law"
+text = "I signed it. Blame me."
+
+[[bark]]
+event = "law"
+state = 1
+text = "A law. We're practically a government."
+
+[[bark]]
+event = "law"
+state = 1
+text = "Somebody tell me how this works."
+
+[[bark]]
+event = "law"
+state = 2
+text = "The districts voted. Mostly with their feet."
+
+[[bark]]
+event = "law"
+state = 2
+text = "{name} for the people. Some of them."
+
+[[bark]]
+event = "law"
+state = 3
+text = "A city needs laws. Mine has good ones."
+
+[[bark]]
+event = "law"
+state = 3
+text = "Sign it, send it, enforce it."
+
+[[bark]]
+event = "law"
+state = 4
+text = "By royal decree: {name}."
+
+[[bark]]
+event = "law"
+state = 4
+text = "An emperor's signature, still wet."
+
+[[bark]]
+event = "law"
+class = "garden"
+text = "Laws grow like light down here."
+
+[[bark]]
+event = "law"
+class = "garden"
+text = "A clean law for a clean city."
+
+[[bark]]
+event = "law"
+class = "hive"
+text = "The wires carry it faster."
+
+[[bark]]
+event = "law"
+class = "hive"
+text = "Hard-wired. Like the walls."
+
+[[bark]]
+event = "law"
+class = "runner"
+text = "The signal will carry it before dinner."
+
+[[bark]]
+event = "law"
+class = "runner"
+text = "Fast cords, fast laws."
+
+[[bark]]
+event = "law"
+class = "bramble"
+text = "Sharp law for a sharp city."
+
+[[bark]]
+event = "law"
+class = "bramble"
+text = "Thorny, but fair."
+
+[[bark]]
+event = "law"
+class = "world_eater"
+text = "Hungry law. Good."
+
+[[bark]]
+event = "law"
+class = "world_eater"
+text = "Law is just appetite with paperwork."
+
+[[bark]]
+event = "stratum"
+text = "You hear that? That's traffic. We're under their feet."
+
+[[bark]]
+event = "stratum"
+text = "We're through. {stratum}, here we come."
+
+[[bark]]
+event = "stratum"
+text = "The Mat's up the shaft. New dark, new scrap."
+
+[[bark]]
+event = "stratum"
+text = "{stratum}. Different smell, same filth."
+
+[[bark]]
+event = "stratum"
+text = "One stratum closer to the street."
+
+[[bark]]
+event = "stratum"
+text = "Up through the slab. Nobody's ever done that before. Nobody sane."
+
+[[bark]]
+event = "stratum"
+text = "The first tip is in {stratum}. Follow it."
+
+[[bark]]
+event = "stratum"
+text = "New ground. New grates. New trouble."
+
+[[bark]]
+event = "stratum"
+state = 1
+text = "We're climbing out of the Sump. Finally."
+
+[[bark]]
+event = "stratum"
+state = 1
+text = "{stratum}. Higher than I ever thought we'd get."
+
+[[bark]]
+event = "stratum"
+state = 2
+text = "The district will want a name for it."
+
+[[bark]]
+event = "stratum"
+state = 2
+text = "{stratum}, claimed. Get the Relays up."
+
+[[bark]]
+event = "stratum"
+state = 3
+text = "The city climbs. The {order} should be worried."
+
+[[bark]]
+event = "stratum"
+state = 3
+text = "{stratum} is ours. Next."
+
+[[bark]]
+event = "stratum"
+state = 4
+text = "Another floor of the empire."
+
+[[bark]]
+event = "stratum"
+state = 4
+text = "The stack is mine, one slab at a time."
+
+[[bark]]
+event = "stratum"
+class = "garden"
+text = "Light up {stratum}. Let it glow."
+
+[[bark]]
+event = "stratum"
+class = "garden"
+text = "The Lume will reach the top yet."
+
+[[bark]]
+event = "stratum"
+class = "hive"
+text = "Wire {stratum}. Armour every shaft."
+
+[[bark]]
+event = "stratum"
+class = "hive"
+text = "The walls climb with us."
+
+[[bark]]
+event = "stratum"
+class = "runner"
+text = "The tips didn't even slow down."
+
+[[bark]]
+event = "stratum"
+class = "runner"
+text = "Up and up. That's the Runner strain."
+
+[[bark]]
+event = "stratum"
+class = "bramble"
+text = "Thorns in {stratum}. Make it ours."
+
+[[bark]]
+event = "stratum"
+class = "bramble"
+text = "Plant the brambles at the top of the shaft."
+
+[[bark]]
+event = "stratum"
+class = "world_eater"
+text = "A whole new stratum to eat."
+
+[[bark]]
+event = "stratum"
+class = "world_eater"
+text = "The hunger climbs."
+
+[[bark]]
+event = "d5_fed"
+rite = true
+text = "The Rite says it's fine. My stomach disagrees."
+
+[[bark]]
+event = "d5_fed"
+rite = true
+text = "Another one for the Rite. Write the name, then drop."
+
+[[bark]]
+event = "d5_fed"
+rite = true
+text = "The Rite makes it routine. Routine is the worst part."
+
+[[bark]]
+event = "d5_fed"
+rite = true
+text = "By the Rite, {name} feeds the Heart."
+
+[[bark]]
+event = "runner_dead"
+rite = true
+text = "{name} goes to the Pit by the Rite. Nothing wasted, everything lost."
+
+[[bark]]
+event = "runner_dead"
+rite = true
+text = "Under the Rite even our dead feed the city. Tell {name}'s bunk."
+
+[[bark]]
+event = "runner_dead"
+rite = true
+text = "The Rite takes {name}. I'll take the grief."
+
+[[bark]]
+event = "runner_dead"
+rite = true
+text = "Dead and dissolved. That's the law I signed."
+
+[[bark]]
+event = "beat"
+beat = 1
+text = "The Heart's beating and eight of us have beds. That's a city, near enough."
+
+[[bark]]
+event = "beat"
+beat = 2
+text = "First Forge, first sale. Now we're a market."
+
+[[bark]]
+event = "beat"
+beat = 3
+text = "We know what the {order} are now. Good. No more surprises."
+
+[[bark]]
+event = "beat"
+beat = 4
+text = "The Bloom's done and {name}'s on the wall."
+
+[[bark]]
+event = "beat"
+beat = 5
+text = "The war chest is real, and it's under our feet."
+
+[[bark]]
+event = "beat"
+beat = 6
+text = "We've got friends up top. Don't trust them, but keep them."
+
+[[bark]]
+event = "beat"
+beat = 7
+text = "That's the end of it. Look at what we became."

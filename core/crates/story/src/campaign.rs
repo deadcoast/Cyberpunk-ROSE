@@ -44,6 +44,33 @@ impl Difficulty {
     }
 }
 
+/// Ivan on the map (Full Design v3.19, Narrative and Ivan): where he stands and walks, his HP, the shift each verb was
+/// last used. He walks the Mat only, a tile every two ticks.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Ivan {
+    pub x: u16,
+    pub y: u16,
+    pub goal: Option<(u16, u16)>,
+    pub hp: f32,
+    pub fell: bool,
+    /// the shift each verb was last used (0 never)
+    pub rally: u32,
+    pub parley: u32,
+    pub feed: u32,
+    pub ooze: u32,
+}
+
+/// Ivan's HP: a Runner's 130 twice, a D4's body (this design's).
+pub const IVAN_HP: f32 = 260.0;
+/// The threats know him by this id among the city's slimos.
+pub const IVAN_ID: u32 = u32::MAX - 1;
+
+impl Default for Ivan {
+    fn default() -> Self {
+        Ivan { x: 0, y: 0, goal: None, hp: IVAN_HP, fell: false, rally: 0, parley: 0, feed: 0, ooze: 0 }
+    }
+}
+
 /// Chapter 3's envoy, answered or not.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Accord {
@@ -104,8 +131,11 @@ pub struct Campaign {
     pub seen: Vec<String>,
     /// the Tithe's measure: Junk in the Stash at the last shift's end
     pub junk_last: u32,
-    /// Downer the Stills made over the run (the warchest)
-    pub downer_made: u32,
+    /// Ivan on the map and his voice
+    #[serde(default)]
+    pub ivan: Ivan,
+    #[serde(default)]
+    pub barker: crate::barks::Barker,
 }
 
 impl Default for Campaign {
@@ -140,7 +170,8 @@ impl Campaign {
             panels: if campaign { vec!["ch1.open".into()] } else { Vec::new() },
             seen: Vec::new(),
             junk_last: 0,
-            downer_made: 0,
+            ivan: Ivan::default(),
+            barker: crate::barks::Barker::new(0),
         }
     }
 

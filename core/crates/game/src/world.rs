@@ -135,6 +135,8 @@ impl World {
             campaign,
         };
         crate::grow::refresh_mat(&mut w.city, &w.colony);
+        crate::ivan::found(&mut w.campaign, &w.city.sim);
+        w.campaign.barker = story::Barker::new(seed);
         let notes = w.threats.start_shift(&mut w.city, &mut w.colony, &w.defs, 1, shift::shift_of_day(1) == 2);
         w.note(notes);
         w.publish();
@@ -177,12 +179,16 @@ impl World {
         for (market, contract, item) in landed.delivered.iter().cloned() {
             crate::trade::delivered(&mut self.economy, &mut self.ledger, &mut self.city, &self.table, market, contract, item, &mut self.log);
         }
+        crate::ivan::tick(&mut self.campaign, &self.city, &mut self.threats, &mut self.log);
         crate::pressure::tick(&mut self.threats, &mut self.city, &mut self.colony, &self.defs, &self.posts, &mut self.log, &landed);
         self.sales.extend(landed.sold);
+        crate::ivan::voice(&mut self.campaign, &self.colony, &self.city.sim, &mut self.threats, &mut self.log, self.city.tick);
     }
 
     /// The run comes home: the roster takes it, the rig goes into the Stash.
     pub fn run_home(&mut self, report: &RunReport, haul: Vec<ItemInstance>) -> (Vec<String>, usize, usize) {
+        let name = self.roster.get(report.runner).map(|r| r.full_name()).unwrap_or_default();
+        crate::shift::bark_run(&mut self.log, report, &name, !haul.is_empty());
         let mut folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
         shift::run_home(&mut folk, &mut self.stash, &self.table, report, haul)
     }
@@ -213,6 +219,10 @@ impl World {
         self.day += 1;
         let notes = self.threats.start_shift(&mut self.city, &mut self.colony, &self.defs, self.day, shift::shift_of_day(self.day) == 2);
         self.note(notes);
+        if self.threats.flood.level > 0 {
+            self.log.bark("flood", &[]);
+        }
+        crate::ivan::shift_end(&mut self.campaign, &mut self.city);
         self.movers();
         self.trade_start();
         s

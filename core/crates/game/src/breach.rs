@@ -80,6 +80,7 @@ pub fn reach(city: &City, threats: Option<&mut Threats>, log: &mut CityLog) -> O
     let f = StrataFile::shipped();
     let name = f.get(top).map(|d| d.name.clone()).unwrap_or_default();
     log.push(city.tick, Class::Landing, format!("the Mat reached {name} (S{top})"));
+    log.bark("stratum", &[("stratum", &name)]);
     Some(top)
 }
 

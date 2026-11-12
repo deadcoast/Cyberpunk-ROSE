@@ -65,6 +65,15 @@ pub fn run_home(folk: &mut Folk, stash: &mut Stash, table: &ItemTable, report: &
     (lines, placed, floor)
 }
 
+/// Ivan on a run come home (Full Design v3.19, barks): a death, or a haul.
+pub fn bark_run(log: &mut CityLog, report: &RunReport, name: &str, hauled: bool) {
+    if report.runner_died {
+        log.bark("runner_dead", &[("name", name)]);
+    } else if report.extracted && hauled {
+        log.bark("haul", &[("name", name)]);
+    }
+}
+
 /// The roster takes the run: XP, bonds, injuries, the dead to the memorial. Returns the record lines.
 pub fn run_report(folk: &mut Folk, report: &RunReport) -> Vec<String> {
     let before: Vec<Record> = std::iter::once(report.runner).chain(report.followers.iter().copied()).filter_map(|id| folk.roster.get(id).cloned()).collect();
@@ -205,7 +214,15 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
     // the Stash's side: the Appraisal Table, oil and paste, spoiling
     let mut stash_lines = Vec::new();
     if outcome.identifies > 0 {
-        let n = store::identify_n(stash, outcome.identifies as usize);
+        let named = store::identify_n(stash, outcome.identifies as usize);
+        let n = named.len();
+        // Ivan on the best of them: a Blackline, else a Rare (Full Design v3.19, barks)
+        let best = named.iter().map(|&d| table.def(d).tier).max();
+        if best.is_some_and(|t| t >= items::Tier::Blackline) {
+            log.bark("blackline", &[]);
+        } else if best == Some(items::Tier::Rare) {
+            log.bark("rare", &[]);
+        }
         if n > 0 {
             stash_lines.push(format!("the Appraisal Table named {n} item{}", if n == 1 { "" } else { "s" }));
         }
@@ -255,6 +272,9 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
     let (beds, taken) = colony.bed_count(defs);
     let reached = city.market_cells.iter().any(|m| m.is_some());
     let (joined, feral) = folk.roster.shelter((beds - taken).max(0) as usize, reached);
+    if let Some(n) = joined.first() {
+        log.bark("newcomer", &[("name", n)]);
+    }
     for n in &joined {
         log.push(tick, Class::Landing, format!("{n} joined the city"));
         people_lines.push(format!("{n} joined the city"));

@@ -441,6 +441,9 @@ pub struct EconomySave {
     /// the alliance signed at chapter 6's council: its tier 4 is open whatever its standing asks
     #[serde(default)]
     pub ally: Option<u8>,
+    /// Ivan's Parley today: (faction, the stock tier it opened, the day)
+    #[serde(default)]
+    pub parley: Option<(u8, u8, u32)>,
 }
 
 pub struct Economy {
@@ -672,7 +675,8 @@ impl Economy {
         if self.s.ally == Some(f) {
             return 4;
         }
-        by_rule.max(st.opened.min(4))
+        let parley = self.s.parley.filter(|p| p.0 == f && p.2 == self.s.day).map_or(0, |p| p.1);
+        by_rule.max(st.opened.min(4)).max(parley)
     }
 
     /// Reputation at a stall: +1 for a staff slimo of the faction's Past, +1 under Open Grates.
@@ -698,6 +702,33 @@ impl Economy {
             return -1;
         }
         0
+    }
+
+    /// Ivan's Parley at a faction's stall (Full Design v3.19, Narrative and Ivan): favour +10; from his second Authority
+    /// state the next stock tier opens for the day; from his third the favour carries reputation past +2 to +3, which
+    /// only a Parley does. Returns what it did, for the log.
+    pub fn parley(&mut self, f: u8, ivan_state: u8) -> String {
+        let mut did = vec!["favour +10".to_string()];
+        let (step, cap) = (self.file.rules.favour, self.file.rules.rep_cap);
+        if ivan_state >= 3 {
+            let st = &mut self.s.standing[f as usize];
+            st.favour += 10;
+            if st.favour >= step && st.rep < 3 {
+                st.rep += 1;
+                st.favour = 0;
+                did.push(format!("reputation {:+}", st.rep));
+            } else if st.favour >= step {
+                st.favour = step - 1;
+            }
+        } else if self.favour(f, 10) > 0 {
+            did.push(format!("reputation {:+}", self.s.standing[f as usize].rep.min(cap)));
+        }
+        if ivan_state >= 2 {
+            let t = (self.tier_open(f) + 1).min(4);
+            self.s.parley = Some((f, t, self.s.day));
+            did.push(format!("tier {t} open today"));
+        }
+        did.join(", ")
     }
 
     fn rep_step(&mut self, f: u8, by: i32) {

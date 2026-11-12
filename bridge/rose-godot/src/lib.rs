@@ -81,6 +81,10 @@ impl RoseSim {
         if let (Some(t), Some(e)) = (self.threats.as_mut(), self.economy.as_mut()) {
             game::campaign::found(&self.campaign, t, e);
         }
+        if let Some(c) = self.city.as_ref() {
+            game::ivan::found(&mut self.campaign, &c.sim);
+        }
+        self.campaign.barker = story::Barker::new(seed as u64);
     }
 
     /// The Board's open strata: raiders walk its routes when one of them rolls for raiders (clear-raiders contracts).
@@ -221,7 +225,9 @@ impl RoseSim {
                         }
                     }
                     if let Some(t) = self.threats.as_mut() {
+                        game::ivan::tick(&mut self.campaign, c, t, &mut self.log);
                         game::pressure::tick(t, c, &mut self.colony, &defs, &self.posts, &mut self.log, &landed);
+                        game::ivan::voice(&mut self.campaign, &self.colony, &c.sim, t, &mut self.log, c.tick);
                     }
                 }
                 c.sim.changed.len() as i64
@@ -929,6 +935,7 @@ impl RoseSim {
         match self.colony.sign(&defs, &c.sim, &def) {
             Ok(()) => {
                 self.decide(format!("{} signed", def.name));
+                self.log.bark("law", &[("name", &def.name)]);
                 GString::new()
             }
             Err(e) => GString::from(e.as_str()),
@@ -970,8 +977,12 @@ impl RoseSim {
         let mut people = people;
         let Some(c) = self.city.as_mut() else { return GString::from("no city") };
         let mut p = people.bind_mut();
+        let name = p.roster.get(slimo as u32).map(|r| r.full_name()).unwrap_or_default();
         match self.colony.dissolve(&mut p.roster, &mut c.sim, slimo as u32) {
-            Ok(line) => GString::from(line.as_str()),
+            Ok(line) => {
+                self.log.bark("d5_fed", &[("name", &name)]);
+                GString::from(line.as_str())
+            }
             Err(e) => GString::from(e.as_str()),
         }
     }
@@ -1069,7 +1080,11 @@ impl RoseSim {
                 let next = day.max(1) as u32 + 1;
                 let notes = t.start_shift(city, &mut self.colony, &defs, next, game::shift_of_day(next) == 2);
                 game::pressure::note(&mut self.log, city.tick, notes);
+                if t.flood.level > 0 {
+                    self.log.bark("flood", &[]);
+                }
             }
+            game::ivan::shift_end(&mut self.campaign, city);
             (shift, laid)
         };
         let (shift, laid) = shift;
