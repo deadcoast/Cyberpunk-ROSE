@@ -182,6 +182,12 @@ pub struct Steward {
     pub wanted: Vec<&'static str>,
     /// research only the wanted (`rose campaign`: the Chrome the rest of the tree costs is the climb's)
     pub only_wanted: bool,
+    /// sell at no grate whose gauge the sale would take to this (`rose campaign`: a point a zone per 10 e sold there,
+    /// and the Sweep's line is 60)
+    pub gauge_line: Option<f32>,
+    /// a faction whose reputation it keeps where it stands: no new contract with it (`rose campaign`: a chain done is
+    /// two steps, and the ally's every step is the Garden's ending and the World-Eater's loss)
+    pub cool: Option<u8>,
 }
 
 impl Steward {
@@ -274,7 +280,7 @@ impl Steward {
         let parts = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == items::Category::Part).count() as u32;
         let chrome = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == items::Category::Chrome).count() as u32;
         // the wanted first, in their order: the node once it can be picked and paid, with no reserve kept (it is what
-        // the reserves are for), else the blueprint in hand that opens its tier
+        // the reserves are for), else the blueprint in hand that opens the next tier on the way to it
         for id in self.wanted.clone() {
             let Some(n) = f.get(id) else { continue };
             if w.colony.progress.tech.has(id) {
@@ -288,7 +294,10 @@ impl Steward {
                 }
                 return;
             }
-            let opens = held.iter().find(|item| f.blueprint(item) == Some((n.branch_index(), n.tier))).cloned();
+            // the blueprint that opens the branch's next tier, up to the node's own
+            let b = n.branch_index();
+            let next = w.colony.progress.tech.open[b] + 1;
+            let opens = held.iter().find(|item| f.blueprint(item) == Some((b, next)) && next <= n.tier).cloned();
             if let Some(item) = opens {
                 if crate::grow::pick_project(&mut w.colony, &mut w.stash, &mut w.ledger, &w.table, progress::Project::Study(item)).is_ok() {
                     let name = w.colony.progress.tech.project_name().unwrap_or_default();
@@ -371,7 +380,7 @@ impl Steward {
         let mut free_beds = ((beds - taken).max(0) as usize).saturating_sub(w.roster.waiting.len());
         for o in w.economy.s.offers.clone() {
             let Some(k) = market_of(w, o.faction) else { continue };
-            if o.links > 3 || w.economy.s.contracts.iter().any(|c| c.faction == o.faction) {
+            if o.links > 3 || w.economy.s.contracts.iter().any(|c| c.faction == o.faction) || self.cool == Some(o.faction) {
                 continue;
             }
             let c = w.economy.first_link(&o, w.day);
@@ -455,12 +464,21 @@ impl Steward {
         let reserve: Vec<u32> = items.iter().filter(|i| i.2 == Category::Chrome).rev().take(CHROME_RESERVE).map(|i| i.1).collect();
         items.retain(|i| !reserve.contains(&i.1));
         let mut sent: Vec<(usize, u32)> = Vec::new();
+        // a grate's gauge and what this shift's sales there add to it
+        let per = w.threats.rules.attention.per_eddies.max(1) as f32;
+        let gauge = |w: &World, k: usize| w.threats.zones.iter().find(|z| z.grate == w.city.markets[k]).map_or(0.0, |z| z.attention);
         for (_, h, cat) in items {
             let Some(it) = w.stash.get_any(h).cloned() else { continue };
             let best = reach
                 .iter()
                 .copied()
                 .filter_map(|k| {
+                    if let Some(line) = self.gauge_line {
+                        let sold: u32 = sent.iter().filter(|s| s.0 == k).map(|s| s.1).sum();
+                        if gauge(w, k) + sold as f32 / per >= line {
+                            return None;
+                        }
+                    }
                     let ahead = w.ledger.queue.iter().filter(|q| q.verb == Verb::Sell { market: k as u8 } && w.table.def(q.item.def).category == cat).count();
                     if ahead >= PER_STALL {
                         return None;

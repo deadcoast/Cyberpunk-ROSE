@@ -8,6 +8,9 @@ max = 100.0
 decay = 2.0
 # Nodes, and structures marked near_grate, count at a grate within this many tiles (Pass 1: 10)
 near = 10
+# of the strain's Lume, what each of those Nodes adds (Pass 1: the whole Lume; this design's tenth, Full Design v3.20:
+# Pass 1's prototype Mat held 42 Nodes after a shift, a grown city holds 20-40 within 10 tiles of every grate it reaches)
+node_glow = 0.1
 near_grate = ["lume_farm"]
 # structures that count anywhere in the zone (Pass 1: a Still running)
 in_zone = ["still"]

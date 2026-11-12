@@ -27,6 +27,8 @@ step "cleansing" "rose cleansing (Phase D's proof: a Cleansing with and without 
 ./target/release/rose --out out cleansing | tail -2
 step "economy" "rose economy (Phase D's proof: thirty shifts trading, every demand inside its band; then feeding -> docs/telemetry/economy.md)"
 ./target/release/rose --out out economy | tail -3
+step "campaign" "rose campaign (Phase E's proof: five scripts, each to its own ending -> docs/telemetry/campaign.md; ten minutes)"
+./target/release/rose --out out campaign | tail -3
 
 mkdir -p game/bin
 case "$(uname -s)" in

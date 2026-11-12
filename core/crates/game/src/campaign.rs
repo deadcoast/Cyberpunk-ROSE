@@ -385,6 +385,8 @@ pub fn shift_end(c: &mut Campaign, p: &mut Parts, day: u32) -> Vec<String> {
         let zones = great_zones(p);
         schedule(p, &zones, 1.0, day);
         p.threats.campaign.mapped = true;
+        // and the gauge sends nothing after it: the Great Cleansing is every squad they have (Full Design v3.20)
+        p.threats.campaign.calm_until = u32::MAX;
         let militia = 2 * p.economy.ally_rep().max(0) as u32;
         p.threats.send_militia(&p.city.sim, militia);
         c.cleansing_sent = true;
@@ -544,6 +546,7 @@ mod tests {
         let st = w.threats.rules.stage_index("cleansing").unwrap();
         assert!(!w.threats.due.iter().filter(|d| d.stage == st).collect::<Vec<_>>().is_empty());
         assert_eq!(w.threats.bodies.iter().filter(|b| b.role == Role::Militia).count(), 4, "two a step of the ally's +2");
+        assert_eq!(w.threats.campaign.calm_until, u32::MAX, "the gauge silent from the shift it comes");
         // the Cleansing gone and the Heart standing: the genome reads Garden
         w.threats.due.clear();
         let lume = progress::strain::gene_index("lume").unwrap();

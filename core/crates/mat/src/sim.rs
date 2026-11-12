@@ -434,6 +434,11 @@ impl MatSim {
     }
 
     // ------------------------------------------------------------ public actions
+    /// What a cell needs to put out a Tip: the growth threshold, the sprout's cost and the new tip's starter.
+    pub fn extension_reserve(&self) -> f32 {
+        self.p.theta_grow + self.grow_cost + self.tip_starter
+    }
+
     pub fn seed_heart(&mut self, x: usize, y: usize) {
         let i = self.idx(x, y);
         self.sub[i] = sub::OPEN;
@@ -986,6 +991,26 @@ impl MatSim {
                 self.set_hy(i, hy::TIP);
                 self.age[i] = 0;
                 self.stall[i] = 0;
+            }
+        }
+
+        // the Heart and the Relays seed again (this design's; Pass 1: "the Heart never starves", and a Relay is a Node
+        // that never starves): one the tissue round it has died from, fed to the extension reserve, puts its empty
+        // ground out as Tips as at its seeding or raising, or a city burned back to it never grows again
+        let sources: Vec<(usize, usize)> = self.heart.iter().copied().chain(self.relays.iter().copied()).collect();
+        for (hx, hy_) in sources {
+            let h = self.idx(hx, hy_);
+            if ncount[h] == 0 && self.n[h] >= need {
+                for d in 0..4 {
+                    if let Some(j) = self.nb(h, d) {
+                        if sub::GROWABLE[self.sub[j] as usize] && self.hy[j] == hy::EMPTY && !self.salt[j] && !occupied[j] {
+                            self.set_hy(j, hy::TIP);
+                            self.age[j] = 0;
+                            self.stall[j] = 0;
+                            occupied[j] = true;
+                        }
+                    }
+                }
             }
         }
 

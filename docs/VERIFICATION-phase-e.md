@@ -63,3 +63,71 @@ finish a node; the book is 38 and the organs 12; classes held over their lines, 
 collections), `game` +6 (a blueprint studied and a node researched; organs grown and a class held;
 reflection and the deeds; a Nerve rule's gates; a loop's decay and run; the handoff's proposal and its tile),
 `save`'s round trip carries the progress. `cargo clippy` adds no warning in this work's code.
+
+## PAC-081 — the campaign: the stack, the chapters, Ivan, the shell, and the proof (2026-11-12)
+
+Full Design v3.19 first (the campaign written to its numbers: the stack of six strata and the breach, newcomers by
+stratum, Ivan on the map, the seven chapters, the accord, the chapter's Bloom, the council, the Great Cleansing, the
+warchest, the endings, panels, barks, Endless, Daily, the strain code and the profile, difficulty), research 22; then
+v3.20 for the climb and for what `rose campaign` found. Nine commits: the stack and the breach (part 1); the story
+crate, the seven chapters and the endings with their panels (2); Ivan on the map and his 379 barks (3); the routes of
+S4–S6 and every source on its own stratum's loot row (4a); New Run, the strain code, the profile, the Daily Seed,
+Endless, and the Mat's climb (4b); `rose campaign` and the rules it found wanting (4c–4g).
+
+**The proof**: `rose campaign --seed 11` PASS — every script reached its own ending (`docs/telemetry/campaign.md`,
+every tenth shift of each there and every decision in `out/campaign_<ending>_11.log`):
+
+| script | the accord | ending | warchest | shifts | chapters 2–7 opened at shift | strata 2–6 reached at shift |
+|---|---|---|---|---|---|---|
+| Garden (Lume, Thrift) | accepted | Garden | 29,410 | 114 | 12 · 14 · 19 · 81 · 83 · 107 | 2 · 38 · 80 · 89 · 107 |
+| Hive (Chrome Affinity, Conductance) | accepted | Hive | 26,865 | 85 | 13 · 17 · 21 · 56 · 59 · 73 | 2 · 29 · 57 · 66 · 73 |
+| World-Eater (Appetite, Feral Drive) | accepted | World-Eater | 35,030 | 136 | 13 · 17 · 22 · 110 · 112 · 126 | 2 · 46 · 111 · 121 · 126 |
+| Accord (Thrift, Toxicity) | accepted | Accord | 9,085 | 102 | 13 · 15 · 19 · 59 · 62 · 93 | 2 · 49 · 61 · 77 · 93 |
+| Scattered (no defence) | refused | Scattered | 87 | 16 | 12 · 14 · — | 2 · — |
+
+Four scripts climb the six strata in 73–126 shifts and meet the Great Cleansing at chapter 7; Scattered's refusal
+brings chapter 3's Cleansing down whole on an undefended city and the Heart burns in shift 16. 575 seconds for all
+five.
+
+Each script is the steward of `rose city` with a player on top (Full Design, Narrative and Ivan: The proof); its
+steering is the proof's plan, not a rule. What playing it found was a rule each time, written into v3.20 before the
+code (the history line lists them all): the Mat's growth (a fed strand's end grows again, a sprout enters ground
+touching two hyphae, the pump pushes past the Relays, a breached slab takes the Mat in, a bare Heart or Relay seeds
+again, a meal takes only what lies past the extension reserve); the Oathkeepers (a stage spends its line, only a
+scout's death is +15, the posts, organs, the tamed and Toxicity let a scout go, a Patrol leaves after four minutes, a
+Sweep takes its district and goes home, a Patrol or Sweep turns back at a shut Gate, the mapped Heart draws only its
+own zone, the gauge's Cleansings wait on the Undercroft and fall silent once the Great Cleansing comes); Blooms (feral
+in three shifts, two crawlers for every four hundred tiles over every Bloom, a Bloom's tissue not the city's); and the
+endings (the ally's reputation counted past the alliance's own step: counted from zero it gave the Garden 0.05 over a
+level Accord, and the Accord script, Thrift and Toxicity at 1.00, tied a Garden of Lume 0.90 by that step and lost the tie). The last
+round also fixed the steering itself: holding every rival's every gene kept nearly all the Chrome off the Pits and
+spent 16,000 eddies buying more to keep, so the World-Eater's climb, cut by shift 102, never grew back; and the
+Garden's ally fell from +3 to 0 on contracts it missed after the alliance.
+
+**The other proofs**: `rose city` PASS; `rose economy` PASS; `rose cleansing --seed 11` PASS (defended, the Heart 200
+of 200, eight of eight fell). The Cleansing failed first: the founding's Mat, grown by this part's rules, sent the
+squads in on the Heart's far side from a Turret placed nearest it, and the flamers burned the Heart six seconds before
+the last of them fell. The proof's Turret now stands where the campaign's steward puts its own — within three of the
+Heart, on the grate's side (`siege::turret_spot`, one rule for both) — and v3.20's proof paragraph says so. `./run.sh`
+now runs `rose campaign` too (ten minutes).
+
+**In play** (`play.gd`, the live game): the Sump Grate Key opened the slab at 102,239, the city's stratum read S2 and the Mat
+reached the Culverts; Ivan rallied five, walked to 102,240 in 71 ticks, Parleyed with the Nomads at grate 5 (favour
++10, tier 2 open today) and spoke ("The districts voted. Mostly with their feet."); chapter 3's card read ANSWER THE
+ENVOY with the envoy at the grate, ACCEPT signed the Tithe and the card turned to THE ACCORD'S CLEANSING; the ending
+read Hive, the warchest 290.
+
+**Reviewed by eye** (`docs/shots/newrun.png`, `panels.png`, `ending.png`, `play_25_slab.png` through
+`play_31_ending.png`): New Run's mode, seed, strain code with its hint ("blank: the Heart is born at the founding's
+genome"), the three difficulties with the chosen one's line, BEGIN and BACK; the slab's card and the breach; Ivan on
+the Mat, his Parley and bark box; the envoy at the grate, chapter 3's panel and the HUD's chapter card ("CH 3 THE
+HAND: THE ACCORD'S CLEANSING") with Ivan's line after ACCEPT; the ending's panel and then the held Stack view with the
+warchest, the strain code, NEW GAME+ and THE MENU.
+
+**Tests**: `story` 6 (the chapters and endings as data; the endings scored from the genome and the ally, the
+alliance's own step no one's edge; the campaign opening on chapter 1; Ivan's bark bags and their tokens), `game` +12
+(a chapter closing on its goal, the accord and the Tithe, chapter 4's Bloom, the Great Cleansing with its militia and
+the gauge silent after it, the breach by Relay or key, Ivan's walk, his Rally, Feed and fall, his voice on the city's
+events, New Game+, Endless, the Daily Seed), `save` +1 (the profile; the strain code now read back with its typo
+caught), `mat` +1 (the stack and its slabs), `logistics` +1 (the Board's strata), `route`'s library at six strata, and
+`threat`'s Turret test rewritten (a Patrol maps and leaves, a Sweep is fired on). 187 tests pass. `cargo clippy` adds no warning in this work's code.

@@ -827,7 +827,8 @@ fn chrono_free_date() -> String {
 fn cmd_campaign(t: &Term, seed: u64, aim: &str, shifts: u32, report: &Path) {
     let aims: Vec<game::proof::Aim> = game::proof::aims().into_iter().filter(|a| aim == "all" || a.ending == aim).collect();
     t.head("campaign", &format!("seed {seed}: {} script{} up to {shifts} shifts", aims.len(), if aims.len() == 1 { "" } else { "s" }));
-    let _ = report;
+    let started = Instant::now();
+    let mut runs: Vec<(game::proof::Aim, game::proof::CampaignRun)> = Vec::new();
     for a in aims {
         t.hrow(&[("shift", 5), ("ch", 3), ("S", 2), ("run", 4), ("result", 10), ("pop", 4), ("beds", 4), ("cells", 6), ("top", 4), ("genes (aim)", 12), ("tiers", 5), ("def", 3), ("bloom", 12), ("P/C/e", 10), ("att", 9), ("research", 18), ("story", 50)]);
         let (run_, _) = game::proof::play(seed, a, shifts, &mut |c, _| {
@@ -838,5 +839,46 @@ fn cmd_campaign(t: &Term, seed: u64, aim: &str, shifts: u32, report: &Path) {
         let log = PathBuf::from(format!("out/campaign_{}_{seed}.log", a.ending));
         let _ = std::fs::create_dir_all("out");
         std::fs::write(&log, &run_.log).expect("log");
+        runs.push((a, run_));
+    }
+    // the proof (Full Design v3.20, Narrative and Ivan: The proof): each script ends the campaign in its own ending
+    let pass = runs.iter().all(|(a, r)| r.ending.as_deref() == Some(a.ending));
+    println!("  {}   {:.0} s", if pass { t.hi("PASS every script reached its ending") } else { t.hi("FAIL a script missed its ending") }, started.elapsed().as_secs_f32());
+    let gene = |k: usize| mat::genome::GENE_NAMES[k];
+    // the first shift a column reached each value
+    let first = |r: &game::proof::CampaignRun, v: u8, f: &dyn Fn(&game::proof::CampaignShift) -> u8| r.shifts.iter().find(|c| f(c) >= v).map_or("—".to_string(), |c| c.day.to_string());
+    let mut md = String::new();
+    md.push_str("# The campaign, chapter 1 to an ending\n\n");
+    md.push_str(&format!("Written by `rose campaign --seed {seed} --shifts {shifts}` on {} (Full Design v3.20, Narrative and Ivan: The proof; the Build plan's Phase E). Five scripts play the campaign headless at the bot's pace, one for each ending: the steward of `rose city` running the shifts and the campaign's own player on top — the research the chapters ask for, the climb up the stack, the defences once the Oathkeepers come, the gene pair it steers with Ivan's feeds and the Stash's Chrome, the accord refused once a Gate and a Turret stand (taken before), an alliance at chapter 6 and the Great Cleansing met at chapter 7; Scattered's script raises no defence and refuses the accord, and the chapter's Cleansing burns the Heart. **Result: {}.**\n\n", chrono_free_date(), if pass { "every script reached its ending" } else { "a script missed its ending" }));
+    md.push_str(&format!("| script | genes steered | the accord | ending | warchest | shifts | chapters 2–7 opened at shift | strata 2–6 reached at shift | the genome at the end, {} to {} | slimos at the end | seconds |\n|---|---|---|---|---|---|---|---|---|---|---|\n", gene(0), gene(9)));
+    for (a, r) in &runs {
+        // a chapter opened when the city first stood in it or past it short of the ending (which closes them all)
+        let chapters: Vec<String> = (2..=7).map(|v| r.shifts.iter().find(|c| c.chapter >= v && c.chapter <= 7).map_or("—".to_string(), |c| c.day.to_string())).collect();
+        let strata: Vec<String> = (2..=6).map(|v| first(r, v, &|c| c.stratum)).collect();
+        // the ten genes, Vigor to Plasticity, as the Great Cleansing read them
+        let genome = r.shifts.last().map_or(String::new(), |c| c.genes.iter().map(|g| format!("{:.2}", g)).collect::<Vec<_>>().join(" "));
+        md.push_str(&format!("| {} | {} and {} | {} | {} | {} | {} | {} | {} | {genome} | {} | {:.0} |\n", a.ending, gene(a.genes[0]), gene(a.genes[1]), if r.log.contains("the envoy answered: accepted") { "accepted" } else { "refused" }, r.ending.clone().unwrap_or_else(|| "none".into()), r.warchest.map_or("—".into(), |v| v.to_string()), r.shifts.len(), chapters.join(" · "), strata.join(" · "), r.shifts.last().map_or(0, |c| c.population), r.seconds));
+    }
+    for (a, r) in &runs {
+        // the steered pair, and Feral Drive (the bloom line) where the pair is not the World-Eater's own
+        let mut shown = a.genes.to_vec();
+        if !shown.contains(&mat::genome::FERAL) {
+            shown.push(mat::genome::FERAL);
+        }
+        let heads: Vec<&str> = shown.iter().map(|&k| gene(k)).collect();
+        md.push_str(&format!("\n## {}, every tenth shift\n\n| shift | chapter | stratum | slimos | Mat cells joined | top row | {} | Bloom tiles | Parts / Chrome / eddies | the loudest grate |\n|---|---|---|---|---|---|{}---|---|---|\n", a.ending, heads.join(" | "), "---|".repeat(shown.len())));
+        for c in r.shifts.iter().filter(|c| c.day % 10 == 0 || Some(c.day) == r.shifts.last().map(|l| l.day)) {
+            let gs: Vec<String> = shown.iter().map(|&k| format!("{:.2}", c.genes[k])).collect();
+            md.push_str(&format!("| {} | {} | S{} | {} | {} | {} | {} | {} | {} / {} / {} | {:.0} |\n", c.day, c.chapter, c.stratum, c.population, c.cells, c.top_row, gs.join(" | "), c.bloom.0, c.stock.0, c.stock.1, c.stock.2, c.attention.0));
+        }
+    }
+    md.push_str(&format!("\nThe logs, every decision and event of each run: `out/campaign_<ending>_{seed}.log`.\n"));
+    if let Some(parent) = report.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(report, md).expect("report");
+    println!("  {} {}", t.dim("wrote"), report.display());
+    if !pass {
+        std::process::exit(1);
     }
 }

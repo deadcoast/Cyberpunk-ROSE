@@ -28,6 +28,8 @@ pub struct AttentionRules {
     pub max: f32,
     pub decay: f32,
     pub near: i32,
+    /// of the strain's Lume, what each Node within `near` of a grate adds
+    pub node_glow: f32,
     pub near_grate: Vec<String>,
     pub in_zone: Vec<String>,
     pub per_eddies: u32,
@@ -438,8 +440,8 @@ pub struct ThreatSave {
 pub const HEART_REACH: i32 = 2;
 
 /// What the campaign changed of the threats (Full Design v3.19, Narrative and Ivan: the accord, difficulty): the
-/// Attention a zone loses a shift and whether the Oathkeepers have mapped the Heart (an accepted accord: every Sweep
-/// and Cleansing walks for it). Chapter 3's Cleansing is the campaign's own; the gauge's Cleansings wait on the
+/// Attention a zone loses a shift and whether the Oathkeepers have mapped the Heart (an accepted accord: a squad down
+/// the Heart's own zone walks for it). Chapter 3's Cleansing is the campaign's own; the gauge's Cleansings wait on the
 /// Undercroft (v3.20).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Campaign {
@@ -984,6 +986,7 @@ impl Threats {
         let reliquary = colony.progress.collections.set_flag("attention_decay_plus_1");
         let lume = sim.genome.0[mat::genome::LUME];
         let near = self.rules.attention.near;
+        let node_glow = self.rules.attention.node_glow;
         let near_defs: Vec<usize> = self.rules.attention.near_grate.iter().filter_map(|d| defs.index(d)).collect();
         let zone_defs: Vec<usize> = self.rules.attention.in_zone.iter().filter_map(|d| defs.index(d)).collect();
         for k in 0..self.zones.len() {
@@ -993,7 +996,7 @@ impl Threats {
                 if sim.hy[i] == hy::NODE && !sim.is_bloom(i) {
                     let t = ((i % sim.w) as u16, (i / sim.w) as u16);
                     if (t.0 as i32 - g.0 as i32).abs() + (t.1 as i32 - g.1 as i32).abs() <= near {
-                        gain += lume;
+                        gain += lume * node_glow;
                     }
                 }
             }
@@ -1164,10 +1167,11 @@ impl Threats {
     #[allow(clippy::too_many_arguments)]
     fn send_squad(&mut self, city: &City, colony: &Colony, defs: &StructureFile, st: &StageDef, event: u32, zone: usize, flamers: bool) -> u32 {
         let g = self.grate_xy(&city.sim, zone);
-        // mapped (an accepted accord): every squad walks for the Heart, never a decoy (Full Design v3.19)
+        // mapped (an accepted accord): a squad down the Heart's own zone walks for the Heart, never a decoy (Full
+        // Design v3.20, Narrative and Ivan: the accord); a Cleansing's go for it wherever they come down
         let heart = city.sim.heart.map(|(x, y)| (x as u16, y as u16));
         let source = match heart {
-            Some(h) if self.campaign.mapped => h,
+            Some(h) if self.campaign.mapped && self.heart_zone(&city.sim) == Some(zone) => h,
             _ => self.brightest(&city.sim, colony, defs, zone),
         };
         let share = self.events.iter().find(|e| e.id == event).map_or(1.0, |e| e.share);
@@ -1342,8 +1346,8 @@ impl Threats {
                         let left = b.mapping - dt;
                         self.bodies[k].mapping = left;
                         if left <= 0.0 {
-                            let sweep = self.events.iter().any(|e| e.id == b.event && self.rules.stage[e.stage].id == "sweep");
-                            self.bodies[k].goal = if sweep { Goal::Heart } else { Goal::Leave };
+                            // mapped or swept, it turns for its grate (Pass 2: "a Sweep takes a district")
+                            self.bodies[k].goal = Goal::Leave;
                         }
                         None
                     } else {
@@ -1354,10 +1358,6 @@ impl Threats {
                     if cheb(pos, heart) > 2 {
                         Some(heart)
                     } else {
-                        // a Sweep's path ends at the Heart: it turns for its grate
-                        if self.events.iter().any(|e| e.id == b.event && self.rules.stage[e.stage].id == "sweep") {
-                            self.bodies[k].goal = Goal::Leave;
-                        }
                         None
                     }
                 }
@@ -1411,7 +1411,7 @@ impl Threats {
                             None
                         }
                         Some(pt) => {
-                            let near = self.bodies.iter().filter(|o| !o.dead && !o.gone && (o.role.oathkeeper() || o.role == Role::Crawler) && cheb((o.x, o.y), pt) <= self.rules.defence.tamed_within).min_by_key(|o| (dist2(pos, (o.x, o.y)), o.id)).map(|o| (o.x, o.y));
+                            let near = self.bodies.iter().filter(|o| !o.dead && !o.gone && ((o.role.oathkeeper() && o.role != Role::Scout) || o.role == Role::Crawler) && cheb((o.x, o.y), pt) <= self.rules.defence.tamed_within).min_by_key(|o| (dist2(pos, (o.x, o.y)), o.id)).map(|o| (o.x, o.y));
                             match near {
                                 Some(o) if cheb(pos, o) > 1 => Some(o),
                                 Some(_) => None,
@@ -1452,7 +1452,13 @@ impl Threats {
             let Some((_, nt)) = next else { continue };
             let ni = nt.1 as usize * w + nt.0 as usize;
             if gates.contains(&ni) {
-                // the only way is through a Gate, and a Gate is muscle: a flamer burns it, the rest wait at it
+                // the only way is through a Gate, and a Gate is muscle: a flamer burns it, a Cleansing's lamps wait at
+                // it for their flamers, and a Patrol or a Sweep, which bring no flame, turn back for their grate
+                let flameless = self.events.iter().any(|e| e.id == b.event && matches!(self.rules.stage[e.stage].id.as_str(), "patrol" | "sweep"));
+                if flameless && b.goal != Goal::Leave {
+                    self.bodies[k].goal = Goal::Leave;
+                    continue;
+                }
                 if def.flame > 0.0 {
                     if let Some(gid) = colony.occupied(defs, nt.0, nt.1) {
                         if let Some(g) = colony.get_mut(gid) {
@@ -1506,7 +1512,7 @@ impl Threats {
                 Role::Tamed => {
                     // it bites what comes at its Pen: an Oathkeeper (Pass 1) or a wild crawler (v3.20)
                     if self.bodies[k].cd <= 0.0 {
-                        if let Some(o) = self.bodies.iter().find(|o| !o.dead && !o.gone && (o.role.oathkeeper() || o.role == Role::Crawler) && cheb(pos, (o.x, o.y)) <= 1) {
+                        if let Some(o) = self.bodies.iter().find(|o| !o.dead && !o.gone && ((o.role.oathkeeper() && o.role != Role::Scout) || o.role == Role::Crawler) && cheb(pos, (o.x, o.y)) <= 1) {
                             let e = body_dmg.entry(o.id).or_insert((0.0, None));
                             e.0 += self.rules.defence.tamed_bite as f32;
                             e.1 = Some(Foe::Body(b.id));
@@ -1586,9 +1592,9 @@ impl Threats {
                 dmg += 2.0;
             }
             let oath_only = d.oath_only;
-            // a seat a slimo works holds its fire on a Patrol's scouts: they map and leave, and each that falls is
-            // +15 at the grate (Full Design v3.20, Pressure); an organ fires on what comes, as it always has
-            let spared = |o: &Body| seated && o.role == Role::Scout;
+            // a seat a slimo works, and the Mat's organs, hold their fire on a Patrol's scouts: they map and leave,
+            // and each that falls is +15 at the grate (Full Design v3.20, Pressure)
+            let spared = |o: &Body| o.role == Role::Scout;
             if let Some(t) = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.hostile() && !spared(o) && (!oath_only || o.role.oathkeeper()) && dist2((st.x, st.y), (o.x, o.y)) <= r * r).min_by_key(|o| (dist2((st.x, st.y), (o.x, o.y)), o.id)) {
                 let e = body_dmg.entry(t.id).or_insert((0.0, None));
                 e.0 += dmg;
@@ -1718,7 +1724,9 @@ impl Threats {
                 if def.burn > 0.0 && city.sim.burn(here, def.burn) {
                     *burned_by.entry(b.event).or_default() += 1;
                 }
-                if b.role.oathkeeper() && city.sim.is_hyphal_at(here) && !city.sim.is_bloom(here) && tox > 0.0 {
+                // the Mat's Toxicity on what stands on it, a Patrol's scouts let be as the posts and organs let them
+                // (Full Design v3.20, Bodies and defence)
+                if b.role.oathkeeper() && b.role != Role::Scout && city.sim.is_hyphal_at(here) && !city.sim.is_bloom(here) && tox > 0.0 {
                     body_dmg.entry(b.id).or_insert((0.0, None)).0 += tox;
                 }
             }
@@ -2007,22 +2015,26 @@ mod tests {
         let (mut c, mut col, defs, mut t) = city();
         let g = t.zones.iter().position(|z| c.markets.contains(&z.grate)).unwrap();
         col.progress.tech = progress::Tech::every_structure();
-        // a Turret on the first anchor it can stand by the Heart, where both squads walk
-        let (hx, hy) = c.sim.heart.map(|(x, y)| (x as u16, y as u16)).unwrap();
-        let mut placed = None;
-        'p: for y in hy.saturating_sub(4)..hy + 5 {
-            for x in hx.saturating_sub(4)..hx + 5 {
-                if let Ok(id) = col.place_built(&defs, &c.sim, "turret", x, y, 1) {
-                    placed = Some(id);
-                    break 'p;
-                }
-            }
-        }
-        let turret = placed.expect("a Turret within range of the grate");
+        // a Turret on the anchor nearest the zone's brightest source, where both squads go (the founding's tissue
+        // settled first, so the source holds still)
+        run(&mut c, &mut col, &defs, &mut t, &Posts::default(), 900);
+        let src = t.brightest(&c.sim, &col, &defs, g);
+        // a Relay there powers it (the founding's tissue up the shaft is dim)
+        c.sim.place_relay(src.0 as usize, src.1 as usize);
+        c.sim.compute_signal();
+        let mut spots: Vec<(u16, u16)> = (src.1.saturating_sub(5)..src.1 + 6).flat_map(|y| (src.0.saturating_sub(5)..src.0 + 6).map(move |x| (x, y))).collect();
+        spots.sort_by_key(|&p| cheb(p, src));
+        let turret = spots.into_iter().find_map(|(x, y)| col.place_built(&defs, &c.sim, "turret", x, y, 1).ok()).expect("a Turret by the source");
+        let at = col.get(turret).map(|s| (s.x, s.y)).unwrap();
         let posts = Posts { guards: vec![(1, turret)], ..Default::default() };
+        let mut came = false;
         // the Patrol: its scouts are let go, so no kill and no salvage
         t.send(&c, &col, &defs, 0, g);
-        run(&mut c, &mut col, &defs, &mut t, &posts, 900);
+        for _ in 0..90 {
+            run(&mut c, &mut col, &defs, &mut t, &posts, 10);
+            came |= t.bodies.iter().any(|b| b.role == Role::Scout && cheb((b.x, b.y), at) <= 6);
+        }
+        assert!(came, "the scouts came within the Turret's range");
         assert_eq!(t.events[0].fallen, 0, "a seated Turret holds its fire on a scout");
         assert_eq!(t.owed.0, 0);
         // a Sweep: the Turret fires on it

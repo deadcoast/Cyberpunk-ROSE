@@ -86,7 +86,8 @@ pub fn joined_to_heart(sim: &mat::MatSim) -> Vec<bool> {
         for (nx, ny) in [(x.wrapping_sub(1), y), (x + 1, y), (x, y.wrapping_sub(1)), (x, y + 1)] {
             if nx < w && ny < sim.h {
                 let j = ny * w + nx;
-                if !seen[j] && matches!(sim.hy[j], hy::TIP | hy::CORD | hy::NODE) {
+                // a Bloom's tissue touching the city's is not the city's (Full Design v3.20, The stack: reached)
+                if !seen[j] && matches!(sim.hy[j], hy::TIP | hy::CORD | hy::NODE) && !sim.is_bloom(j) {
                     seen[j] = true;
                     q.push_back(j);
                 }

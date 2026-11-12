@@ -81,14 +81,33 @@ fn heart_field(w: &World, gates_closed: bool) -> Vec<u16> {
     d
 }
 
+/// Does the grate `g` reach the Heart only through a built Gate?
+pub fn gated(w: &World, g: usize) -> bool {
+    heart_field(w, true)[g] == u16::MAX
+}
+
 /// The proof's defence: two Sphincter Gates across the narrowest crossing of the squads' way down from the grate that
 /// the Mat spans — a run of walkable ground at most two wide, wall on both sides, every tile of it Cord or Node a Gate
 /// can stand on — the first such crossing down from the grate (else the first two placeable tiles of the way past 8
-/// and 14 steps); a Scrap Turret nearest the Heart that its signal allows; a Guard ordered to each, the best Fight
+/// and 14 steps); a Scrap Turret by the Heart on the grate's side (`turret_spot`); a Guard ordered to each, the best Fight
 /// first. Built at once for the proof; as ghosts the Build job raises (`gates`, the campaign's steward), the Turret
 /// left to the caller.
 pub fn defend(w: &mut World, gx: usize) -> Vec<String> {
     defend_with(w, gx, true)
+}
+
+/// A Turret's spot by the Heart, the flamers' end of every way (Full Design v3.20, Bodies and defence): within three
+/// of its middle, so its six tiles reach round the 3 x 3, on the side of the grate `g` the squads come down — the spot
+/// its signal allows nearest the grate.
+pub fn turret_spot(w: &World, g: usize) -> Option<(u16, u16)> {
+    let sim = &w.city.sim;
+    let (hx, hy) = sim.heart.map(|(x, y)| (x as i32, y as i32))?;
+    let (gx, gy) = ((g % sim.w) as i32, (g / sim.w) as i32);
+    (hy - 3..=hy + 3)
+        .flat_map(|y| (hx - 3..=hx + 3).map(move |x| (x, y)))
+        .filter(|&(x, y)| x >= 0 && y >= 0 && w.colony.can_place(&w.defs, sim, "turret", x as u16, y as u16).is_ok())
+        .min_by_key(|&(x, y)| ((x - gx).abs() + (y - gy).abs(), y, x))
+        .map(|(x, y)| (x as u16, y as u16))
 }
 
 /// The Gates of `defend` as ghosts on the way down from the grate `gx` (the campaign steward's): their lines.
@@ -213,12 +232,10 @@ fn defend_with(w: &mut World, gx: usize, now: bool) -> Vec<String> {
     if !now {
         return out;
     }
-    // the Turret: where it may stand (σ 0.5) nearest the Heart, so its six tiles cover the Heart's walls — the flamers'
-    // end of every way (Full Design v3.20: a Turret down the way fires at what walks round its Gate, and at nothing
-    // once the squads are past it)
+    // the Turret by the Heart on the grate's side; with no spot there, the nearest the Heart its signal allows
     let mut posts = gates.clone();
     let (hx, hy) = w.city.sim.heart.unwrap_or((0, 0));
-    let spot = crate::city::nearest_spot(w, "turret", (hx as u16, hy as u16)).map(|(x, y)| y as usize * sw + x as usize);
+    let spot = turret_spot(w, gx).or_else(|| crate::city::nearest_spot(w, "turret", (hx as u16, hy as u16))).map(|(x, y)| y as usize * sw + x as usize);
     if let Some(i) = spot {
         if let Ok(id) = w.colony.place_built(&w.defs, &w.city.sim, "turret", (i % sw) as u16, (i / sw) as u16, 1) {
             posts.push(id);

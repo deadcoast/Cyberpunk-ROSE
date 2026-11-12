@@ -87,15 +87,17 @@ impl ChapterFile {
         v
     }
 
-    /// Each strain ending's score at the Great Cleansing's end (Full Design v3.19, Endings): its two genes' mean, plus
-    /// its `ally` share for each step of the ally's reputation. Scattered has none.
+    /// Each strain ending's score at the Great Cleansing's end (Full Design v3.20, Endings): its two genes' mean, plus
+    /// its `ally` share for each step of the ally's reputation past the first, the alliance's own (chapter 6 asks
+    /// +1 of every city). Scattered has none.
     pub fn scores(&self, genome: &[f32; 10], ally_rep: i32) -> Vec<(&str, f32)> {
+        let steps = (ally_rep - 1) as f32;
         self.ending
             .iter()
             .filter(|e| e.genes.len() == 2)
             .map(|e| {
                 let g: Vec<f32> = e.genes.iter().map(|k| progress::strain::gene_index(k).map_or(0.0, |i| genome[i])).collect();
-                (e.id.as_str(), (g[0] + g[1]) / 2.0 + e.ally * ally_rep as f32)
+                (e.id.as_str(), (g[0] + g[1]) / 2.0 + e.ally * steps)
             })
             .collect()
     }
@@ -164,5 +166,12 @@ mod tests {
         t[ix("feral")] = 0.7;
         assert_eq!(f.ending_of(&t, 2, false, false).id, "garden");
         assert_eq!(f.ending_of(&t, -1, false, false).id, "world_eater");
+        // the alliance's own step is every city's: a Garden and an Accord level on their genes at +1, the Garden
+        // gains nothing by it, and the tie goes by the table
+        let mut a = [0.5f32; 10];
+        a[ix("lume")] = 0.8;
+        a[ix("thrift")] = 0.9;
+        a[ix("toxicity")] = 0.85;
+        assert_eq!(f.ending_of(&a, 1, false, false).id, "accord");
     }
 }
