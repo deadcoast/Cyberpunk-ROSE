@@ -888,8 +888,9 @@ impl Player {
         rec.run_gap = median(&mut gaps(&mut run_times.clone()));
         let mut merged: Vec<f32> = run_times.iter().chain(city_times.iter()).copied().collect();
         rec.merged_gap = median(&mut gaps(&mut merged));
-        rec.built = s.outcome.built.iter().filter_map(|id| w.colony.get(*id)).map(|st| w.defs.structure[st.def].name.clone()).collect();
-        rec.population = w.roster.records.len();
+        // what stood up this shift, in the work cycles and at its end (the log's "<name> built at x,y")
+        rec.built = w.log.events[log_from..].iter().filter_map(|e| e.what.split_once(" built at ").map(|(name, _)| name.to_string())).collect();
+        rec.population = w.roster.sleepers();
         rec.stash = w.stash.count();
         rec.in_rooms = w.stash.rooms.iter().map(|r| r.items.len()).sum();
         rec.floor = w.stash.floor.len();

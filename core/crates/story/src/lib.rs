@@ -6,6 +6,7 @@
 pub mod barks;
 pub mod campaign;
 pub mod chapters;
+pub mod onboarding;
 pub mod strings;
 
 pub use barks::{Barker, Ctx};

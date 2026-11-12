@@ -86,7 +86,7 @@ func _draw_list() -> void:
 			_redraw())
 		b.add_theme_color_override("font_color", UiTheme.ACID if tab == t[0] else UiTheme.CHALK)
 		x += t[1].length() * 4 + 14
-	var pop: int = Sim.ensure_people().count()
+	var pop: int = Sim.ensure_people().sleepers()
 	make_label(list_frame, "%s of %d   tier %d   the Stash holds %d Parts, %d Chrome, %d e" % [String(sim.city_tier_name(pop)).to_upper(), pop, int(sim.city_tier(pop)), int(holds.parts), int(holds.chrome), int(holds.eddies)], Vector2(6, 22), UiTheme.DUST)
 	var y := 36
 	for d in _in_tab(tab):
@@ -185,7 +185,7 @@ func _draw_card() -> void:
 		make_label(card_frame, "costs", Vector2(8, y), UiTheme.DUST)
 		_cost_label(card_frame, d.cost, Vector2(34, y))
 		y += 11
-		make_label(card_frame, "%d build points: a builder adds its Hands a shift" % int(d.build), Vector2(8, y), UiTheme.DUST)
+		make_label(card_frame, "%d build points: a builder adds its Hands a minute" % int(d.build), Vector2(8, y), UiTheme.DUST)
 	y += 11
 	if int(d.heart_tier) > 0:
 		make_label(card_frame, "needs the Heart at tier %d" % int(d.heart_tier), Vector2(8, y), UiTheme.HOT_PINK)

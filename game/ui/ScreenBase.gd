@@ -9,6 +9,11 @@ var ui: CanvasLayer
 var content: Control
 var title_label: Label
 var nav: HBoxContainer
+## The controls a first-ten-minutes beat can light, by name (Full Design v3.21, Onboarding): "nav:route" and the
+## rest of the nav bar here; a screen adds its own ("tool:build", "alert:newcomers", "clock").
+var targets := {}
+var _light: Control
+var _lit := ""
 
 const NAV := ["colony", "route", "slimo", "jobs", "stash", "bench", "market", "strain", "charter", "codex", "settings"]
 
@@ -44,6 +49,7 @@ func _ready() -> void:
 		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(func(): Screens.show_screen(id))
 		nav.add_child(b)
+		targets["nav:" + id] = b
 	var esc := Label.new()
 	esc.text = "ESC MENU"
 	esc.add_theme_color_override("font_color", UiTheme.DUST)
@@ -56,6 +62,32 @@ func _ready() -> void:
 	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(content)
 	_build_content(content)
+	# the beat's light, over everything the screen drew
+	_light = Control.new()
+	_light.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_light.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_light.draw.connect(_draw_light)
+	root.add_child(_light)
+	set_process(true)
+
+func _process(_delta: float) -> void:
+	var want := ""
+	if Sim.sim != null:
+		want = String(Sim.sim.onboarding_highlight())
+	if want != _lit or want != "":
+		_lit = want
+		_light.queue_redraw()
+
+## A Cyan frame two pixels out from the lit control, pulsing; nothing when the beat's control is not on this screen.
+func _draw_light() -> void:
+	var t: Control = targets.get(_lit)
+	if t == null or not is_instance_valid(t) or not t.is_visible_in_tree():
+		return
+	var r := t.get_global_rect().grow(2)
+	var a := 0.7 + 0.3 * sin(Time.get_ticks_msec() / 160.0)
+	_light.draw_rect(r, Color(UiTheme.CYAN, a), false, 1.0)
+	_light.draw_rect(r.grow(1), Color(UiTheme.CYAN, a * 0.6), false, 1.0)
+	_light.draw_rect(r.grow(2), Color(UiTheme.CYAN, a * 0.25), false, 1.0)
 
 func _build_content(_c: Control) -> void:
 	pass

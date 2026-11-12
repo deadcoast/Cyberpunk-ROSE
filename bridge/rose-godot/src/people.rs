@@ -88,6 +88,12 @@ impl RosePeople {
         self.roster.records.len() as i64
     }
 
+    /// The city's sleepers (every record but a D5): its population for the tiers.
+    #[func]
+    fn sleepers(&self) -> i64 {
+        self.roster.sleepers() as i64
+    }
+
     /// Every living record's id, the Runners first (the roster's order).
     #[func]
     fn ids(&self) -> PackedInt32Array {

@@ -254,7 +254,7 @@ func _draw_card() -> void:
 		make_label(card, "STASH   tier %d   %d items   %d free" % [stash.tier(), stash.count(), stash.free_cells()], Vector2(6, 4), UiTheme.CYAN)
 		make_label(card, "click an item for its card", Vector2(6, 18), UiTheme.DUST)
 		make_label(card, "filters select the view; bulk acts on it", Vector2(6, 30), UiTheme.DUST)
-		make_label(card, "sells and feeds ride the Mat at shift end", Vector2(6, 42), UiTheme.DUST)
+		make_label(card, "sells and feeds ride the Mat within the minute", Vector2(6, 42), UiTheme.DUST)
 		make_label(card, "the grid grows with the Heart's tier", Vector2(6, 54), UiTheme.DUST)
 		return
 	var d: Dictionary = items.get(int(it.index))
@@ -411,7 +411,7 @@ func _draw_queue() -> void:
 	var foot := ""
 	var now: Dictionary = stash.landed()
 	if q.size() > 0:
-		foot = "%d queued: %d e, %.1f n   leave at shift end" % [q.size(), sell_sum, feed_sum]
+		foot = "%d queued: %d e, %.1f n   leave within the minute" % [q.size(), sell_sum, feed_sum]
 		if int(now.riding) > 0:
 			foot += "   %d on the Mat" % int(now.riding)
 	elif int(now.riding) > 0 or int(now.sold) + int(now.fed) > 0:
@@ -427,5 +427,5 @@ func _draw_queue() -> void:
 		if Sim.people_lines.size() > 0 and foot.length() + 3 + String(Sim.people_lines[0]).length() <= 54:
 			foot += "   " + String(Sim.people_lines[0])
 	else:
-		foot = "nothing queued   shift ends after a run"
+		foot = "nothing queued"
 	make_label(queue_panel, foot.left(54), Vector2(6, 70), UiTheme.DUST)

@@ -4,7 +4,7 @@ extends ScreenBase
 ## and its passive), the Memorial (the dead) and the Trophies (the twelve). Every rule is the progress crate's
 ## (RoseSim.codex); the screen reads it. Lore (Full Design v3.19) keeps every panel set seen and replays it.
 
-const TABS := ["SCRAPDEX", "STRAINBOOK", "SETS", "MEMORIAL", "TROPHIES", "LORE"]
+const TABS := ["SYSTEMS", "SCRAPDEX", "STRAINBOOK", "SETS", "MEMORIAL", "TROPHIES", "LORE"]
 
 var tab := "SCRAPDEX"
 var view: Control
@@ -61,6 +61,8 @@ func _draw() -> void:
 			_trophies()
 		"LORE":
 			_lore()
+		"SYSTEMS":
+			_systems()
 
 func _click(parent: Control, size_: Vector2, text: String) -> void:
 	var b := Button.new()
@@ -200,3 +202,18 @@ func _lore() -> void:
 		y += 16
 		if y > 280:
 			break
+
+## The city's systems as the first ten minutes met them (Full Design v3.21, Onboarding): an entry unlocks the first
+## time its system fires, with Ivan's line on it.
+func _systems() -> void:
+	var seen: Array = Sim.ensure().systems_seen()
+	make_label(view, "SYSTEMS   %d of 10 met" % seen.size(), Vector2(0, 2), UiTheme.CYAN)
+	var y := 18
+	if seen.is_empty():
+		make_label(view, "nothing yet: each system lands here the first time it fires", Vector2(0, y), UiTheme.DUST)
+	for e in seen:
+		make_label(view, String(e.title).to_upper(), Vector2(0, y), UiTheme.OOZE_GLOW)
+		var l := make_label(view, String(e.line), Vector2(120, y), UiTheme.CHALK)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD
+		l.size = Vector2(500, 20)
+		y += 26

@@ -211,7 +211,33 @@ impl RoseSim {
     /// Ivan's line on screen now, or "".
     #[func]
     fn bark(&self) -> GString {
+        // a first-ten-minutes beat speaks over the bark pools while it is live (Full Design v3.21, Onboarding)
+        if let Some(b) = self.campaign.onboarding.showing() {
+            return b.line.into();
+        }
         self.campaign.barker.current().unwrap_or("").into()
+    }
+
+    /// The first-ten-minutes beat showing: what the screen lights ("tool:build", "nav:route", "ghost",
+    /// "alert:newcomers", "clock"), or "" when none is live.
+    #[func]
+    fn onboarding_highlight(&self) -> GString {
+        self.campaign.onboarding.showing().map_or("", |b| b.highlight).into()
+    }
+
+    /// The Codex's Systems entries: each system the first ten minutes showed or the player used, in the tour's
+    /// order: {id, title, line}.
+    #[func]
+    fn systems_seen(&self) -> VarArray {
+        let mut out = VarArray::new();
+        for b in story::onboarding::BEATS.iter().filter(|b| self.campaign.onboarding.seen.iter().any(|s| s == b.id)) {
+            let mut d = VarDictionary::new();
+            d.set("id", b.id);
+            d.set("title", b.title);
+            d.set("line", b.line);
+            out.push(&d.to_variant());
+        }
+        out
     }
 
     /// A bark from the run (the Run HUD: runner_down) with the runner's name.

@@ -226,8 +226,7 @@ pub fn dispatch_shift(city: &mut City, colony: &mut Colony, defs: &StructureFile
     if city.heart_cell().is_none() {
         return lines;
     }
-    city.set_consumers(consumers(colony, defs, city, stash, ledger, table));
-    // products ride home from where they were made
+    // products ride home from where they were made (the consumers are published by dispatch_orders, below)
     let mut made = 0;
     let mut brine = o.brine;
     for &still in &o.stills {
@@ -260,7 +259,19 @@ pub fn dispatch_shift(city: &mut City, colony: &mut Colony, defs: &StructureFile
             lines.push(format!("the Salt Works made {n} salt: on the cords home"));
         }
     }
-    // the queue, then the quotas' pull, each from where its item lies
+    lines.extend(dispatch_orders(city, colony, defs, stash, ledger, table));
+    lines
+}
+
+/// The queue (sells, feeds) and the quotas' pull onto the cords, each from where its item lies: at a shift's end
+/// and every work cycle (Full Design v3.21, The living city), so a Feed or a Sell rides within the minute.
+pub fn dispatch_orders(city: &mut City, colony: &Colony, defs: &StructureFile, stash: &mut Stash, ledger: &mut Ledger, table: &ItemTable) -> Vec<String> {
+    let mut lines = Vec::new();
+    if city.heart_cell().is_none() {
+        return lines;
+    }
+    // what stands now takes cargo: a Pit or Still built this minute, the Heart's Pit from the founding on
+    city.set_consumers(consumers(colony, defs, city, stash, ledger, table));
     for (id, to, from) in ledger.dispatch_queue() {
         send(city, colony, defs, stash, id, to, from);
     }

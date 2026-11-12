@@ -9,7 +9,7 @@ use items::{ItemTable, Tier};
 use logistics::City;
 use people::{Record, Roster, Status};
 use story::campaign::{Accord, Campaign, Mode, ACCORD_CALM, BEAT_AUTHORITY, BLOOM_TILES, ENVOY_WAITS, GREAT_GRATES, GREAT_IN, SEEPAGE_SLIMOS, TAMED_GOAL};
-use story::chapters::{opens_at, ChapterFile};
+use story::chapters::{opens_at, opens_pop, ChapterFile};
 use threat::{Due, Role, Threats};
 
 use crate::log::{CityLog, Class};
@@ -92,8 +92,10 @@ fn goal_met(c: &Campaign, p: &Parts, day: u32) -> bool {
     let (colony, defs) = (&*p.colony, p.defs);
     match c.chapter {
         1 => {
+            // a D5 is a body and takes no bed (Recruitment): the goal counts the sleepers
             let (beds, _) = colony.bed_count(defs);
-            p.roster.records.len() >= SEEPAGE_SLIMOS && beds as usize >= p.roster.records.len()
+            let sleepers = p.roster.sleepers();
+            sleepers >= SEEPAGE_SLIMOS && beds as usize >= sleepers
         }
         2 => built(colony, defs, "forge") && built(colony, defs, "market") && p.economy.s.standing.iter().any(|s| s.traded > 0),
         3 => matches!(c.accord, Some(Accord::Accepted { .. } | Accord::Refused { .. })) && c.cleansing_sent && c.cleansing_at.is_some_and(|at| day >= at) && !cleansing_on(p.threats),
@@ -103,6 +105,38 @@ fn goal_met(c: &Campaign, p: &Parts, day: u32) -> bool {
         7 => c.cleansing_sent && c.great_at.is_some_and(|at| day >= at) && !cleansing_on(p.threats),
         _ => false,
     }
+}
+
+/// The founding's roster: more than this many is someone who joined.
+const FOUNDERS: usize = 6;
+
+/// The first ten minutes (Full Design v3.21, Onboarding): the city's facts as the beats read them, and the beats
+/// advanced on them — every work cycle and at a shift's end. A beat that fires is Ivan's line (`showing`).
+#[allow(clippy::too_many_arguments)]
+pub fn onboard(c: &mut Campaign, city: &City, colony: &Colony, defs: &StructureFile, roster: &Roster, ledger: &inventory::Ledger, economy: &economy::Economy, threats: &Threats) {
+    use inventory::{Dest, Verb};
+    if c.onboarding.beat as usize >= story::onboarding::BEATS.len() {
+        return;
+    }
+    let home = |s: &&colony::Structure| matches!(defs.structure[s.def].id.as_str(), "pod" | "bunkhouse");
+    let traded = economy.s.standing.iter().any(|s| s.traded > 0);
+    let f = story::onboarding::Facts {
+        // beyond the founders' Bunkhouse
+        home_placed: colony.structures.iter().filter(home).count() > 1,
+        home_built: colony.structures.iter().filter(home).filter(|s| s.built).count() > 1,
+        waiting: !roster.waiting.is_empty(),
+        joined: roster.records.len() > FOUNDERS,
+        fed: ledger.queue.iter().any(|q| matches!(q.verb, Verb::Feed { .. })) || ledger.in_flight.iter().any(|s| matches!(s.to, Dest::Pit(_))) || ledger.landed.fed > 0,
+        runs: roster.records.iter().map(|r| r.runs).sum::<u32>(),
+        out: roster.records.iter().any(|r| r.status == people::Status::OnRun),
+        sale: traded || ledger.queue.iter().any(|q| matches!(q.verb, Verb::Sell { .. })) || ledger.in_flight.iter().any(|s| matches!(s.to, Dest::Market(_))),
+        sold: traded || ledger.landed.sold > 0,
+        patrol: threats.events.iter().any(|e| threats.rules.stage[e.stage].id == "patrol"),
+        district: !colony.districts.is_empty(),
+        flood: threats.flood.level > 0,
+        cycle: (city.tick / crate::shift::WORK_TICKS) as u32,
+    };
+    c.onboarding.step(&f);
 }
 
 /// The reached grate nearest the Heart: the envoy's (chapter 3).
@@ -345,8 +379,8 @@ pub fn shift_end(c: &mut Campaign, p: &mut Parts, day: u32) -> Vec<String> {
         c.cleansing_sent = false;
         c.cleansing_at = None;
     }
-    // the next chapter opens when its stratum is reached
-    if c.open_since == 0 && p.threats.stratum >= opens_at(c.chapter) {
+    // the next chapter opens when its stratum is reached and the city is the size it waits for
+    if c.open_since == 0 && p.threats.stratum >= opens_at(c.chapter) && p.roster.sleepers() >= opens_pop(c.chapter) {
         let n = c.chapter;
         c.open_since = day;
         c.panels.push(format!("ch{n}.open"));
@@ -412,21 +446,26 @@ mod tests {
         shift_end(c, &mut p, day)
     }
 
+    /// The city grown to `n` slimos that sleep (a chapter's tier; a D5 takes no bed).
+    fn crowd(w: &mut crate::World, n: usize) {
+        let (t, names) = (people::TraitFile::shipped(), people::NameFile::shipped());
+        let mut rng = mat::rng::Pcg32::new(13);
+        while w.roster.sleepers() < n {
+            w.roster.create(&t, &names, &mut rng, 1, false);
+        }
+    }
+
     #[test]
     fn a_chapter_closes_on_its_goal_pays_its_beat_and_the_next_opens_with_its_stratum() {
         let mut w = world();
         assert_eq!(w.campaign.chapter, 1);
         assert_eq!(w.campaign.panels, vec!["ch1.open".to_string()]);
         let before = w.colony.charter.earned;
-        // not yet: the founders are fewer than eight
+        // not yet: the founders are fewer than a Hamlet
         end(&mut w, 1);
         assert_eq!(w.campaign.chapter, 1);
-        // eight with beds
-        let (t, n) = (people::TraitFile::shipped(), people::NameFile::shipped());
-        let mut rng = mat::rng::Pcg32::new(5);
-        while w.roster.records.len() < 8 {
-            w.roster.create(&t, &n, &mut rng, 2, false);
-        }
+        // a Hamlet with beds
+        crowd(&mut w, SEEPAGE_SLIMOS);
         w.colony.progress.tech = progress::Tech::every_structure();
         while (w.colony.bed_count(&w.defs).0 as usize) < w.roster.records.len() {
             let (hx, hy) = w.city.sim.heart.unwrap();
@@ -513,6 +552,10 @@ mod tests {
         w.campaign.chapter = 4;
         w.campaign.open_since = 0;
         w.threats.stratum = 3;
+        // the Storm Drains alone do not open it: the city waits to be a Quarter
+        end(&mut w, 5);
+        assert_eq!(w.campaign.open_since, 0, "a Hamlet in the Storm Drains waits");
+        crowd(&mut w, opens_pop(4));
         end(&mut w, 6);
         assert!(w.campaign.bloom);
         let wild: Vec<usize> = (0..w.city.sim.wild.len()).filter(|&i| w.city.sim.wild[i]).collect();
@@ -534,8 +577,12 @@ mod tests {
             let (c, mut p) = w.campaign_parts();
             ally(c, &mut p, nomads).unwrap();
         }
-        end(&mut w, 10);
+        // chapter 6 closes; 7 waits for the Empire's 2,000th slimo
+        end(&mut w, 9);
         assert_eq!(w.campaign.chapter, 7);
+        assert_eq!(w.campaign.great_at, None, "no Great Cleansing before the Empire");
+        crowd(&mut w, opens_pop(7));
+        end(&mut w, 10);
         assert_eq!(w.campaign.great_at, Some(16));
         for d in 11..15 {
             end(&mut w, d);

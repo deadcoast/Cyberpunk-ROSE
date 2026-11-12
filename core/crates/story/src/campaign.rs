@@ -109,8 +109,8 @@ pub const GREAT_IN: u32 = 6;
 pub const BLOOM_TILES: usize = 40;
 /// The goal of chapter 4 by taming: crawlers standing tamed.
 pub const TAMED_GOAL: usize = 2;
-/// Chapter 1's goal: slimos, every one with a bed.
-pub const SEEPAGE_SLIMOS: usize = 8;
+/// Chapter 1's goal: a Hamlet (Pass 2's first tier, 20), every one with a bed.
+pub const SEEPAGE_SLIMOS: usize = 20;
 /// A chapter's beat: Authority (the Charter's deeds).
 pub const BEAT_AUTHORITY: i32 = 2;
 /// Up to this many Undercroft grates send the Great Cleansing.
@@ -162,6 +162,9 @@ pub struct Campaign {
     pub ivan: Ivan,
     #[serde(default)]
     pub barker: crate::barks::Barker,
+    /// the first ten minutes' beats (Full Design v3.21, Onboarding)
+    #[serde(default)]
+    pub onboarding: crate::onboarding::Onboarding,
 }
 
 impl Default for Campaign {
@@ -202,6 +205,7 @@ impl Campaign {
             junk_last: 0,
             ivan: Ivan::default(),
             barker: crate::barks::Barker::new(0),
+            onboarding: crate::onboarding::Onboarding::default(),
         }
     }
 
@@ -275,7 +279,7 @@ mod tests {
     fn a_campaign_opens_on_chapter_one_with_its_panels_and_its_card() {
         let mut c = Campaign::default();
         assert_eq!(c.chapter, 1);
-        assert_eq!(c.card(1), "CH 1 SEEPAGE: 8 SLIMOS WITH BEDS");
+        assert_eq!(c.card(1), "CH 1 SEEPAGE: A HAMLET: 20 SLIMOS WITH BEDS");
         assert_eq!(c.take_panels().as_deref(), Some("ch1.open"));
         assert_eq!(c.set("ch1.open").len(), 4);
         c.chapter = 3;

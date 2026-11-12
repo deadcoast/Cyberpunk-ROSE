@@ -105,9 +105,11 @@ const SPARE_BEDS: i32 = 6;
 /// Below these cells joined to the Heart the Heart's Pit feeds whatever research wants (a Cleansing burns the Mat
 /// back to the Heart's few dozen; the founding leaves 107–290).
 const HUNGRY: usize = 100;
-/// Joined tissue a bed asks of the Mat: a slimo eats the surplus about its home or two eddies of paste, and a city of
-/// seven hundred ate every eddy it made and bought no Parts (this script's).
-const CELLS_A_MOUTH: usize = 80;
+/// More beds while the city eats: the last shift's paste meals at most one sleeper in this many, or the ledger holding
+/// PASTE_HELD shifts of paste for everyone (this script's; a city of seven hundred once ate every eddy it made and
+/// bought no Parts, so beds follow the food).
+const PASTE_SHARE: u32 = 10;
+const PASTE_HELD: u32 = 4;
 /// A Vault's Parts, and the Parts a Vault leaves for the frontier's Pit (the climb before the Blackline's shelter).
 const VAULT_PARTS: i32 = 12;
 const FRONT_PARTS: i32 = 4;
@@ -345,22 +347,51 @@ impl CampaignSteward {
     /// sheltered within two shifts goes feral), every ghost placed this shift, each where the Mat is richest.
     fn beds(&mut self, w: &mut World, out: &mut Vec<String>) {
         let def = if w.colony.progress.tech.structure_locked("bunkhouse").is_none() { "bunkhouse" } else { "pod" };
-        // no more mouths than the Mat joined to the Heart feeds: every slimo eats from the tissue about its home before
-        // paste (Homes, meals), and a city past it eats every nutrient the frontier would grow with
-        let fed = (logistics::joined_to_heart(&w.city.sim).iter().filter(|&&j| j).count() / CELLS_A_MOUTH) as i32;
-        let want = ((w.roster.records.len() + w.roster.waiting.len()) as i32 + SPARE_BEDS).min(fed.max(MOUTHS_LEAST));
-        let ghost_beds = |w: &World| -> i32 { w.colony.structures.iter().filter(|s| !s.built).filter_map(|s| w.defs.structure[s.def].beds.first().copied()).sum() };
+        // no more mouths than the city feeds: the Mat's larder (Homes, meals) or the ledger's paste
+        let sleepers = w.roster.sleepers() as u32;
+        let paste = w.last.as_ref().map_or(0, |o| o.paste_meals);
+        let eats = paste * PASTE_SHARE <= sleepers.max(PASTE_SHARE) || w.ledger.eddies >= PASTE_HELD * colony::PASTE_EDDIES * sleepers;
+        let want = if eats { (sleepers as usize + w.roster.waiting.len()) as i32 + SPARE_BEDS } else { (sleepers as i32).max(MOUTHS_LEAST) };
+        // beds on the way: ghosts' first tier, and an upgrade's step (the warren)
+        let ghost_beds = |w: &World| -> i32 {
+            w.colony
+                .structures
+                .iter()
+                .map(|s| {
+                    let beds = &w.defs.structure[s.def].beds;
+                    let at = |t: u8| beds.get(t as usize - 1).copied().unwrap_or(0);
+                    if !s.built {
+                        at(1)
+                    } else {
+                        s.upgrading_to.map_or(0, |to| at(to) - at(s.tier))
+                    }
+                })
+                .sum()
+        };
         // the Parts a ghost of the defences, a Vault, a Relay or a node waits on come first: a home is placed only
         // while the Stash keeps a reserve past every ghost's bill
         let parts = |w: &World| w.stash.handles().iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == Category::Part).count() as i32;
-        let owed = |w: &World| -> i32 { w.colony.structures.iter().filter(|s| !s.built && !s.paid).map(|s| w.defs.structure[s.def].cost.parts as i32).sum() };
+        let owed = |w: &World| -> i32 { w.colony.structures.iter().filter(|s| (!s.built || s.upgrading_to.is_some()) && !s.paid).map(|s| w.defs.structure[s.def].cost_at(s.upgrading_to.unwrap_or(1)).parts as i32).sum() };
+        let tier = colony::Colony::city_tier(sleepers as usize);
+        // while the story waits on the city's size — chapter 1's Hamlet, or a chapter that opens at a tier the city
+        // is short of — beds are the goal and no reserve is held back from them, as a player spends on Bunkhouses
+        let waits_on_size = w.campaign.chapter <= 1 || (w.campaign.open_since == 0 && (sleepers as usize) < story::chapters::opens_pop(w.campaign.chapter));
+        let reserve = if waits_on_size { w.defs.get(def).map_or(0, |d| d.cost.parts as i32) } else { BED_RESERVE };
         for _ in 0..8 {
             let (beds, _) = w.colony.bed_count(&w.defs);
-            if beds + ghost_beds(w) >= want || parts(w) - owed(w) < BED_RESERVE {
+            if beds + ghost_beds(w) >= want || parts(w) - owed(w) < reserve {
                 break;
             }
-            // a slimo with a bed eats from the tissue about its home (Homes, meals): away from the Heart, on the
-            // Deposits, else where the Mat holds most; with no such spot, nearest the Heart as before
+            // a Bunkhouse raised to the city's tier first: its next step's beds for its first cost (the warren)
+            let raise = w.colony.structures.iter().find(|s| s.built && s.upgrading_to.is_none() && s.tier < tier && w.defs.structure[s.def].id == "bunkhouse").map(|s| (s.id, s.x, s.y));
+            if let Some((id, x, y)) = raise {
+                if let Ok(to) = w.colony.upgrade(&w.defs, id, tier) {
+                    out.push(format!("the Bunkhouse at {x},{y} raised to tier {to} for the slimos and the newcomers without beds"));
+                    continue;
+                }
+            }
+            // away from the Heart, on the Deposits, else where the Mat holds most; with no such spot, nearest the
+            // Heart as before
             let Some((x, y)) = richest_spot(w, def).or_else(|| nearest_spot(w, def, heart_xy(w))) else { break };
             if w.colony.place(&w.defs, &w.city.sim, def, x, y).is_err() {
                 break;
@@ -618,7 +649,9 @@ impl CampaignSteward {
     fn buy(&mut self, w: &mut World, out: &mut Vec<String>) {
         // never Chrome the steering would keep off the Pits
         let hold = self.aim.map(|a| held(w, a)).unwrap_or_default();
-        for (cat, want, what) in [(Category::Chrome, CHROME_WANTED, "Chrome"), (Category::Part, PARTS_WANTED, "Parts")] {
+        // and a Bunkhouse's Parts for every six waiting at a grate: the beds the city's food allows (Homes, meals)
+        let beds_wanted = w.roster.waiting.iter().filter(|(r, _)| r.depth != people::Depth::D5).count().div_ceil(6) * 10;
+        for (cat, want, what) in [(Category::Chrome, CHROME_WANTED, "Chrome"), (Category::Part, PARTS_WANTED + beds_wanted, "Parts")] {
             let have = w.stash.handles().iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == cat).count();
             let riding: u16 = w.ledger.orders.iter().filter(|o| w.economy.stock_item(o.faction, o.entry).is_some_and(|i| w.table.def(i).category == cat)).map(|o| o.units).sum();
             if have + riding as usize >= want || w.ledger.eddies < EDDY_RESERVE {
@@ -878,13 +911,23 @@ fn lead(aim: Aim, genome: &[f32; 10], chapter: u8, ally_rep: i32) -> f32 {
 fn held(w: &World, aim: Aim) -> Vec<usize> {
     let own = if aim.ending == "scattered" { "garden" } else { aim.ending };
     let g = w.city.sim.genome.0;
-    let mut rivals: Vec<Vec<usize>> = story::ChapterFile::shipped()
-        .ending
-        .iter()
-        .filter(|e| e.id != own && e.genes.len() == 2)
-        .map(|e| e.genes.iter().filter_map(|k| progress::strain::gene_index(k)).filter(|k| !aim.genes.contains(k)).collect::<Vec<usize>>())
-        .filter(|gs| w.campaign.chapter >= 4 || gs.len() == 1)
-        .collect();
+    let f = story::ChapterFile::shipped();
+    let own_ally = f.ending(own).map_or(0.0, |e| e.ally);
+    let mut rivals: Vec<Vec<usize>> = Vec::new();
+    for e in f.ending.iter().filter(|e| e.id != own && e.genes.len() == 2) {
+        let gs: Vec<usize> = e.genes.iter().filter_map(|k| progress::strain::gene_index(k)).filter(|k| !aim.genes.contains(k)).collect();
+        // a rival the alliance tips toward (the World-Eater's Garden) is held on both its genes from the founding:
+        // every script signs an alliance at chapter 6, and its reputation's steps are worth a tenth of a gene each to
+        // that rival, more than a campaign's feeds leave between two pairs that have all climbed
+        if e.ally > own_ally {
+            rivals.extend(gs.iter().map(|&k| vec![k]));
+            continue;
+        }
+        if w.campaign.chapter < 4 && gs.len() != 1 {
+            continue;
+        }
+        rivals.push(gs);
+    }
     let mut held = Vec::new();
     while let Some(k) = (0..10).filter(|k| rivals.iter().any(|r| r.contains(k))).max_by(|&a, &b| {
         let covers = |k: usize| rivals.iter().filter(|r| r.contains(&k)).count();
@@ -981,7 +1024,7 @@ pub fn play(seed: u64, aim: Aim, max: u32, each: &mut dyn FnMut(&CampaignShift, 
             stratum: w.threats.stratum,
             run_on,
             result: rec.result.clone(),
-            population: w.roster.records.len(),
+            population: w.roster.sleepers(),
             beds: w.colony.bed_count(&w.defs).0,
             cells: joined.iter().filter(|&&j| j).count(),
             top_row: (0..joined.len()).filter(|&i| joined[i]).map(|i| i / w.city.sim.w).min().unwrap_or(0),

@@ -323,6 +323,25 @@ impl RoseSim {
         }
     }
 
+    /// The anchors in a rect of tiles where the def may stand (turned or not), as x, y pairs: the Build tool's map of
+    /// where it can go (Full Design v3.21, this design's).
+    #[func]
+    fn place_spots(&mut self, def_id: GString, x0: i64, y0: i64, w: i64, h: i64, rotated: bool) -> PackedInt32Array {
+        let mut out = PackedInt32Array::new();
+        let defs = self.defs().clone();
+        let Some(c) = &self.city else { return out };
+        let id = def_id.to_string();
+        for y in y0.max(0)..(y0 + h).min(c.sim.h as i64) {
+            for x in x0.max(0)..(x0 + w).min(c.sim.w as i64) {
+                if self.colony.can_place_r(&defs, &c.sim, &id, x as u16, y as u16, rotated).is_ok() {
+                    out.push(x as i32);
+                    out.push(y as i32);
+                }
+            }
+        }
+        out
+    }
+
     /// Order a slimo to work a structure the next shift (over its priorities). "" or why not.
     #[func]
     fn order(&mut self, slimo: i64, structure: i64) -> GString {

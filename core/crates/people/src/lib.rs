@@ -948,8 +948,8 @@ pub struct Roster {
     pub d4_runs: bool,
 }
 
-/// The flush (Full Design v3.12, Recruitment): a batch of 1–6 every 9–15 shifts; a newcomer not sheltered within
-/// two shifts goes feral.
+/// The flush (Full Design v3.21, Recruitment): a batch of 1–6 every 9–15 work cycles (minutes of the city's clock:
+/// Pass 1's three to five days of one-minute shifts); a newcomer not sheltered within ten cycles goes feral.
 pub const FLUSH_SIZE: (u32, u32) = (1, 6);
 
 /// A flush's batch at a grate of `stratum` (Full Design v3.19, Newcomers by stratum): FLUSH_SIZE for each stratum of
@@ -964,10 +964,14 @@ pub fn flush_size(rng: &mut Pcg32, stratum: u8, mult: f32) -> u32 {
 }
 
 pub const FLUSH_EVERY: (u32, u32) = (9, 15);
-pub const FERAL_AFTER: u8 = 2;
-/// The census's (Full Design v3.18, Research: Flesh tier 4).
+/// Work cycles a newcomer waits at its grate for a bed: about a run's length, so a city whose Runner is out finds
+/// them still there if it comes home in time.
+pub const FERAL_AFTER: u8 = 10;
+/// The census's (Full Design v3.18, Research: Flesh tier 4), in work cycles.
 pub const CENSUS_EVERY: (u32, u32) = (6, 10);
-pub const CENSUS_WAIT: u8 = 4;
+pub const CENSUS_WAIT: u8 = 20;
+/// The first batch comes down at the fourth cycle (Pass 2: "4:00, first newcomer batch drops at the grate").
+pub const FIRST_FLUSH: u32 = 4;
 
 /// What a run tells the roster (Full Design: Skills and XP).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -1022,15 +1026,15 @@ impl Roster {
         self.records.iter_mut().find(|r| r.id == id)
     }
 
-    /// A flush comes down at the end of shift `day` when its time has come: the batch joins the waiting list.
-    /// Returns how many came.
-    pub fn flush(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, mult: f32) -> usize {
-        if day < self.next_flush.max(1) {
+    /// A flush comes down at work cycle `cycle` when its time has come: the batch joins the waiting list (`day` is
+    /// the shift their records are born on). Returns how many came.
+    pub fn flush(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, cycle: u32, day: u32, mult: f32) -> usize {
+        if cycle < self.next_flush.max(FIRST_FLUSH) {
             return 0;
         }
         let n = flush_size(rng, 1, mult);
         self.batch(traits, names, rng, day, n);
-        self.next_flush = day + self.flush_gap(rng);
+        self.next_flush = cycle + self.flush_gap(rng);
         n as usize
     }
 
@@ -1040,20 +1044,21 @@ impl Roster {
     }
 
     /// The further grates the Mat reaches (all but the first, whose clock is `next_flush`): each keeps its own clock
-    /// from the shift it is first reached (Full Design v3.18, City tiers). Returns how many came.
-    pub fn flush_grates(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, grates: &[(u16, u8)], mult: f32) -> usize {
+    /// from the cycle it is first reached (Full Design v3.18, City tiers), Returns how many came.
+    #[allow(clippy::too_many_arguments)]
+    pub fn flush_grates(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, cycle: u32, day: u32, grates: &[(u16, u8)], mult: f32) -> usize {
         let mut came = 0;
         for &(g, stratum) in grates {
             match self.grate_flush.iter().position(|c| c.0 == g) {
                 None => {
-                    let next = day + self.flush_gap(rng);
+                    let next = cycle + self.flush_gap(rng);
                     self.grate_flush.push((g, next));
                 }
-                Some(k) if day >= self.grate_flush[k].1 => {
+                Some(k) if cycle >= self.grate_flush[k].1 => {
                     let n = flush_size(rng, stratum, mult);
                     self.batch(traits, names, rng, day, n);
                     came += n as usize;
-                    self.grate_flush[k].1 = day + self.flush_gap(rng);
+                    self.grate_flush[k].1 = cycle + self.flush_gap(rng);
                 }
                 _ => {}
             }
@@ -1098,17 +1103,17 @@ impl Roster {
         n as usize
     }
 
-    /// Shelter the waiting while beds are free (`beds` of them) and the Mat reaches a grate; the rest wait a shift
-    /// more, and those past FERAL_AFTER go feral. Returns (joined, gone feral) by name.
-    pub fn shelter(&mut self, beds: usize, reached: bool) -> (Vec<String>, Vec<String>) {
-        let (mut joined, mut feral) = (Vec::new(), Vec::new());
+    /// Shelter the waiting while beds are free (`beds` of them) and the Mat reaches a grate; the rest wait a cycle
+    /// more, and those past FERAL_AFTER go feral. Returns (joined, gone feral, flesh piles the Mat took) by name.
+    pub fn shelter(&mut self, beds: usize, reached: bool) -> (Vec<String>, Vec<String>, Vec<String>) {
+        let (mut joined, mut feral, mut taken) = (Vec::new(), Vec::new(), Vec::new());
         let mut free = if reached { beds } else { 0 };
         let mut keep = Vec::new();
         for (r, waited) in std::mem::take(&mut self.waiting) {
             if reached && r.depth == Depth::D5 {
-                // a D5 is a body, not a sleeper: it is the Heart's to dissolve and takes no bed
-                joined.push(r.full_name());
-                self.records.push(r);
+                // a D5 off the street is a flesh pile, not a sleeper and not yet one of ours (Full Design v3.21,
+                // Recruitment): the Mat at the grate takes it, and the caller feeds it in
+                taken.push(r.full_name());
             } else if free > 0 {
                 free -= 1;
                 joined.push(r.full_name());
@@ -1120,7 +1125,13 @@ impl Roster {
             }
         }
         self.waiting = keep;
-        (joined, feral)
+        (joined, feral, taken)
+    }
+
+    /// The city's sleepers: every record but a D5 (a flesh pile, which takes no bed and is not counted in the city's
+    /// tiers; Full Design v3.21).
+    pub fn sleepers(&self) -> usize {
+        self.records.iter().filter(|r| r.depth != Depth::D5).count()
     }
 
     /// Roll a newcomer (Full Design: Creation). `deep_weights` shifts the depth table toward the deep (chapter 5).

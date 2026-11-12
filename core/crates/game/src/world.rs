@@ -12,8 +12,9 @@ use crate::log::CityLog;
 use crate::shift::{self, Folk, Shift, Store, Town};
 use crate::{alerts, cargo};
 
-/// The founding Stash: what the city starts with (Full Design, the starting haul), each at its condition.
-pub const STARTING_HAUL: [(&str, u8); 14] = [
+/// The founding Stash: what the city starts with (Full Design v3.21, The city's clock), each at its condition — a
+/// Runner's kit and twenty Parts: two Bunkhouses, the founders' beds and the first batch's at minute four.
+pub const STARTING_HAUL: [(&str, u8); 31] = [
     ("chr_street_eye", 82),
     ("prt_pipe", 71),
     ("ger_nail_rifle", 64),
@@ -28,6 +29,23 @@ pub const STARTING_HAUL: [(&str, u8); 14] = [
     ("org_antiseptic", 95),
     ("prt_salt", 92),
     ("org_stim", 70),
+    ("prt_wire", 80),
+    ("prt_bearing", 74),
+    ("prt_cloth", 66),
+    ("prt_cell_dead", 58),
+    ("prt_board_fried", 61),
+    ("prt_tarp", 77),
+    ("prt_valve", 69),
+    ("prt_pipe", 63),
+    ("prt_wire", 72),
+    ("prt_lens", 55),
+    ("prt_bearing", 81),
+    ("prt_cloth", 70),
+    ("prt_blade_stock", 66),
+    ("prt_tarp", 59),
+    ("prt_valve", 74),
+    ("prt_cell_dead", 62),
+    ("prt_board_fried", 68),
 ];
 
 /// Put the starting haul into a Stash.
@@ -109,6 +127,7 @@ impl World {
         let defs = StructureFile::shipped();
         let mut colony = Colony::new();
         colony.found(&defs, &city.sim).expect("the founding stratum takes the city");
+        colony.found_home(&defs, &city.sim);
         let traits = TraitFile::shipped();
         let names = NameFile::shipped();
         let mut roster = Roster::new();
@@ -194,6 +213,14 @@ impl World {
         crate::pressure::tick(&mut self.threats, &mut self.city, &mut self.colony, &self.defs, &self.posts, &mut self.log, &landed);
         self.sales.extend(landed.sold);
         crate::ivan::voice(&mut self.campaign, &self.colony, &self.city.sim, &mut self.threats, &mut self.log, self.city.tick);
+        if self.city.tick.is_multiple_of(shift::WORK_TICKS) {
+            let (flush_mult, _) = crate::campaign::mults(&self.campaign, &self.city.sim);
+            let folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
+            self.plan = shift::work_cycle(&mut self.city, &mut self.colony, &self.defs, folk, &mut self.stash, &mut self.ledger, &self.table, flush_mult, self.day, &mut self.log);
+        }
+        if self.city.tick.is_multiple_of(shift::LOOK_TICKS) {
+            crate::campaign::onboard(&mut self.campaign, &self.city, &self.colony, &self.defs, &self.roster, &self.ledger, &self.economy, &self.threats);
+        }
     }
 
     /// The run comes home: the roster takes it, the rig goes into the Stash.
@@ -208,9 +235,9 @@ impl World {
     pub fn end_shift(&mut self) -> Shift {
         let mut folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
         let loop_lines = crate::loops::play(&mut self.colony, &mut folk, &mut self.stash, &self.table, Some(&self.threats), &self.city.sim, self.threats.seed, self.day, self.city.tick, &mut self.log);
-        let (flush_mult, gain_mult) = crate::campaign::mults(&self.campaign, &self.city.sim);
+        let (_, gain_mult) = crate::campaign::mults(&self.campaign, &self.city.sim);
         self.threats.campaign.gain_mult = gain_mult;
-        let town = Town { city: &mut self.city, colony: &mut self.colony, defs: &self.defs, flush_mult };
+        let town = Town { city: &mut self.city, colony: &mut self.colony, defs: &self.defs };
         let store = Store { stash: &mut self.stash, ledger: &mut self.ledger, bench: &mut self.bench, table: &self.table, recipes: &self.recipes };
         let folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
         let mut s = shift::end_shift(town, store, folk, self.day, &mut self.log);

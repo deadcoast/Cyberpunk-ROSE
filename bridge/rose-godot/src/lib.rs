@@ -39,6 +39,10 @@ pub struct RoseSim {
     laws: Option<colony::LawFile>,
     /// the city's one Stash, bound so cargo can land as it arrives (Full Design v3.11, Cargo)
     stash: Option<Gd<RoseStash>>,
+    /// the roster the work clock reads (bound by refresh_movers, as the Stash is by bind_stash)
+    people: Option<Gd<RosePeople>>,
+    /// the day the shift being worked belongs to (refresh_movers'), for the work clock's plan
+    work_day: u32,
     /// the city's log (landings, losses, decisions) and the last shift's outcome, for the alerts (v3.12)
     log: game::CityLog,
     last_outcome: Option<colony::ShiftOutcome>,
@@ -269,6 +273,26 @@ impl RoseSim {
                         game::ivan::tick(&mut self.campaign, c, t, &mut self.log);
                         game::pressure::tick(t, c, &mut self.colony, &defs, &self.posts, &mut self.log, &landed);
                         game::ivan::voice(&mut self.campaign, &self.colony, &c.sim, t, &mut self.log, c.tick);
+                    }
+                    // the city's work clock (Full Design v3.21, The living city): the same cycle the headless world runs
+                    let work = c.tick.is_multiple_of(game::shift::WORK_TICKS);
+                    if work || c.tick.is_multiple_of(game::shift::LOOK_TICKS) {
+                        if let Some(people) = self.people.as_mut() {
+                            let mut p = people.bind_mut();
+                            p.ensure();
+                            let p = &mut *p;
+                            if work {
+                                let (traits, names) = (p.traits.clone().unwrap(), p.names.clone().unwrap());
+                                let (stash, table) = (st.stash.as_mut().unwrap(), st.table.as_ref().unwrap());
+                                let (flush_mult, _) = game::campaign::mults(&self.campaign, &c.sim);
+                                let folk = game::Folk { roster: &mut p.roster, traits: &traits, names: &names, died: &mut p.died_this_shift };
+                                self.plan = game::shift::work_cycle(c, &mut self.colony, &defs, folk, stash, &mut st.ledger, table, flush_mult, self.work_day, &mut self.log);
+                                self.posts = threat::Posts::from_plan(&self.plan, &p.roster);
+                            }
+                            if let (Some(e), Some(t)) = (self.economy.as_ref(), self.threats.as_ref()) {
+                                game::campaign::onboard(&mut self.campaign, c, &self.colony, &defs, &p.roster, &st.ledger, e, t);
+                            }
+                        }
                     }
                 }
                 c.sim.changed.len() as i64
@@ -708,6 +732,8 @@ impl RoseSim {
             let s = c.sim.stats();
             let cs = c.stats();
             d.set("tick", s.tick as i64);
+            // the city's own clock (2 Hz): the HUD's time
+            d.set("city_tick", c.tick as i64);
             d.set("tips", s.tips as i64);
             d.set("cords", s.cords as i64);
             d.set("nodes", s.nodes as i64);
@@ -748,7 +774,8 @@ impl RoseSim {
         self.defs.as_ref().unwrap()
     }
 
-    /// Found the city on the grown Mat: the Heart, a Route Board, a tier-1 Bench, a Pit on every Relay. Once.
+    /// Found the city on the grown Mat: the Heart, a Route Board, a tier-1 Bench, a Pit on every Relay, the founders'
+    /// Bunkhouse. Once.
     #[func]
     fn found_city(&mut self) -> bool {
         if !self.colony.structures.is_empty() {
@@ -758,6 +785,7 @@ impl RoseSim {
         match &self.city {
             Some(c) => match self.colony.found(&defs, &c.sim) {
                 Ok(()) => {
+                    self.colony.found_home(&defs, &c.sim);
                     // New Game+: the profile's laws unlocked and its Scrapdex kept
                     if let Some(p) = self.carry.take() {
                         game::meta::carry(&p, &mut self.colony);
@@ -1085,11 +1113,11 @@ impl RoseSim {
                 let city_seed = self.economy.as_ref().map_or(0, |e| e.s.seed);
                 game::loops::play(&mut self.colony, &mut folk, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), self.threats.as_ref(), &city.sim, city_seed, day.max(1) as u32, city.tick, &mut self.log)
             };
-            let (flush_mult, gain_mult) = game::campaign::mults(&self.campaign, &city.sim);
+            let (_, gain_mult) = game::campaign::mults(&self.campaign, &city.sim);
             if let Some(t) = self.threats.as_mut() {
                 t.campaign.gain_mult = gain_mult;
             }
-            let town = game::Town { city, colony: &mut self.colony, defs: &defs, flush_mult };
+            let town = game::Town { city, colony: &mut self.colony, defs: &defs };
             let store = game::Store { stash: st.stash.as_mut().unwrap(), ledger: &mut st.ledger, bench: &mut st.bench, table: st.table.as_ref().unwrap(), recipes: st.recipes.as_ref().unwrap() };
             let folk = game::Folk { roster: &mut p.roster, traits: &traits, names: &names, died: &mut p.died_this_shift };
             let mut shift = game::end_shift(town, store, folk, day.max(1) as u32, &mut self.log);
@@ -1148,6 +1176,8 @@ impl RoseSim {
     /// colony's plan for that shift gives them; a Runner on a run is off the map.
     #[func]
     fn refresh_movers(&mut self, people: Gd<RosePeople>, day: i64) {
+        self.people = Some(people.clone());
+        self.work_day = day.max(1) as u32;
         let defs = self.defs().clone();
         let Some(city) = self.city.as_mut() else { return };
         let mut people = people;
@@ -1163,6 +1193,10 @@ impl RoseSim {
             let mut st = st.bind_mut();
             st.ensure();
             game::trade::start_shift(e, &mut st.ledger, city, &self.colony, &defs, &p.roster, &names, &self.plan, self.threats.as_ref(), day.max(1) as u32, self.raiders, &mut self.log);
+            // the first ten minutes read the city at the shift's start too: the founding's beat, a run home
+            if let Some(t) = self.threats.as_ref() {
+                game::campaign::onboard(&mut self.campaign, city, &self.colony, &defs, &p.roster, &st.ledger, e, t);
+            }
         }
     }
 

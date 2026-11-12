@@ -19,6 +19,9 @@ pub const STRUCTURES_TOML: &str = include_str!("../../../../data/structures.toml
 pub const SIGNAL_FLOOR: f32 = 0.3;
 /// Cords from a hub within which structures and beds belong to its district (Pass 2: 12 cords).
 pub const DISTRICT_CORDS: u32 = 12;
+/// Each ghost's crew in a work cycle: (Hands, a Forge in the district) a builder.
+type Builders = HashMap<u32, Vec<(i32, bool)>>;
+
 /// Shifts a dissolved district's Node cannot hub again.
 pub const HUB_BAR_SHIFTS: u32 = 10;
 /// Built structures a hub needs to form a district.
@@ -35,6 +38,9 @@ pub const PETITION_AFTER: u8 = 2;
 /// floor this replaced starved a fed city onto paste; PAC-045: four sleepers drawing on one anchor tile starved two of
 /// them while the tiles about it held their meals).
 pub const MEAL_TAKES: f32 = 0.05;
+/// The share of each tile's surplus a shift's meals may take (Full Design v3.21, Homes, meals; this design's: eaten to
+/// the reserve line, two thousand sleepers held a Mat burned back by a Cleansing at 3,400 cells for 150 shifts).
+pub const LARDER_SHARE: f32 = 0.5;
 pub const PASTE_EDDIES: u32 = 2;
 /// City tiers by population: Hamlet, Quarter, City, Empire.
 pub const CITY_TIERS: [usize; 4] = [20, 100, 500, 2000];
@@ -252,7 +258,13 @@ impl StructureDef {
         out
     }
     /// Cost of a tier (tier 2 is twice tier 1, tier 3 three times).
+    /// What raising it to `tier` costs: the cost times the tier; a home every step at its first cost (Full Design
+    /// v3.21, this design's: a Bunkhouse becomes the Quarter's and the City's warren, and at the tier's multiple two
+    /// thousand sleepers asked twelve thousand Parts, a hundred times what a shift's runs and stalls bring).
     pub fn cost_at(&self, tier: u8) -> Cost {
+        if self.category == "homes" {
+            return self.cost;
+        }
         self.cost.times(tier.max(1) as u32)
     }
     pub fn build_at(&self, tier: u8) -> u32 {
@@ -1294,6 +1306,26 @@ impl Colony {
         Ok(())
     }
 
+    /// The founders' Bunkhouse (Full Design v3.21, this design's), built on the nearest tissue that takes it outside
+    /// the Heart's own ring (three tiles round it are the Turrets' and the Heart's district's): the six who came down
+    /// with the Heart have their bunks, so the first home the player builds is the newcomers'.
+    pub fn found_home(&mut self, defs: &StructureFile, mat: &MatSim) {
+        let Some((hx, hy_)) = mat.heart else { return };
+        'home: for r in 5..20i32 {
+            for dy in -r..=r {
+                for dx in -r..=r {
+                    if dx.abs() != r && dy.abs() != r {
+                        continue;
+                    }
+                    let (x, y) = (hx as i32 + dx, hy_ as i32 + dy);
+                    if x >= 0 && y >= 0 && self.place_built(defs, mat, "bunkhouse", x as u16, y as u16, 1).is_ok() {
+                        break 'home;
+                    }
+                }
+            }
+        }
+    }
+
     // ------------------------------------------------------------ zones
 
     /// A cell a zone may hold: signalled Mat, or walkable floor touching signalled Mat.
@@ -2001,6 +2033,124 @@ impl Colony {
         out
     }
 
+    /// Who builds what in a plan: each ghost's crew (Hands, a Forge in the district) and each cut's Hands.
+    fn crews(&self, defs: &StructureFile, roster: &Roster, jobs: &[(u32, Job, u32)]) -> (Builders, HashMap<u32, i32>) {
+        let forge_districts: std::collections::HashSet<u32> = self.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "forge").filter_map(|s| s.district).collect();
+        let mut builders: HashMap<u32, Vec<(i32, bool)>> = HashMap::new();
+        let mut cutters: HashMap<u32, i32> = HashMap::new();
+        for &(slimo, _, sid) in jobs.iter().filter(|j| j.1 == Job::Build) {
+            let Some(r) = roster.get(slimo) else { continue };
+            if self.cuts.iter().any(|c| c.id == sid) {
+                *cutters.entry(sid).or_insert(0) += r.stat(Stat::Hands);
+            } else if let Some(s) = self.get(sid) {
+                builders.entry(sid).or_default().push((r.stat(Stat::Hands), s.district.is_some_and(|dd| forge_districts.contains(&dd))));
+            }
+        }
+        (builders, cutters)
+    }
+
+    /// A work cycle (Full Design v3.21, The living city): every `WORK_TICKS` city ticks the plan's builders put their
+    /// Hands into the ghosts, cuts and repairs they were given, so what is placed rises while the player watches
+    /// instead of waiting for the shift's end. Returns what was built, upgraded, mended or cut, and what waits on the
+    /// Stash.
+    pub fn work_cycle(&mut self, defs: &StructureFile, mat: &mut MatSim, roster: &Roster, jobs: &[(u32, Job, u32)], pay: &mut dyn FnMut(Cost) -> bool) -> ShiftOutcome {
+        let mut out = ShiftOutcome::default();
+        let (builders, cutters) = self.crews(defs, roster, jobs);
+        self.raise(defs, mat, builders, cutters, pay, &mut out);
+        out
+    }
+
+    /// The builders' work (Full Design v3.21, The living city), first asked first: a ghost is paid by its first Build
+    /// work, and the crew of one the Stash cannot pay for goes on to the next work in the order, so builders are never
+    /// idle while there is work they can do. Called by every work cycle and by the shift's end.
+    fn raise(&mut self, defs: &StructureFile, mat: &mut MatSim, mut builders: Builders, cutters: HashMap<u32, i32>, pay: &mut dyn FnMut(Cost) -> bool, out: &mut ShiftOutcome) {
+        let mut spare: Vec<(i32, bool)> = Vec::new();
+        let mut done = Vec::new();
+        for (sid, _) in self.build_work(defs) {
+            if let Some(h) = cutters.get(&sid) {
+                spare.push((*h, false));
+            }
+            if let Some(ci) = self.cuts.iter().position(|c| c.id == sid) {
+                // the cuts: eight points a tile, then the Mat is severed there
+                let points: i32 = std::mem::take(&mut spare).iter().map(|(h, _)| *h).sum();
+                let c = &mut self.cuts[ci];
+                c.progress += points.max(0) as u32;
+                if c.progress >= CUT_POINTS {
+                    mat.sever(c.x as usize, c.y as usize);
+                    out.cut.push((c.x, c.y));
+                    out.lines.push(format!("a cord cut at {},{}", c.x, c.y));
+                    done.push(c.id);
+                }
+                continue;
+            }
+            let mut crew = builders.remove(&sid).unwrap_or_default();
+            crew.append(&mut spare);
+            if crew.is_empty() {
+                continue;
+            }
+            let Some(idx) = self.structures.iter().position(|s| s.id == sid) else { continue };
+            let def = defs.structure[self.structures[idx].def].clone();
+            // mending: 2 x Hands a builder (doubled by a Forge in the district), up to the structure's HP; what is
+            // left of the crew goes on to the next work
+            if self.damaged(defs, &self.structures[idx]) {
+                let max = self.hp_max(defs, &self.structures[idx]);
+                let s = &mut self.structures[idx];
+                let mut gave = 0;
+                for (h, forge) in crew {
+                    if s.hp >= max {
+                        spare.push((h, forge));
+                        continue;
+                    }
+                    let m = (MEND_PER_HANDS * h * if forge { 2 } else { 1 }).max(0).min(max - s.hp);
+                    s.hp += m;
+                    gave += m;
+                }
+                if gave > 0 {
+                    out.mended.push((sid, gave));
+                    out.lines.push(format!("{} at {},{} mended {gave} HP ({}/{max})", def.name, s.x, s.y, s.hp));
+                }
+                continue;
+            }
+            let to = self.structures[idx].upgrading_to.unwrap_or(1);
+            if !self.structures[idx].paid {
+                let cost = def.cost_at(to);
+                if pay(cost) {
+                    self.structures[idx].paid = true;
+                } else {
+                    out.waiting.push((sid, cost));
+                    spare = crew;
+                    continue;
+                }
+            }
+            let points: i32 = crew.iter().map(|(h, forge)| if *forge { h * 2 } else { *h }).sum();
+            let (hp_to, hp_one) = (self.hp_max_of(defs, self.structures[idx].def, to), self.hp_max_of(defs, self.structures[idx].def, 1));
+            let s = &mut self.structures[idx];
+            s.progress += points.max(0) as u32;
+            if s.progress >= def.build_at(to) {
+                if s.built {
+                    s.tier = to;
+                    s.upgrading_to = None;
+                    s.hp = hp_to;
+                    out.upgraded.push(sid);
+                    out.lines.push(format!("{} upgraded to tier {}", def.name, to));
+                } else {
+                    s.built = true;
+                    s.hp = hp_one;
+                    out.built.push(sid);
+                    out.lines.push(format!("{} built at {},{}", def.name, s.x, s.y));
+                    // a Relay raised is a nerve: a signal source that never starves
+                    if def.id == "relay" {
+                        let (rx, ry) = (s.x, s.y);
+                        mat.place_relay(rx as usize, ry as usize);
+                        out.relays.push((rx, ry));
+                    }
+                }
+                s.progress = 0;
+            }
+        }
+        self.cuts.retain(|c| !done.contains(&c.id));
+    }
+
     /// The shift (Full Design, Homes, meals, light, water, sleep; Building; Districts; Petitions). `pay` takes a
     /// cost out of the Stash and says whether it could; `ledger_eddies` is what the ledger holds for paste and oil;
     /// `shift_of_day` 0 Dim, 1 Dark, 2 Flood. The roster is read, not written: the bridge applies `work` and
@@ -2009,7 +2159,7 @@ impl Colony {
     pub fn end_shift(&mut self, defs: &StructureFile, mat: &mut MatSim, roster: &Roster, traits: &TraitFile, shift_of_day: u8, ledger_eddies: u32, pay: &mut dyn FnMut(Cost) -> bool) -> ShiftOutcome {
         self.shift += 1;
         let mut out = ShiftOutcome::default();
-        let city_tier = Self::city_tier(roster.records.len());
+        let city_tier = Self::city_tier(roster.sleepers());
         // the wave's yardstick, homes and districts first: unrest and jobs read them
         self.refresh_heart_dist(mat);
         self.assign_homes(defs, roster, traits, mat);
@@ -2140,93 +2290,7 @@ impl Colony {
         let medics = out.treated.len();
         out.work.treatments_by = out.treated.clone();
         out.treated = patients.into_iter().take(medics).collect();
-        // building, first asked first: a ghost is paid by its first Build shift; the crew of one the Stash cannot pay
-        // for goes on to the next work in the order, so builders are never idle while there is work they can do
-        let mut spare: Vec<(i32, bool)> = Vec::new();
-        let mut done = Vec::new();
-        for (sid, _) in self.build_work(defs) {
-            if let Some(h) = cutters.get(&sid) {
-                spare.push((*h, false));
-            }
-            if let Some(ci) = self.cuts.iter().position(|c| c.id == sid) {
-                // the cuts: eight points a tile, then the Mat is severed there
-                let points: i32 = std::mem::take(&mut spare).iter().map(|(h, _)| *h).sum();
-                let c = &mut self.cuts[ci];
-                c.progress += points.max(0) as u32;
-                if c.progress >= CUT_POINTS {
-                    mat.sever(c.x as usize, c.y as usize);
-                    out.cut.push((c.x, c.y));
-                    out.lines.push(format!("a cord cut at {},{}", c.x, c.y));
-                    done.push(c.id);
-                }
-                continue;
-            }
-            let mut crew = builders.remove(&sid).unwrap_or_default();
-            crew.append(&mut spare);
-            if crew.is_empty() {
-                continue;
-            }
-            let Some(idx) = self.structures.iter().position(|s| s.id == sid) else { continue };
-            let def = defs.structure[self.structures[idx].def].clone();
-            // mending: 2 x Hands a builder (doubled by a Forge in the district), up to the structure's HP; what is
-            // left of the crew goes on to the next work
-            if self.damaged(defs, &self.structures[idx]) {
-                let max = self.hp_max(defs, &self.structures[idx]);
-                let s = &mut self.structures[idx];
-                let mut gave = 0;
-                for (h, forge) in crew {
-                    if s.hp >= max {
-                        spare.push((h, forge));
-                        continue;
-                    }
-                    let m = (MEND_PER_HANDS * h * if forge { 2 } else { 1 }).max(0).min(max - s.hp);
-                    s.hp += m;
-                    gave += m;
-                }
-                if gave > 0 {
-                    out.mended.push((sid, gave));
-                    out.lines.push(format!("{} at {},{} mended {gave} HP ({}/{max})", def.name, s.x, s.y, s.hp));
-                }
-                continue;
-            }
-            let to = self.structures[idx].upgrading_to.unwrap_or(1);
-            if !self.structures[idx].paid {
-                let cost = def.cost_at(to);
-                if pay(cost) {
-                    self.structures[idx].paid = true;
-                } else {
-                    out.waiting.push((sid, cost));
-                    spare = crew;
-                    continue;
-                }
-            }
-            let points: i32 = crew.iter().map(|(h, forge)| if *forge { h * 2 } else { *h }).sum();
-            let (hp_to, hp_one) = (self.hp_max_of(defs, self.structures[idx].def, to), self.hp_max_of(defs, self.structures[idx].def, 1));
-            let s = &mut self.structures[idx];
-            s.progress += points.max(0) as u32;
-            if s.progress >= def.build_at(to) {
-                if s.built {
-                    s.tier = to;
-                    s.upgrading_to = None;
-                    s.hp = hp_to;
-                    out.upgraded.push(sid);
-                    out.lines.push(format!("{} upgraded to tier {}", def.name, to));
-                } else {
-                    s.built = true;
-                    s.hp = hp_one;
-                    out.built.push(sid);
-                    out.lines.push(format!("{} built at {},{}", def.name, s.x, s.y));
-                    // a Relay raised is a nerve: a signal source that never starves
-                    if def.id == "relay" {
-                        let (rx, ry) = (s.x, s.y);
-                        mat.place_relay(rx as usize, ry as usize);
-                        out.relays.push((rx, ry));
-                    }
-                }
-                s.progress = 0;
-            }
-        }
-        self.cuts.retain(|c| !done.contains(&c.id));
+        self.raise(defs, mat, builders, cutters, pay, &mut out);
         // the Foreman's Cut: the foreman's stock mends its district's damage, the most damaged first, a packet a time
         for k in 0..self.districts.len() {
             if self.districts[k].cut == 0 || !self.charter.flag_at("stock_mends", self.district_dist(mat, &self.districts[k])) {
@@ -2270,6 +2334,18 @@ impl Colony {
         let working: std::collections::HashSet<u32> = jobs.iter().map(|j| j.0).collect();
         let heart_tier = self.heart_tier(defs);
         let mut ate: HashMap<u32, f32> = HashMap::new();
+        // the network's larder (Full Design v3.21, Homes, meals): what every signalled Cord and Node holds past what it
+        // would grow with — signal reaches only tissue joined to the Heart — eaten richest tile first, so a slimo whose
+        // home is on the network eats from all of it and the Mat is the conveyor its food rides; never the Mat's growth
+        // nor its life (v3.20)
+        let line = mat.extension_reserve();
+        let mut larder: Vec<usize> = (0..mat.hy.len()).filter(|&j| (mat.hy[j] == hy::CORD || mat.hy[j] == hy::NODE) && mat.sig[j] >= SIGNAL_FLOOR && mat.n[j] > line).collect();
+        larder.sort_by(|a, b| mat.n[*b].total_cmp(&mat.n[*a]).then(a.cmp(b)));
+        // a shift's meals take at most LARDER_SHARE of each tile's surplus: the rest rides on to the frontier, so a
+        // city however big eats beside the Mat's growth and never flattens the gradient its trunk carries food up
+        let mut left_at: Vec<f32> = larder.iter().map(|&j| LARDER_SHARE * (mat.n[j] - line)).collect();
+        let mut stock: f32 = left_at.iter().sum();
+        let mut next = 0usize;
         for r in &roster.records {
             if r.status == Status::OnRun || r.status == Status::Stranded || r.status == Status::Dead {
                 continue;
@@ -2277,16 +2353,12 @@ impl Colony {
             let (x, y) = self.stand(mat, r.id);
             let i = y as usize * mat.w + x as usize;
             let on_mat = mat.hy[i] == hy::CORD || mat.hy[i] == hy::NODE;
-            let signalled = on_mat && mat.sig[i] >= SIGNAL_FLOOR;
-            // the tissue a meal draws on: the stand and the eight tiles about it that are signalled Cord or Node
-            let table: Vec<usize> = (-1i32..=1)
-                .flat_map(|dy| (-1i32..=1).map(move |dx| (dx, dy)))
-                .filter_map(|(dx, dy)| {
-                    let (xx, yy) = (x + dx, y + dy);
-                    (xx >= 0 && yy >= 0 && (xx as usize) < mat.w && (yy as usize) < mat.h).then(|| yy as usize * mat.w + xx as usize)
-                })
-                .filter(|&j| (mat.hy[j] == hy::CORD || mat.hy[j] == hy::NODE) && mat.sig[j] >= SIGNAL_FLOOR)
-                .collect();
+            // on the network: any tile of the home's footprint signalled Cord or Node (the Heart's, homeless), so a
+            // home whose anchor tile drowned or was eaten still eats while the rest of it touches the Mat (v3.21)
+            let signalled = match self.home_of(r.id) {
+                Some(h) => Self::mat_tiles(defs, mat, h).iter().any(|&j| mat.sig[j] >= SIGNAL_FLOOR),
+                None => on_mat && mat.sig[i] >= SIGNAL_FLOOR,
+            };
             let home = self.home_of(r.id).map(|h| (defs.structure[h.def].id.clone(), h.tier, h.district));
             let in_bunkhouse = home.as_ref().is_some_and(|h| h.0 == "bunkhouse");
             let drowned_home = self.home_of(r.id).is_some_and(|h| h.drowned);
@@ -2298,24 +2370,19 @@ impl Colony {
             // a meal: the Mat's nutrient at the home, else paste; Rationing halves the draw
             let (takes, paste) = if rationed { (MEAL_TAKES * 0.5, PASTE_EDDIES / 2) } else { (MEAL_TAKES, PASTE_EDDIES) };
             let mut fed = false;
-            // only what each tile holds past what it would grow with: the city eats the Mat's surplus, never its
-            // growth nor its life (Full Design v3.20)
-            let line = mat.extension_reserve();
-            let spare = |n: f32| (n - line).max(0.0);
-            let held: f32 = table.iter().map(|&j| spare(mat.n[j])).sum();
-            if signalled && held >= takes {
-                // the richest tile first
-                let mut order = table.clone();
-                order.sort_by(|a, b| mat.n[*b].partial_cmp(&mat.n[*a]).unwrap().then(a.cmp(b)));
+            if signalled && stock >= takes {
                 let mut left = takes;
-                for j in order {
-                    let t = spare(mat.n[j]).min(left);
+                while left > 1e-6 && next < larder.len() {
+                    let j = larder[next];
+                    let t = left_at[next].min(left);
                     mat.n[j] -= t;
+                    left_at[next] -= t;
                     left -= t;
-                    if left <= 0.0 {
-                        break;
+                    if left_at[next] <= 1e-6 {
+                        next += 1;
                     }
                 }
+                stock -= takes - left;
                 fed = true;
                 if let Some(d) = self.district_of(r.id).map(|d| d.id) {
                     *ate.entry(d).or_insert(0.0) += takes;
@@ -2693,6 +2760,16 @@ mod tests {
         t.iter().map(|&j| mat.n[j]).sum()
     }
 
+    /// Nothing past the reserve anywhere on the signalled network: the larder empty.
+    fn empty_larder(mat: &mut MatSim) {
+        let line = mat.extension_reserve();
+        for j in 0..mat.n.len() {
+            if (mat.hy[j] == hy::CORD || mat.hy[j] == hy::NODE) && mat.sig[j] >= SIGNAL_FLOOR {
+                mat.n[j] = mat.n[j].min(line);
+            }
+        }
+    }
+
     #[test]
     fn rationing_halves_the_draw_and_costs_five_and_the_wave_reaches_the_heart_at_once() {
         let (mut c, defs, mut mat, r, t) = with_district();
@@ -2706,6 +2783,7 @@ mod tests {
         let (who, home) = c.homes.iter().map(|(a, b)| (*a, *b)).next().unwrap();
         let h = c.get(home).unwrap();
         let (hx, hy_) = (h.x as usize, h.y as usize);
+        empty_larder(&mut mat);
         let tb = set_table(&mut mat, hx, hy_, 0.5);
         let before = table_sum(&mat, &tb);
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
@@ -2715,18 +2793,21 @@ mod tests {
         assert!(o.contexts[&who].extra_target <= -5);
         assert!(o.laws_arrived.iter().any(|(l, _)| l == "rationing"));
         // paste costs 1 e
+        empty_larder(&mut mat);
         set_table(&mut mat, hx, hy_, 0.0);
-        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 1, &mut |_| true);
-        assert!(o.contexts[&who].fed && o.paste_eddies >= 1);
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        assert!(o.contexts[&who].fed && o.paste_meals >= 1 && o.paste_eddies == o.paste_meals, "a rationed meal of paste is 1 e");
         // a repeal is free and the Heart is clear of it the shift it is repealed
         c.repeal(&mat, "rationing").unwrap();
         assert_eq!(c.charter.authority, 0);
         let tb = set_table(&mut mat, hx, hy_, 0.5);
         let before = table_sum(&mat, &tb);
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        // the larder is that one table now: every sleeper on the network eats from it, each a whole meal again
         let drew = before - table_sum(&mat, &tb);
-        assert!(drew >= MEAL_TAKES - 1e-5 && drew < MEAL_TAKES * 2.0, "draw {drew}");
-        assert!(o.contexts[&who].extra_target > -5);
+        let meals = (drew / MEAL_TAKES).round();
+        assert!(meals >= 1.0 && (drew - meals * MEAL_TAKES).abs() < 1e-4, "draw {drew}");
+        assert!(o.contexts[&who].fed && o.contexts[&who].extra_target > -5);
     }
 
     #[test]
@@ -2907,7 +2988,9 @@ mod tests {
         // an upgrade needs the Quarter
         assert_eq!(c.upgrade(&defs, id, 1), Err("needs the Quarter".to_string()));
         assert_eq!(c.upgrade(&defs, id, 2), Ok(2));
-        assert_eq!(defs.get("bunkhouse").unwrap().cost_at(2).parts, 20);
+        // a home's every step at its first cost (v3.21: the warren); anything else the tier's multiple
+        assert_eq!(defs.get("bunkhouse").unwrap().cost_at(2).parts, 10);
+        assert_eq!(defs.get("forge").unwrap().cost_at(2).parts, 2 * defs.get("forge").unwrap().cost.parts);
     }
 
     #[test]
@@ -2978,12 +3061,21 @@ mod tests {
         // a Dim shift: the pod's +30 is Dark's
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
         assert!(!o.contexts[&who].pod_dark && o.contexts[&who].asleep);
-        // meals: the Mat under the home feeds when it carries nutrient, else paste from the ledger
+        // meals: the network's larder feeds, wherever on the signalled tissue it lies (v3.21): one far tile's surplus
+        empty_larder(&mut mat);
+        let far = (0..mat.n.len()).find(|&j| (mat.hy[j] == hy::CORD || mat.hy[j] == hy::NODE) && mat.sig[j] >= SIGNAL_FLOOR && cheb(((j % mat.w) as i32, (j / mat.w) as i32), (x as i32, y as i32)) > 3).expect("signalled tissue away from the home");
+        mat.n[far] = 0.5;
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |_| true);
+        assert!(o.contexts[&who].fed, "fed from tissue far from the home");
+        assert!(0.5 - mat.n[far] >= MEAL_TAKES - 1e-5, "the far tile paid the meal");
+        // the home's own tissue, else paste from the ledger
+        empty_larder(&mut mat);
         let tb = set_table(&mut mat, x as usize, y as usize, 0.5);
         let before = table_sum(&mat, &tb);
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |_| true);
         assert!(o.contexts[&who].fed);
         assert!(before - table_sum(&mat, &tb) >= MEAL_TAKES - 1e-5);
+        empty_larder(&mut mat);
         set_table(&mut mat, x as usize, y as usize, 0.0);
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |_| true);
         assert!(!o.contexts[&who].fed, "no nutrient and no eddies: hungry");

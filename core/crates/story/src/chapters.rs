@@ -45,6 +45,18 @@ pub struct ChapterFile {
     pub ending: Vec<EndingDef>,
 }
 
+/// The population a chapter waits for (Full Design v3.21, the chapters' table; this design's): Pass 2's city tiers are
+/// the campaign's spine — a Quarter of 100 for chapter 4, a City of 500 for chapter 6, and the Empire's 2,000th slimo
+/// waking for chapter 7 ("the Empire card is the 2,000th slimo waking up").
+pub fn opens_pop(n: u8) -> usize {
+    match n {
+        4 => 100,
+        6 => 500,
+        7 => 2000,
+        _ => 0,
+    }
+}
+
 /// The stratum the city must have reached for a chapter to open (Full Design v3.19, the chapters' table): the
 /// Culverts for chapter 3, the Storm Drains for 4, the Service Tunnels for 5, the Vault for 6.
 pub fn opens_at(n: u8) -> u8 {

@@ -131,3 +131,47 @@ the gauge silent after it, the breach by Relay or key, Ivan's walk, his Rally, F
 events, New Game+, Endless, the Daily Seed), `save` +1 (the profile; the strain code now read back with its typo
 caught), `mat` +1 (the stack and its slabs), `logistics` +1 (the Board's strata), `route`'s library at six strata, and
 `threat`'s Turret test rewritten (a Patrol maps and leaves, a Sweep is fired on). 187 tests pass. `cargo clippy` adds no warning in this work's code.
+
+## PAC-082 — the living city and the population economy (2026-11-12)
+
+Full Design v3.21 (The living city; Onboarding; Recruitment; Homes, meals; City tiers; Building). Found by playing
+the live game and reading `rose campaign`'s logs: a placed ghost waited for the run to end; a Feed queued before the
+first run bounced back to the Stash (the city's consumers were published only at a shift's end); the founders took
+the player's first Bunkhouse; the HUD's clock read the Mat's tick; and the campaign's "Empire of 2,000" was four in
+five D5 bodies, while its sleepers stopped near 300, held by the bot's own food cap and by Parts.
+
+**What changed**: colony labour, newcomers and the Stash's orders every 120 city ticks (`game::shift::work_cycle`, the
+headless world and the bridge alike); the founders' Bunkhouse; consumers published every cycle; the first ten
+minutes as ten beats with Ivan's line, a light on the control and the Codex's Systems tab; the Build tool's dots;
+Ivan's box off the map; the run camera inside the route. Then the population: a D5 off the street is a flesh pile the
+Mat takes at the grate; the tiers and the chapters count sleepers; meals come from the whole signalled network, half
+of each tile's surplus a shift; the Bunkhouse is 6 / 24 / 60 beds, every step 10 Parts. The campaign's scripts build
+beds while the city eats, buy Parts for the waiting, spend on beds while a chapter waits on the city's size, and a
+script whose rival the alliance favours holds that rival's genes from the founding.
+
+**The proof**: `rose campaign --seed 11` — every script reached its own ending. The city's hours are the bot's run
+seconds times its pace factor 3:
+
+| script | ending | shifts | Hamlet (20) | Quarter (100) | City (500) | Empire (2,000) | the end |
+|---|---|---|---|---|---|---|---|
+| Garden | Garden | 122 | 0.8 h | 4.8 h | 7.1 h | 14.8 h | 16.0 h |
+| Hive | Hive | 110 | 0.8 h | 3.8 h | 6.8 h | 12.0 h | 12.8 h |
+| World-Eater | World-Eater | 112 | 0.8 h | 5.3 h | 10.1 h | 14.3 h | 16.3 h |
+| Accord | Accord | 84 | 0.8 h | 4.9 h | 6.8 h | 10.8 h | 11.9 h |
+| Scattered | Scattered | 11 | — | — | — | — | — |
+
+Pass 2's tiers ask for the Hamlet in the first hour, the Quarter at three to four, the City at about eight and the
+Empire at about fourteen, a campaign of 12–18 hours; before this the same scripts ended at 184–257 shifts, 25–37 hours.
+The Quarter comes an hour late. The newcomers still outrun the beds from the City on: about 4,000 an hour come down
+and nineteen in twenty go feral (one line of the log a cycle).
+
+**In play** (the live game under xvfb, driven by input): a Bunkhouse placed on the Build tool's dots stood at the
+second work cycle with "2 at work" on its card; four newcomers joined at minute four; a Street Eye fed from the Stash
+before any run landed in the Heart at 3:00.5; a Fried Board sold at 10:24 and the markets beat ended on it; the
+beats fired in order with BUILD, the ghost and the nav buttons lit; Ivan's line left the run's HUD as the Runner
+departed; after a run the city line read "fed by the Mat".
+
+**The other proofs**: `rose city` PASS (fourteen sleepers fed by the Mat; the ledger at 192 e by the twentieth shift,
+where it sat near nothing on paste); `rose cleansing` PASS; `rose economy` PASS; the headless smoke PASS. **Tests**: 188
+pass (the onboarding beats in order and the notices in any order; meals from tissue far from the home; the warren's
+cost).

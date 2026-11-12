@@ -64,9 +64,9 @@ sigma = 0.3
 cost = { parts = 10, chrome = 0, eddies = 0 }
 build = 16
 hp = 100
-beds = [6, 8, 10]
+beds = [6, 24, 60]
 rest = [20, 20, 20]
-text = "Six bunks under one tarp. Rest +20 asleep here in Dark; a Pack Animal likes it, a Hermit does not."
+text = "Six bunks under one tarp; a warren of sixty at the City. Rest +20 asleep here in Dark; a Pack Animal likes it, a Hermit does not."
 art = "struct.bunkhouse"
 
 [[structure]]

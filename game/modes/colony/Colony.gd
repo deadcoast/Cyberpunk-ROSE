@@ -16,6 +16,8 @@ const SPEEDS := [2.0, 4.0, 8.0]
 const CATS := [["chrome", "CHR"], ["part", "PRT"], ["organic", "ORG"], ["tech", "TEC"], ["gear", "GER"], ["contraband", "CON"], ["key", "KEY"], ["curio", "CUR"], ["relic", "REL"]]
 const TIERS := ["COMMON", "UNCOMMON", "RARE", "BLACKLINE", "RELIC"]
 const ALERT_ROWS := 12
+## The alert list's height: from under the chapter line to Ivan's box.
+const ALERT_ROOM := 162
 const ALERT_EVERY := 1.0   # one new line a second at most
 
 var world: WorldView
@@ -42,6 +44,10 @@ var stroke_last := Vector2i(-1, -1)
 var cursor: Node2D
 var cursor_tile := Vector2i(-1, -1)
 var cursor_reason := ""    # whether the armed def may stand under the cursor
+## Where the armed def may stand in view (x, y pairs), looked up while Build is in hand
+var spots := PackedInt32Array()
+var spots_key := ""
+var spots_age := 0.0
 var answer := ""           # the last verb's answer ("" when it went through)
 var answer_ok := true
 var answer_age := 0.0
@@ -100,6 +106,7 @@ func _exit_tree() -> void:
 func _build_content(c: Control) -> void:
 	var top := make_frame(c, Vector2(0, -2), Vector2(632, 26))
 	clock_label = make_label(top, "", Vector2(4, 4), UiTheme.CYAN)
+	targets["clock"] = clock_label
 	city_label = make_label(top, "", Vector2(4, 15), UiTheme.DUST)
 	chapter_frame = make_frame(c, Vector2(0, 26), Vector2(430, 14))
 	chapter_label = make_label(chapter_frame, "", Vector2(4, 4), UiTheme.OOZE_GLOW)
@@ -139,7 +146,11 @@ func _build_content(c: Control) -> void:
 		zb.add_child(b)
 	zone_bar.visible = false
 	# the hint line and the tool bar
-	ivan_frame = make_frame(c, Vector2(304, 216), Vector2(128, 54))
+	# the right column, over the minimap, off the city the player is working (Full Design v3.21, Onboarding): a
+	# first-ten-minutes beat whole in four lines
+	ivan_frame = make_frame(c, Vector2(436, 196), Vector2(196, 54))
+	# the map under his box still takes clicks and placing; only his portrait is a button
+	ivan_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ivan_portrait = make_slot(ivan_frame, "ivan.portrait", Vector2(2, 2), 0, 0, 0.0, "a1")
 	ivan_portrait.scale = Vector2(0.5, 0.5)
 	var pick := Button.new()
@@ -160,7 +171,7 @@ func _build_content(c: Control) -> void:
 	# his line inside the box: off the frame's edge, five lines at most
 	bark_label = make_label(ivan_frame, "", Vector2(38, 4), UiTheme.CHALK)
 	bark_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	bark_label.size = Vector2(86, 46)
+	bark_label.size = Vector2(154, 46)
 	bark_label.max_lines_visible = 5
 	var hint := make_frame(c, Vector2(0, 272), Vector2(432, 15))
 	hint_label = make_label(hint, "", Vector2(4, 4), UiTheme.DUST)
@@ -176,6 +187,7 @@ func _build_content(c: Control) -> void:
 		b.pressed.connect(func(): pick_tool(t))
 		tools.add_child(b)
 		tool_buttons[t] = b
+		targets["tool:" + t] = b
 	# the minimap: the Stack view at a texel a tile with the camera's frame; click to go there
 	var mm := make_frame(c, Vector2(436, 252), Vector2(196, 54))
 	minimap = TextureRect.new()
@@ -215,6 +227,7 @@ func _on_tick() -> void:
 	cursor.queue_redraw()
 
 func _process(delta: float) -> void:
+	super(delta)
 	var v := Vector2.ZERO
 	if Input.is_key_pressed(KEY_W): v.y -= 1
 	if Input.is_key_pressed(KEY_S): v.y += 1
@@ -230,24 +243,47 @@ func _process(delta: float) -> void:
 		if answer_age > ANSWER_FOR:
 			answer = ""
 			_refresh_hint()
+	_look_for_spots(delta)
 	alert_clock += delta
 	if alert_clock >= ALERT_EVERY and not alert_queue.is_empty():
 		alert_clock = 0.0
 		Sim.alerts_shown.push_front(alert_queue.pop_front())
 		_draw_alerts()
 
+## With Build in hand, every anchor in view where the def may stand, looked up again when the view, the def or its
+## turn changes and every second (the Mat grows and things get built): the player sees where it can go before trying.
+func _look_for_spots(delta: float) -> void:
+	if tool != "build" or Sim.build_tool == "" or view_index > 1:
+		if not spots.is_empty():
+			spots = PackedInt32Array()
+			spots_key = ""
+			cursor.queue_redraw()
+		return
+	var T := WorldView.TILE
+	var half: Vector2 = get_viewport_rect().size * 0.5 / cam.zoom.x / T
+	var x0 := int(cam.position.x / T - half.x) - 1
+	var y0 := int(cam.position.y / T - half.y) - 1
+	var key := "%s %s %d %d %d" % [Sim.build_tool, rotated, x0, y0, view_index]
+	spots_age += delta
+	if key == spots_key and spots_age < 1.0:
+		return
+	spots_key = key
+	spots_age = 0.0
+	spots = Sim.ensure().place_spots(Sim.build_tool, x0, y0, int(half.x * 2.0) + 3, int(half.y * 2.0) + 3, rotated)
+	cursor.queue_redraw()
+
 func _speed_index() -> int:
 	return maxi(0, SPEEDS.find(Sim.tick_hz))
 
 func _refresh_lines(sim: RoseSim) -> void:
 	var s: Dictionary = sim.stats()
-	var secs := int(s.get("tick", 0)) / 2
+	var secs := int(s.get("city_tick", 0)) / 2
 	var ov := String(Sim.overlay).to_upper() if Sim.overlay != "" else "none"
 	clock_label.text = "DAY %d %s  %d:%02d:%02d   %s %dx   %s   overlay %s   cargo %d riding %d waiting   jam %d   salt bag %d" % [
 		Sim.day, _shift_name(sim), secs / 3600, (secs / 60) % 60, secs % 60,
 		"PAUSED" if Sim.paused else "RUN", 1 << _speed_index(), VIEW_NAMES[view_index], ov,
 		s.get("riding", 0), s.get("waiting", 0), s.get("jammed", 0), int(sim.salt_left())]
-	var pop: int = Sim.ensure_people().count()
+	var pop: int = Sim.ensure_people().sleepers()
 	var built := 0
 	var ghosts := 0
 	for st in sim.structures():
@@ -258,9 +294,12 @@ func _refresh_lines(sim: RoseSim) -> void:
 	var beds: PackedInt32Array = sim.beds()
 	var ds: Array = sim.districts(Sim.ensure_people())
 	var cuts: int = sim.cuts().size()
-	city_label.text = "%s of %d   %d built  %d ghost%s  %d cut%s   beds %d/%d   %d district%s   AUTHORITY %d" % [
+	# the last shift's meals: the Mat's larder fed the rest (Full Design v3.21, Homes, meals)
+	var paste := int(Sim.last_shift.get("paste_meals", 0))
+	var food := ("   paste %d" % paste) if paste > 0 else ("   fed by the Mat" if not Sim.last_shift.is_empty() else "")
+	city_label.text = "%s of %d   %d built  %d ghost%s  %d cut%s   beds %d/%d   %d district%s   AUTHORITY %d%s" % [
 		String(sim.city_tier_name(pop)).to_upper(), pop, built, ghosts, "" if ghosts == 1 else "s", cuts, "" if cuts == 1 else "s",
-		beds[1], beds[0], ds.size(), "" if ds.size() == 1 else "s", int(sim.authority())]
+		beds[1], beds[0], ds.size(), "" if ds.size() == 1 else "s", int(sim.authority()), food]
 	# Ivan's line, his portrait by his Authority state
 	bark_label.text = String(sim.bark())
 	var v: Dictionary = sim.ivan()
@@ -336,7 +375,7 @@ func _refresh_hint() -> void:
 		"salt":
 			line = "SALT   %d left in the open bag (a bag of road salt lays 8)   drag for a line   RMB put down" % int(Sim.ensure().salt_left())
 		"sever":
-			line = "SEVER   mark Mat to cut: 8 Build points at shift end   drag for a line   RMB a mark unmarks"
+			line = "SEVER   mark Mat to cut: builders put 8 points in a tile   drag for a line   RMB a mark unmarks"
 		"zone":
 			line = "ZONE %s   drag a rectangle%s   RMB put down" % [zone_kind.to_upper(), "   (against the selected Rack or Cold Store, else the nearest)" if zone_kind == "stockpile" else ""]
 			if zone_kind == "erase":
@@ -400,7 +439,7 @@ func place_ghost(tx: int, ty: int) -> int:
 		_say(cursor_reason)
 		return -1
 	var id := int(sim.place_turned(Sim.build_tool, tx, ty, rotated))
-	_say("" if id >= 0 else "it cannot stand there", "%s placed: Build takes it at shift end once the Stash pays" % String(_def(Sim.build_tool).get("name", "")))
+	_say("" if id >= 0 else "it cannot stand there", "%s placed: a builder walks over within the minute; the Stash pays at the first work" % String(_def(Sim.build_tool).get("name", "")))
 	return id
 
 ## A rectangle of zone: a stockpile against the selected store (else the nearest built Rack or Cold Store), the
@@ -506,8 +545,8 @@ func right_click(tx: int, ty: int) -> void:
 		_say(why, "Ivan walks to %d,%d" % [tx, ty])
 		return
 	if selected.get("kind", "") == "slimo" and int(t.structure) >= 0:
-		var info: Dictionary = sim.structure_info(int(t.structure), Sim.ensure_people().count())
-		_say(String(sim.order(int(selected.id), int(t.structure))), "%s works the %s next shift" % [Sim.slimo_name(int(selected.id)), String(info.get("name", ""))])
+		var info: Dictionary = sim.structure_info(int(t.structure), Sim.ensure_people().sleepers())
+		_say(String(sim.order(int(selected.id), int(t.structure))), "%s works the %s from the next minute till the shift ends" % [Sim.slimo_name(int(selected.id)), String(info.get("name", ""))])
 		card_sig = ""
 		_draw_card()
 		return
@@ -559,7 +598,7 @@ func _short(th: Dictionary) -> String:
 				return ""
 			return "%s  %s\n%s" % [String(rec.full_name).to_upper(), String(rec.depth), String(rec.status)]
 		"structure":
-			var info: Dictionary = sim.structure_info(int(th.id), Sim.ensure_people().count())
+			var info: Dictionary = sim.structure_info(int(th.id), Sim.ensure_people().sleepers())
 			if info.is_empty():
 				return ""
 			var state := "TIER %d/%d" % [int(info.tier), int(info.tiers)] if bool(info.built) else "GHOST %d/%d" % [int(info.progress), int(info.need)]
@@ -595,7 +634,7 @@ func _card_info() -> Dictionary:
 			info.v = sim.ivan()
 			info.bark = String(sim.bark())
 		"structure":
-			info.s = sim.structure_info(int(selected.id), people.count())
+			info.s = sim.structure_info(int(selected.id), people.sleepers())
 			if info.s.is_empty():
 				return {"kind": ""}
 			if bool(info.s.quota):
@@ -696,14 +735,14 @@ func _card_slimo(info: Dictionary) -> void:
 	var id := int(rec.id)
 	make_label(card, "%s   %s %s" % [String(rec.full_name).to_upper(), String(rec.depth), String(rec.depth_name)], Vector2(6, 4), UiTheme.CYAN)
 	make_label(card, String(rec.status), Vector2(6, 15), UiTheme.CHALK)
-	var job := "this shift: %s at the %s" % [String(info.job).to_upper(), String(info.at)] if String(info.job) != "" else "this shift: no job"
+	var job := "now: %s at the %s" % [String(info.job).to_upper(), String(info.at)] if String(info.job) != "" else "now: no job"
 	make_label(card, job, Vector2(6, 26), UiTheme.CHALK)
 	var n: Dictionary = rec.needs
 	make_label(card, "FED %d   REST %d   LIT %d   DRY %d   MOOD %d (toward %d)" % [int(n.get("fed", 0)), int(n.get("rest", 0)), int(n.get("lit", 0)), int(n.get("dry", 0)), int(n.get("mood", 0)), int(rec.mood_target)], Vector2(6, 37), UiTheme.DUST)
 	if String(info.ordered) != "":
-		make_label(card, "next shift: the %s (ordered)" % String(info.ordered), Vector2(6, 50), UiTheme.ACID)
+		make_label(card, "ordered: the %s, till the shift ends" % String(info.ordered), Vector2(6, 50), UiTheme.ACID)
 	else:
-		make_label(card, "RMB a structure: it works there next shift", Vector2(6, 50), UiTheme.DUST)
+		make_label(card, "RMB a structure: it works there from the next minute", Vector2(6, 50), UiTheme.DUST)
 	make_button(card, "UNFOLLOW" if bool(info.following) else "FOLLOW (F)", Vector2(6, 68), func():
 		following = not following
 		card_sig = "")
@@ -764,7 +803,7 @@ func _card_structure(info: Dictionary) -> void:
 	elif int(s.tier) < int(s.tiers) and int(s.upgrading_to) == 0:
 		if String(s.upgrade) == "":
 			make_button(card, "UPGRADE  %s" % String(s.upgrade_cost), Vector2(6, 68), func():
-				_say(String(sim.upgrade(id, Sim.ensure_people().count())), "the next tier's ghost stands over it")
+				_say(String(sim.upgrade(id, Sim.ensure_people().sleepers())), "the next tier's ghost stands over it")
 				card_sig = ""
 				world.redraw_city())
 		else:
@@ -796,7 +835,7 @@ func _card_quota(id: int, q: Dictionary) -> void:
 	make_button(card, "DEFAULT", Vector2(140 if pit else 40, 42), func():
 		sim.clear_quota(id)
 		card_sig = "")
-	make_label(card, "pulled from the Stash at shift end; cap %.0f" % cap if pit else "pulled from the Stash at shift end", Vector2(6, 57), UiTheme.DUST)
+	make_label(card, "pulled from the Stash each minute; cap %.0f" % cap if pit else "pulled from the Stash each minute", Vector2(6, 57), UiTheme.DUST)
 
 ## A stockpile's priority and filter (Stockpiles), and what it holds.
 func _card_stockpile(info: Dictionary) -> void:
@@ -1029,8 +1068,14 @@ func _draw_alerts() -> void:
 	for a in alerts_now:
 		by_key[String(a.key)] = a
 	var rows: Array = []
+	# the list stops above Ivan's box (ALERT_ROOM pixels)
+	var room := ALERT_ROOM
 	for k in Sim.alerts_shown:
 		if by_key.has(k) and rows.size() < ALERT_ROWS:
+			var need := 2 + ceili(String(by_key[k].text).length() / 47.0) * 9
+			if need > room:
+				break
+			room -= need
 			rows.append(by_key[k])
 	var sig := str(rows)
 	if sig == alert_sig:
@@ -1065,6 +1110,7 @@ func _draw_alerts() -> void:
 				cam.position = Vector2(x * WorldView.TILE + 16, y * WorldView.TILE + 16)
 				minimap_frame.queue_redraw())
 		alert_rows.add_child(b)
+		targets["alert:" + String(a.key)] = b
 	alert_frame.size = Vector2(196, height)
 
 # ---------------------------------------------------------------- the minimap
@@ -1139,6 +1185,16 @@ func _draw_cursor() -> void:
 				for st in Sim.ensure().structures():
 					if int(st.id) == int(orders[int(selected.id)]):
 						cursor.draw_rect(Rect2(int(st.x) * T - 2, int(st.y) * T - 2, int(st.w) * T + 4, int(st.h) * T + 4), UiTheme.ACID, false, 2.0)
+	# the first-ten-minutes beat that lights a ghost (Full Design v3.21, Onboarding): every ghost framed, pulsing
+	if String(Sim.ensure().onboarding_highlight()) == "ghost":
+		var a := 0.7 + 0.3 * sin(Time.get_ticks_msec() / 160.0)
+		for st in Sim.ensure().structures():
+			if not bool(st.built):
+				cursor.draw_rect(Rect2(int(st.x) * T - 3, int(st.y) * T - 3, int(st.w) * T + 6, int(st.h) * T + 6), Color(UiTheme.CYAN, a), false, 2.0)
+	# where the armed def may stand: a dot on each anchor
+	for i in range(0, spots.size(), 2):
+		var at := Vector2(spots[i] * T + T / 2 - 3, spots[i + 1] * T + T / 2 - 3)
+		cursor.draw_rect(Rect2(at, Vector2(6, 6)), Color(UiTheme.CYAN, 0.7))
 	# the ghost under the cursor, Cyan where it may stand, Hot Pink where it may not
 	if tool == "build" and Sim.build_tool != "" and cursor_tile.x >= 0:
 		var f := _footprint(_def(Sim.build_tool))

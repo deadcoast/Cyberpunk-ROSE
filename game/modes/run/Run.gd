@@ -186,6 +186,11 @@ func _ready() -> void:
 	fog.setup(route.width(), route.height())
 	add_child(fog)
 	cam = Camera2D.new()
+	# the view stops at the route's edges: no void past the Mat's west end or the last chunk
+	cam.limit_left = 0
+	cam.limit_top = 0
+	cam.limit_right = route.width() * WorldView.TILE
+	cam.limit_bottom = route.height() * WorldView.TILE
 	add_child(cam)
 	cam.make_current()
 	state = route.runner()
@@ -243,6 +248,9 @@ func _build_content(c: Control) -> void:
 	route_frame = make_frame(c, Vector2(0, 0), Vector2(120, 14))
 	route_label = make_label(route_frame, "", Vector2(4, 4), UiTheme.DUST)
 	bark_label = make_label(c, "", Vector2(2, 16), UiTheme.OOZE_GLOW)
+	# left of the shift clock, wrapped: a beat's line whole in two or three lines
+	bark_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	bark_label.size = Vector2(266, 30)
 	var strip_w := maxi(64, route.chunk_count() * 8)
 	var tc := make_frame(c, Vector2(316 - strip_w / 2 - 4, 0), Vector2(strip_w + 8, 22))
 	clock_label = make_label(tc, "", Vector2(4, 4), UiTheme.CYAN)
@@ -369,6 +377,7 @@ func step_with(buttons: int, dx: int, dy: int) -> void:
 	_sync_view()
 
 func _process(delta: float) -> void:
+	super(delta)
 	clock += delta
 	if over != "":
 		over_t += delta

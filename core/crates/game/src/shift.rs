@@ -20,8 +20,6 @@ pub struct Town<'a> {
     pub city: &'a mut City,
     pub colony: &'a mut Colony,
     pub defs: &'a StructureFile,
-    /// every flush's batch multiplied (Full Design v3.19: the occupation's 2 from chapter 6, Endless Sump's growth)
-    pub flush_mult: f32,
 }
 
 /// The Stash, its ledger and the Bench.
@@ -190,7 +188,7 @@ fn people_side(folk: &mut Folk, o: &ShiftOutcome, sold: u32, crafted: u32, hauls
 
 /// The shift whole. `day` picks the shift of the day. Every landing, loss and the shift's own events go to `log`.
 pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut CityLog) -> Shift {
-    let Town { city, colony, defs, flush_mult } = town;
+    let Town { city, colony, defs } = town;
     let Store { stash, ledger, bench, table, recipes } = st;
     let sod = shift_of_day(day);
     let eddies = ledger.eddies;
@@ -255,37 +253,7 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
     let closed = store::close(stash, ledger, bench, table, recipes, outcome.bench_slots as usize, &faster);
     // the Heart's tier is the city's; the grid follows it
     stash.set_tier(colony.heart_tier(defs));
-    let mut people_lines = people_side(&mut folk, &outcome, closed.report.sold, closed.placed, &hauls);
-    // the flush (Recruitment): a batch at a grate when its time comes; beds shelter the waiting, the rest go feral
-    let mut rng = mat::rng::Pcg32::new(0xF1A5_0000 ^ ((day as u64) << 16) ^ folk.roster.next_id as u64);
-    folk.roster.census = colony.progress.tech.flag("census");
-    folk.roster.d4_runs = colony.progress.tech.flag("d4_runs");
-    let mut came = folk.roster.flush(folk.traits, folk.names, &mut rng, day, flush_mult);
-    // each further grate the Mat reaches keeps its own clock (Full Design v3.18, City tiers), its batch by its stratum
-    // (v3.19)
-    let further: Vec<(u16, u8)> = city.markets.iter().zip(city.market_cells.iter()).skip(1).filter(|(_, c)| c.is_some()).map(|(g, _)| (*g as u16, city.sim.stratum_at(*g))).collect();
-    came += folk.roster.flush_grates(folk.traits, folk.names, &mut rng, day, &further, flush_mult);
-    if came > 0 {
-        log.push(tick, Class::Landing, format!("{came} newcomer{} came down a grate", if came == 1 { "" } else { "s" }));
-        people_lines.push(format!("{came} newcomer{} came down a grate", if came == 1 { "" } else { "s" }));
-    }
-    let (beds, taken) = colony.bed_count(defs);
-    let reached = city.market_cells.iter().any(|m| m.is_some());
-    let (joined, feral) = folk.roster.shelter((beds - taken).max(0) as usize, reached);
-    if let Some(n) = joined.first() {
-        log.bark("newcomer", &[("name", n)]);
-    }
-    for n in &joined {
-        log.push(tick, Class::Landing, format!("{n} joined the city"));
-        people_lines.push(format!("{n} joined the city"));
-    }
-    for n in &feral {
-        log.push(tick, Class::Loss, format!("{n} went feral in the drain"));
-        people_lines.push(format!("{n} went feral in the drain, never sheltered"));
-    }
-    if !joined.is_empty() {
-        colony.assign_homes(defs, folk.roster, folk.traits, &city.sim);
-    }
+    let people_lines = people_side(&mut folk, &outcome, closed.report.sold, closed.placed, &hauls);
     // the shift's own events
     for sid in &outcome.built {
         if let Some(s) = colony.get(*sid) {
@@ -341,8 +309,98 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
         log.push(tick, Class::Landing, what);
     }
     // the progression: organs, classes, the Strainbook, the collections (Full Design v3.18)
-    stash_lines.extend(crate::grow::shift_end(city, colony, defs, stash, table, folk.roster.records.len(), day, log));
+    stash_lines.extend(crate::grow::shift_end(city, colony, defs, stash, table, folk.roster.sleepers(), day, log));
     Shift { outcome, closed, stash_lines, people_lines, settled, hauled }
+}
+
+/// The city's work clock (Full Design v3.21, The living city): every `WORK_TICKS` city ticks — a minute at 2 Hz — the
+/// colony hands its jobs out again and the builders' Hands go into what is placed, so a ghost rises while the player
+/// watches instead of waiting for the shift's end.
+pub const WORK_TICKS: u64 = 120;
+/// The onboarding beats look at the city every two seconds, so a beat ends as the player does its deed.
+pub const LOOK_TICKS: u64 = 4;
+
+/// One work cycle: the newcomers (a batch at a grate when its clock comes round; free beds shelter the waiting, the
+/// rest wait ten cycles and go feral), the plan again (a ghost placed since gets its crew, the movers walk to it),
+/// the builders' work paid from the Stash, and the homes handed out again when a bed went up or someone joined.
+/// Returns the plan the movers now walk.
+#[allow(clippy::too_many_arguments)]
+pub fn work_cycle(city: &mut City, colony: &mut Colony, defs: &StructureFile, folk: Folk, stash: &mut Stash, ledger: &mut Ledger, table: &ItemTable, flush_mult: f32, day: u32, log: &mut CityLog) -> Vec<(u32, people::Job, u32)> {
+    if city.synthetic() {
+        return Vec::new();
+    }
+    let cycle = (city.tick / WORK_TICKS) as u32;
+    // everyone with a bed first (the founders into their Bunkhouse), so a free bed is a free bed
+    colony.assign_homes(defs, folk.roster, folk.traits, &city.sim);
+    let joined = newcomers(city, colony, defs, folk.roster, folk.traits, folk.names, flush_mult, cycle, day, log);
+    let (roster, traits) = (&*folk.roster, folk.traits);
+    let mut plan = refresh_movers(city, colony, defs, roster, traits, day);
+    let out = {
+        let mut pay = |c: colony::Cost| store::take_cost(stash, ledger, table, c);
+        colony.work_cycle(defs, &mut city.sim, roster, &plan, &mut pay)
+    };
+    let tick = city.tick;
+    for line in &out.lines {
+        log.push(tick, Class::Landing, line.clone());
+    }
+    // the Stash's orders ride now, not at the run's end: a Feed reaches its Pit and a Sell its stall within the minute
+    for line in cargo::dispatch_orders(city, colony, defs, stash, ledger, table) {
+        log.push(tick, Class::Decision, line);
+    }
+    if joined || !out.built.is_empty() || !out.upgraded.is_empty() {
+        colony.assign_homes(defs, roster, traits, &city.sim);
+        plan = refresh_movers(city, colony, defs, roster, traits, day);
+    }
+    plan
+}
+
+/// The flush (Full Design v3.21, Recruitment): a batch at each reached grate when its clock comes round, each further
+/// grate on its own clock with its batch by its stratum; free beds shelter the waiting while the Mat reaches a grate,
+/// and a newcomer left waiting too long goes feral. Returns whether anyone joined.
+#[allow(clippy::too_many_arguments)]
+fn newcomers(city: &mut City, colony: &Colony, defs: &StructureFile, roster: &mut Roster, traits: &TraitFile, names: &NameFile, flush_mult: f32, cycle: u32, day: u32, log: &mut CityLog) -> bool {
+    let tick = city.tick;
+    let mut rng = mat::rng::Pcg32::new(0xF1A5_0000 ^ ((cycle as u64) << 16) ^ roster.next_id as u64);
+    roster.census = colony.progress.tech.flag("census");
+    roster.d4_runs = colony.progress.tech.flag("d4_runs");
+    let mut came = roster.flush(traits, names, &mut rng, cycle, day, flush_mult);
+    let further: Vec<(u16, u8)> = city.markets.iter().zip(city.market_cells.iter()).skip(1).filter(|(_, c)| c.is_some()).map(|(g, _)| (*g as u16, city.sim.stratum_at(*g))).collect();
+    came += roster.flush_grates(traits, names, &mut rng, cycle, day, &further, flush_mult);
+    if came > 0 {
+        log.push(tick, Class::Landing, format!("{came} newcomer{} came down a grate", if came == 1 { "" } else { "s" }));
+    }
+    let (beds, taken) = colony.bed_count(defs);
+    let reached = city.market_cells.iter().any(|m| m.is_some());
+    let (joined, feral, piles) = roster.shelter((beds - taken).max(0) as usize, reached);
+    // the flesh piles feed the Mat where they came down: the first reached grate's cell, as a Dissolution's worth
+    if !piles.is_empty() {
+        if let Some(cell) = city.market_cells.iter().flatten().next().copied().or(city.heart_cell()) {
+            let w = city.sim.w;
+            city.sim.feed(cell % w, cell / w, colony::charter::DISSOLUTION_NUTRIENT * piles.len() as f32);
+        }
+        log.push(tick, Class::Landing, format!("the Mat took {} flesh pile{} at the grate: {}", piles.len(), if piles.len() == 1 { "" } else { "s" }, named(&piles)));
+    }
+    if let Some(n) = joined.first() {
+        log.bark("newcomer", &[("name", n)]);
+    }
+    // a few by name; a crowd as one line, so a big flush reads as one event and not a page of the log
+    if !joined.is_empty() {
+        log.push(tick, Class::Landing, format!("{} joined the city", named(&joined)));
+    }
+    if !feral.is_empty() {
+        log.push(tick, Class::Loss, format!("{} went feral in the drain, never sheltered", named(&feral)));
+    }
+    !joined.is_empty()
+}
+
+/// "A", "A and B", "A, B and C", or "12: A, B, C and 9 more".
+fn named(names: &[String]) -> String {
+    match names.len() {
+        0 => String::new(),
+        1 => names[0].clone(),
+        2 | 3 => format!("{} and {}", names[..names.len() - 1].join(", "), names[names.len() - 1]),
+        n => format!("{n}: {} and {} more", names[..3].join(", "), n - 3),
+    }
 }
 
 /// The roster on the map for shift `day`: the colony's plan for that shift. Returns the plan (who stands Guard where
