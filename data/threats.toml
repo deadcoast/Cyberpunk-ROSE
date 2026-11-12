@@ -163,7 +163,8 @@ toxicity = 2.0
 # a slimo in white light: Mood lost that shift (Pass 1); Bleeding past this share of its HP
 panic_mood = 20
 bleed_at = 0.25
-# a Pen with a Tend slimo tames a crawler this near; a tamed one bites Oathkeepers this near its Pen (Pass 1: 3)
+# a Pen with a Tend slimo tames a crawler this near; a tamed one bites Oathkeepers and wild crawlers this near its Pen
+# (Pass 1: 3)
 tame_within = 4
 tamed_within = 8
 tamed_bite = 3

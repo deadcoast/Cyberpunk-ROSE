@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub mod meta;
 pub use meta::{EndingRecord, EndlessRecord, Profile, StrainCode};
 
-pub const SAVE_VERSION: u16 = 16;
+pub const SAVE_VERSION: u16 = 17;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -111,7 +111,8 @@ pub struct SaveFile {
     /// the campaign: the chapter, the accord, the Bloom, the alliance, the Great Cleansing, the ending and the panels
     /// (v15, Full Design v3.19); the stack's Mat (the snapshots), the threats' stratum and campaign state, a street's
     /// stratum, the economy's chapter, accord grate and ally (v15); the run's seed, its strain code, the ending's shift
-    /// and Endless's Empire, the difficulty's rules on the threats, the laws New Game+ unlocked (v16)
+    /// and Endless's Empire, the difficulty's rules on the threats, the laws New Game+ unlocked (v16); the threats'
+    /// campaign state without the accord's Cleansings from any stratum (v17)
     #[serde(default)]
     pub campaign: story::Campaign,
 }

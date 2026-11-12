@@ -180,6 +180,8 @@ pub struct Steward {
     relay: Option<u32>,
     /// research nodes the caller wants before the cheapest open one (`rose campaign`'s chapters)
     pub wanted: Vec<&'static str>,
+    /// research only the wanted (`rose campaign`: the Chrome the rest of the tree costs is the climb's)
+    pub only_wanted: bool,
 }
 
 impl Steward {
@@ -294,6 +296,9 @@ impl Steward {
                     return;
                 }
             }
+        }
+        if self.only_wanted {
+            return;
         }
         let mut studies: Vec<(u8, String)> = held.iter().filter_map(|id| f.blueprint(id).map(|(_, t)| (t, id.clone()))).collect();
         studies.sort();

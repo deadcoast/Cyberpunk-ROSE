@@ -438,12 +438,12 @@ pub struct ThreatSave {
 pub const HEART_REACH: i32 = 2;
 
 /// What the campaign changed of the threats (Full Design v3.19, Narrative and Ivan: the accord, difficulty): the
-/// Attention a zone loses a shift, whether Cleansings come from any stratum (after chapter 3's envoy), and whether
-/// the Oathkeepers have mapped the Heart (an accepted accord: every Sweep and Cleansing walks for it).
+/// Attention a zone loses a shift and whether the Oathkeepers have mapped the Heart (an accepted accord: every Sweep
+/// and Cleansing walks for it). Chapter 3's Cleansing is the campaign's own; the gauge's Cleansings wait on the
+/// Undercroft (v3.20).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Campaign {
     pub decay: f32,
-    pub any_cleansing: bool,
     pub mapped: bool,
     /// no stage is chosen for a shift up to this one (an accepted accord's two shifts of calm)
     #[serde(default)]
@@ -461,7 +461,7 @@ pub struct Campaign {
 
 impl Default for Campaign {
     fn default() -> Self {
-        Campaign { decay: 2.0, any_cleansing: false, mapped: false, calm_until: 0, gain_mult: 1.0, raid_corpses: true, spored_first_only: false, dawn_flood: false }
+        Campaign { decay: 2.0, mapped: false, calm_until: 0, gain_mult: 1.0, raid_corpses: true, spored_first_only: false, dawn_flood: false }
     }
 }
 
@@ -1068,8 +1068,7 @@ impl Threats {
             let a = self.zones[k].attention;
             let mut pick = None;
             for st in (0..self.rules.stage.len()).rev() {
-                let from = if self.campaign.any_cleansing && self.rules.stage[st].id == "cleansing" { 1 } else { self.rules.stage[st].from };
-                if a < self.rules.stage[st].at || from > self.stratum {
+                if a < self.rules.stage[st].at || self.rules.stage[st].from > self.stratum {
                     continue;
                 }
                 let quiet = (st..self.rules.stage.len()).any(|s| self.zones[k].last[s].is_some_and(|d| next.saturating_sub(d) < self.rules.stage[s].quiet));
@@ -1412,7 +1411,7 @@ impl Threats {
                             None
                         }
                         Some(pt) => {
-                            let near = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.oathkeeper() && cheb((o.x, o.y), pt) <= self.rules.defence.tamed_within).min_by_key(|o| (dist2(pos, (o.x, o.y)), o.id)).map(|o| (o.x, o.y));
+                            let near = self.bodies.iter().filter(|o| !o.dead && !o.gone && (o.role.oathkeeper() || o.role == Role::Crawler) && cheb((o.x, o.y), pt) <= self.rules.defence.tamed_within).min_by_key(|o| (dist2(pos, (o.x, o.y)), o.id)).map(|o| (o.x, o.y));
                             match near {
                                 Some(o) if cheb(pos, o) > 1 => Some(o),
                                 Some(_) => None,
@@ -1505,8 +1504,9 @@ impl Threats {
                     }
                 }
                 Role::Tamed => {
+                    // it bites what comes at its Pen: an Oathkeeper (Pass 1) or a wild crawler (v3.20)
                     if self.bodies[k].cd <= 0.0 {
-                        if let Some(o) = self.bodies.iter().find(|o| !o.dead && !o.gone && o.role.oathkeeper() && cheb(pos, (o.x, o.y)) <= 1) {
+                        if let Some(o) = self.bodies.iter().find(|o| !o.dead && !o.gone && (o.role.oathkeeper() || o.role == Role::Crawler) && cheb(pos, (o.x, o.y)) <= 1) {
                             let e = body_dmg.entry(o.id).or_insert((0.0, None));
                             e.0 += self.rules.defence.tamed_bite as f32;
                             e.1 = Some(Foe::Body(b.id));

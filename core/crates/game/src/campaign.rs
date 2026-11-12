@@ -234,7 +234,6 @@ pub fn answer_accord(c: &mut Campaign, p: &mut Parts, accept: bool, day: u32) ->
     }
     let zone = c.envoy_zone.ok_or("no envoy")? as usize;
     p.threats.envoy_leaves();
-    p.threats.campaign.any_cleansing = true;
     if accept {
         c.accord = Some(Accord::Accepted { on: day });
         if let Some(law) = colony::LawFile::shipped().get("tithe") {
@@ -462,7 +461,7 @@ mod tests {
             answer_accord(c, &mut p, true, 5).unwrap();
         }
         assert!(w.colony.charter.law("tithe").is_some(), "the Tithe signed at no Authority");
-        assert!(w.threats.campaign.mapped && w.threats.campaign.any_cleansing);
+        assert!(w.threats.campaign.mapped);
         assert_eq!(w.threats.campaign.calm_until, 7);
         assert!(w.economy.s.accord_grate.is_some(), "the Oathkeepers trade at the envoy's grate");
         assert_eq!(w.campaign.cleansing_at, Some(8));

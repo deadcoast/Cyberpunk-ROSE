@@ -82,13 +82,15 @@ const CHROME_WANTED: usize = 14;
 /// Chrome the frontier's Pits leave in the Stash: a Relay's six (research takes its node's when it starts one).
 const FRONT_RESERVE: usize = 6;
 const EDDY_RESERVE: u32 = 100;
+/// Parts the steward buys up to with the eddies past the reserve: a Bunkhouse's ten and a tier-3 node's ten.
+const PARTS_WANTED: usize = 20;
 /// Scrap Turrets by the Heart.
 const TURRETS: usize = 4;
 /// Beds kept ahead of the slimos and the waiting: a Bunkhouse's six (a flush is 1–6 a stratum of its grate).
 const SPARE_BEDS: i32 = 6;
-/// Below these cells joined to the Heart the Pits feed whatever research wants (a Cleansing burns the Mat back to the
-/// Heart; the founding leaves 107–290).
-const HUNGRY: usize = 300;
+/// Below these cells joined to the Heart the Heart's Pit feeds whatever research wants (a Cleansing burns the Mat
+/// back to the Heart's few dozen; the founding leaves 107–290).
+const HUNGRY: usize = 100;
 /// A frontier Pit's quota: nutrient kept, Uncommon at most.
 const FRONT_KEEP: QuotaSet = QuotaSet { target: 4.0, ceiling: 1 };
 
@@ -103,6 +105,31 @@ fn threat_bloom_line(w: &World) -> f32 {
 
 fn heart_xy(w: &World) -> (u16, u16) {
     w.city.sim.heart.map(|(x, y)| (x as u16, y as u16)).unwrap_or((0, 0))
+}
+
+/// The anchor joined to the Heart whose 3 x 3 holds the most nutrient, nearest the Heart on a tie.
+fn richest_spot(w: &World, def: &str) -> Option<(u16, u16)> {
+    let sim = &w.city.sim;
+    let joined = logistics::joined_to_heart(sim);
+    let (hx, hy) = heart_xy(w);
+    let food = |i: usize| -> f32 {
+        let (x, y) = ((i % sim.w) as i32, (i / sim.w) as i32);
+        let mut t = 0.0;
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                let (nx, ny) = (x + dx, y + dy);
+                if nx >= 0 && ny >= 0 && (nx as usize) < sim.w && (ny as usize) < sim.h {
+                    t += sim.n[ny as usize * sim.w + nx as usize];
+                }
+            }
+        }
+        t
+    };
+    (0..joined.len())
+        .filter(|&i| joined[i] && w.colony.can_place(&w.defs, sim, def, (i % sim.w) as u16, (i / sim.w) as u16).is_ok())
+        .map(|i| (food(i), (i % sim.w) as i32, (i / sim.w) as i32))
+        .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(((b.1 - hx as i32).abs() + (b.2 - hy as i32).abs()).cmp(&((a.1 - hx as i32).abs() + (a.2 - hy as i32).abs()))).then(b.2.cmp(&a.2)).then(b.1.cmp(&a.1)))
+        .map(|(_, x, y)| (x as u16, y as u16))
 }
 
 fn place_near(w: &mut World, def: &str, from: (u16, u16), why: &str, out: &mut Vec<String>) -> Option<u32> {
@@ -123,6 +150,7 @@ impl CampaignSteward {
         self.chapter_builds(w, &mut out);
         self.buy(w, &mut out);
         self.climb(w, &mut out);
+        self.loops(w, &mut out);
         self.steer(w, &mut out);
         self.ivan(w, &mut out);
         self.contraband(w, &mut out);
@@ -138,13 +166,38 @@ impl CampaignSteward {
     }
 
     /// The stratum the run goes to: the Vault while chapter 5 waits on a Runner home from it, else the lowest the Board
-    /// offers.
+    /// offers that has no loop yet.
     pub fn run_on(&self, w: &World) -> u8 {
         let board: Vec<u8> = logistics::board_strata(w.threats.stratum, w.city.sim.strata).collect();
         if w.campaign.chapter == 5 && !w.campaign.vault_home && board.contains(&5) {
             return 5;
         }
-        board.first().copied().unwrap_or(1)
+        // the lowest route not yet on a loop, so each earns its two runs home and a crew of its own
+        board.iter().copied().find(|&s| !w.colony.loops.iter().any(|l| l.stratum == s)).or_else(|| board.first().copied()).unwrap_or(1)
+    }
+
+    /// Route loops (Full Design v3.18): every Board route the Runners have come home from twice gets a crew of one,
+    /// the best Scav not posted elsewhere — a loop is a haul a shift, and the haul's Chrome is the climb's food.
+    fn loops(&mut self, w: &mut World, out: &mut Vec<String>) {
+        if !w.colony.progress.tech.flag("route_loops") {
+            return;
+        }
+        let board: Vec<u8> = logistics::board_strata(w.threats.stratum, w.city.sim.strata).collect();
+        let (research, guard) = (people::Job::Research, people::Job::Guard);
+        for s in board {
+            if w.colony.loops.iter().any(|l| l.stratum == s) || w.colony.homes_from(s) < colony::LOOP_AFTER {
+                continue;
+            }
+            let looping: Vec<u32> = w.colony.loops.iter().map(|l| l.slimo).collect();
+            let mut crew: Vec<(u8, u32, String)> = w.roster.eligible().into_iter().filter(|r| !looping.contains(&r.id) && r.priorities[research.index()] != 4 && r.priorities[guard.index()] != 4).map(|r| (r.skill(people::Skill::Scav), r.id, r.full_name())).collect();
+            crew.sort_by_key(|c| (std::cmp::Reverse(c.0), c.1));
+            // the best stays the Runner
+            if let Some((_, id, name)) = crew.get(1).cloned() {
+                if w.colony.set_loop(s, Some(id)).is_ok() {
+                    out.push(format!("{name} loops the S{s} route"));
+                }
+            }
+        }
     }
 
     fn answer(&mut self, w: &mut World, out: &mut Vec<String>) {
@@ -237,16 +290,23 @@ impl CampaignSteward {
     }
 
     /// Beds for the slimos, the newcomers waiting at a grate and a Bunkhouse's worth ahead (Recruitment: a batch not
-    /// sheltered within two shifts goes feral), every ghost placed this shift.
+    /// sheltered within two shifts goes feral), every ghost placed this shift, each where the Mat is richest.
     fn beds(&mut self, w: &mut World, out: &mut Vec<String>) {
         let def = if w.colony.progress.tech.structure_locked("bunkhouse").is_none() { "bunkhouse" } else { "pod" };
         let want = (w.roster.records.len() + w.roster.waiting.len()) as i32 + SPARE_BEDS;
         let ghost_beds = |w: &World| -> i32 { w.colony.structures.iter().filter(|s| !s.built).filter_map(|s| w.defs.structure[s.def].beds.first().copied()).sum() };
         for _ in 0..8 {
             let (beds, _) = w.colony.bed_count(&w.defs);
-            if beds + ghost_beds(w) >= want || place_near(w, def, heart_xy(w), " for the slimos and the newcomers without beds", out).is_none() {
+            if beds + ghost_beds(w) >= want {
                 break;
             }
+            // where the Mat is richest: a slimo with a bed eats from the tissue about its home (Homes, meals), so a
+            // city housed round the Heart starves the Heart's own tissue
+            let Some((x, y)) = richest_spot(w, def) else { break };
+            if w.colony.place(&w.defs, &w.city.sim, def, x, y).is_err() {
+                break;
+            }
+            out.push(format!("{} placed at {x},{y} for the slimos and the newcomers without beds", w.defs.get(def).map_or(def.to_string(), |d| d.name.clone())));
         }
     }
 
@@ -298,15 +358,18 @@ impl CampaignSteward {
         if hot > room && !pending(w, "vault") && w.colony.progress.tech.structure_locked("vault").is_none() {
             place_near(w, "vault", heart, " for the Blackline in the open", out);
         }
-        // chapter 4: a Pen on the city's Mat where it comes nearest a Bloom's Node, within the twelve a crawler hunts a
-        // slimo at, and a slimo ordered to Tend it (a crawler that comes within 4 is tamed; two tamed close the chapter)
+        // chapter 4: a Pen on the city's Mat where it comes nearest the Node a crawler stands for, within the twelve a
+        // crawler hunts a slimo at, and a slimo ordered to Tend it (a crawler that comes within 4 is tamed; two tamed close the chapter)
         if ch == 4 && w.campaign.open_since > 0 && w.campaign.bloom {
             let sim = &w.city.sim;
             let sw = sim.w;
-            // tiles from the nearest Bloom Node, as the crow flies (Chebyshev, the crawlers' reach)
+            // tiles from the nearest Node a crawler stands for (its home: it hunts within 12 of where it is and chews
+            // within 16 of it), as the crow flies; with none standing, from every Bloom Node
             let mut far = vec![u16::MAX; sim.hy.len()];
             let mut q = std::collections::VecDeque::new();
-            for i in (0..sim.hy.len()).filter(|&i| sim.is_bloom(i) && sim.hy[i] == mat::sim::hy::NODE) {
+            let homes: Vec<usize> = w.threats.bodies.iter().filter(|b| b.role == threat::Role::Crawler && !b.dead && sim.is_bloom(b.home)).map(|b| b.home).collect();
+            let seeds: Vec<usize> = if homes.is_empty() { (0..sim.hy.len()).filter(|&i| sim.is_bloom(i) && sim.hy[i] == mat::sim::hy::NODE).collect() } else { homes };
+            for i in seeds {
                 far[i] = 0;
                 q.push_back(i);
             }
@@ -325,8 +388,8 @@ impl CampaignSteward {
             }
             let tended = w.colony.structures.iter().filter(|s| w.defs.structure[s.def].id == "pen").any(|s| far[s.y as usize * sw + s.x as usize] <= 12);
             if !tended {
-                let joined = logistics::joined_to_heart(sim);
-                let spot = (0..joined.len()).filter(|&i| joined[i] && far[i] <= 12).filter(|&i| w.colony.can_place(&w.defs, sim, "pen", (i % sw) as u16, (i / sw) as u16).is_ok()).min_by_key(|&i| (far[i], i));
+                // anywhere the city's signal lets a Pen stand: the frontier past the Relays counts
+                let spot = (0..sim.hy.len()).filter(|&i| far[i] <= 12 && mat::sim::is_hyphal(sim.hy[i]) && !sim.is_bloom(i)).filter(|&i| w.colony.can_place(&w.defs, sim, "pen", (i % sw) as u16, (i / sw) as u16).is_ok()).min_by_key(|&i| (far[i], i));
                 if let Some(i) = spot {
                     let (x, y) = ((i % sw) as u16, (i / sw) as u16);
                     if w.colony.place(&w.defs, &w.city.sim, "pen", x, y).is_ok() {
@@ -424,34 +487,37 @@ impl CampaignSteward {
         }
     }
 
-    /// Chrome bought with the eddies past a reserve, the cheapest a unit at any stall in reach, while the Stash holds
-    /// less than a research node's and a Relay's (the haul's Chrome feeds the Heart; research and the climb buy theirs).
+    /// Chrome and Parts bought with the eddies past a reserve, the cheapest a unit at any stall in reach, while the Stash
+    /// holds less than a research node's and a Relay's Chrome, or a Bunkhouse's and a node's Parts (the beds a big flush
+    /// asks for would otherwise take every Part research waits on).
     fn buy(&mut self, w: &mut World, out: &mut Vec<String>) {
-        let chrome = w.stash.handles().iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == Category::Chrome).count();
-        let riding: u16 = w.ledger.orders.iter().map(|o| o.units).sum();
-        if chrome + riding as usize >= CHROME_WANTED || w.ledger.eddies < EDDY_RESERVE {
-            return;
-        }
-        let mut best: Option<(u32, u8, u8, u16, u16)> = None;
-        for m in crate::city::Steward::in_reach(w) {
-            let g = w.city.markets[m];
-            let Some(f) = w.economy.faction_at(g) else { continue };
-            for (entry, units, each) in w.economy.stock(f, &w.table, 0, false, false) {
-                let is_chrome = w.economy.stock_item(f, entry).is_some_and(|i| w.table.def(i).category == Category::Chrome);
-                if is_chrome && units > 0 && best.is_none_or(|b| each < b.0) {
-                    best = Some((each, m as u8, f, entry, units));
+        for (cat, want, what) in [(Category::Chrome, CHROME_WANTED, "Chrome"), (Category::Part, PARTS_WANTED, "Parts")] {
+            let have = w.stash.handles().iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == cat).count();
+            let riding: u16 = w.ledger.orders.iter().filter(|o| w.economy.stock_item(o.faction, o.entry).is_some_and(|i| w.table.def(i).category == cat)).map(|o| o.units).sum();
+            if have + riding as usize >= want || w.ledger.eddies < EDDY_RESERVE {
+                continue;
+            }
+            let mut best: Option<(u32, u8, u8, u16, u16)> = None;
+            for m in crate::city::Steward::in_reach(w) {
+                let g = w.city.markets[m];
+                let Some(f) = w.economy.faction_at(g) else { continue };
+                for (entry, units, each) in w.economy.stock(f, &w.table, 0, false, false) {
+                    let is = w.economy.stock_item(f, entry).is_some_and(|i| w.table.def(i).category == cat);
+                    if is && units > 0 && best.is_none_or(|b| each < b.0) {
+                        best = Some((each, m as u8, f, entry, units));
+                    }
                 }
             }
-        }
-        let Some((each, m, f, entry, units)) = best else { return };
-        let afford = ((w.ledger.eddies - EDDY_RESERVE) / each.max(1)) as u16;
-        let n = units.min(afford).min((CHROME_WANTED - chrome) as u16);
-        if n == 0 {
-            return;
-        }
-        let plan = w.plan.clone();
-        if crate::trade::order(&mut w.economy, &mut w.ledger, &w.table, &w.city, &w.colony, &w.defs, &w.roster, &plan, m, f, entry, n).is_ok() {
-            out.push(format!("{n} Chrome ordered from the {} at {each} e each", w.economy.name(f)));
+            let Some((each, m, f, entry, units)) = best else { continue };
+            let afford = ((w.ledger.eddies - EDDY_RESERVE) / each.max(1)) as u16;
+            let n = units.min(afford).min((want - have) as u16);
+            if n == 0 {
+                continue;
+            }
+            let plan = w.plan.clone();
+            if crate::trade::order(&mut w.economy, &mut w.ledger, &w.table, &w.city, &w.colony, &w.defs, &w.roster, &plan, m, f, entry, n).is_ok() {
+                out.push(format!("{n} {what} ordered from the {} at {each} e each", w.economy.name(f)));
+            }
         }
     }
 
@@ -460,22 +526,26 @@ impl CampaignSteward {
     /// is served first when both pull) — unless the Mat is burned back to the Heart, when it eats first; Ivan's hand feeds the item that widens the aim's lead most at three times its bias.
     fn steer(&mut self, w: &mut World, out: &mut Vec<String>) {
         let chrome = w.stash.handles().iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == Category::Chrome).count();
-        // a Mat burned back to the Heart eats first: what it lost goes feral unless it regrows to it
-        let joined = logistics::joined_to_heart(&w.city.sim).iter().filter(|&&j| j).count();
-        let feeding = chrome >= CHROME_WANTED || joined < HUNGRY;
-        // the frontier's Pits feed on what a Relay and a research node leave (the climb stands without them)
-        let frontier = chrome >= FRONT_RESERVE;
+        // a Mat burned back to the Heart eats first, Uncommon too: what it lost goes feral unless it regrows to it, and
+        // the frontier waits
+        let hungry = logistics::joined_to_heart(&w.city.sim).iter().filter(|&&j| j).count() < HUNGRY;
+        let feeding = chrome >= CHROME_WANTED || hungry;
+        // the frontier's Pits feed on what a Relay leaves (the climb stands without them)
+        let frontier = chrome >= FRONT_RESERVE && !hungry;
         let pits: Vec<(u32, bool)> = w.colony.pits(&w.defs).into_iter().filter_map(|id| w.colony.get(id).map(|s| (id, w.defs.structure[s.def].id == "heart"))).collect();
         for (id, heart) in pits {
-            let target = if heart { if feeding { crate::city::HEART_KEEP.target } else { 0.0 } } else if frontier { FRONT_KEEP.target } else { 0.0 };
-            let q = QuotaSet { target, ceiling: if heart { 0 } else { FRONT_KEEP.ceiling } };
+            let q = if heart {
+                QuotaSet { target: if feeding { crate::city::HEART_KEEP.target } else { 0.0 }, ceiling: if hungry { FRONT_KEEP.ceiling } else { 0 } }
+            } else {
+                QuotaSet { target: if frontier { FRONT_KEEP.target } else { 0.0 }, ceiling: FRONT_KEEP.ceiling }
+            };
             if w.colony.get(id).and_then(|s| s.quota) != Some(q) {
                 w.colony.set_quota(&w.defs, id, Some(q));
             }
         }
         if feeding != self.feeding {
             self.feeding = feeding;
-            out.push(if feeding { "the Pits feed again: the Stash holds the Chrome research wants".into() } else { "the Pits stop feeding: research and the Relays want the Chrome".into() });
+            out.push(if feeding { "the Heart's Pit feeds: the Mat is burned back, or the Stash holds the Chrome research wants".into() } else { "the Heart's Pit stops feeding: research, the Relays and the climb want the Chrome".into() });
         }
     }
 
@@ -595,14 +665,20 @@ fn after(w: &World, genome: [f32; 10], d: &items::ItemDef, times: f32) -> [f32; 
     g
 }
 
-/// The aim's ending's score less the best other strain ending's (Full Design v3.19, Endings; the ally aside).
+/// The aim's ending's score less the best other strain ending's (Full Design v3.19, Endings; the ally aside), and
+/// for every aim but the World-Eater's a strain kept off the Bloom line: past Feral Drive 0.5 everything a Cleansing
+/// cuts off blooms against the city (Pressure: Blooms), so a feed that carries it over counts as a lost ending.
 fn lead(aim: Aim, genome: &[f32; 10]) -> f32 {
     let own = if aim.ending == "scattered" { "garden" } else { aim.ending };
     let scores = story::ChapterFile::shipped().scores(genome, 0);
     let mine = scores.iter().find(|s| s.0 == own).map_or(0.0, |s| s.1);
     let rival = scores.iter().filter(|s| s.0 != own).map(|s| s.1).fold(0.0, f32::max);
-    mine - rival
+    let blooms = own != "world_eater" && genome[mat::genome::FERAL] > BLOOM_LINE;
+    mine - rival - if blooms { 1.0 } else { 0.0 }
 }
+
+/// Feral Drive over which a strain's cut-off tissue blooms (`data/threats.toml`'s bloom.feral_drive, Pass 1).
+const BLOOM_LINE: f32 = 0.5;
 
 /// The campaign's result: every shift, and whether and where it ended.
 #[derive(Clone, Debug, Default)]
@@ -623,7 +699,8 @@ pub fn play(seed: u64, aim: Aim, max: u32, each: &mut dyn FnMut(&CampaignShift, 
     let w = World::found_with(seed, table, story::Campaign::new(Mode::Campaign, story::Difficulty::Culvert), mat::Genome::default());
     let mut p = Player::new(w, seed, Haul::Feed);
     // the Turret first: the flamers end at the Heart's walls, where it stands
-    p.steward.wanted = vec!["c1_forge", "c2_turret", "c2_gate", "c2_vault", "f1_pens", "f2_still"];
+    p.steward.wanted = vec!["c1_forge", "c2_turret", "c2_gate", "c2_vault", "m2_routes", "f1_pens", "f2_still"];
+    p.steward.only_wanted = true;
     let mut cs = CampaignSteward { aim: Some(aim), ..Default::default() };
     let mut out = CampaignRun { seed, aim: aim.ending.to_string(), ..Default::default() };
     for _ in 0..max {

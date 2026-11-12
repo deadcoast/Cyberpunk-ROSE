@@ -449,10 +449,13 @@ impl MatSim {
         self.splash(x, y, 0.6, true);
     }
 
-    /// A built nerve: a Node that is a signal source and never starves.
+    /// A built nerve: a Node that is a signal source and never starves. Ground the Mat cannot grow on becomes open
+    /// floor; a grate stays a grate (a Relay on one erased it, and with it the crossing above and its market).
     pub fn place_relay(&mut self, x: usize, y: usize) {
         let i = self.idx(x, y);
-        self.sub[i] = sub::OPEN;
+        if !sub::GROWABLE[self.sub[i] as usize] {
+            self.sub[i] = sub::OPEN;
+        }
         self.set_hy(i, hy::NODE);
         for d in 0..4 {
             if let Some(j) = self.nb(i, d) {
