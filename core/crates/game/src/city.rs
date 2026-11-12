@@ -260,14 +260,41 @@ impl Steward {
     }
 
     /// The research standing order (this design's steward; Full Design v3.18, Research): with no project standing,
-    /// study a blueprint the Stash holds that opens a tier, else start the first node of the lowest open tier the
-    /// Stash pays for while it keeps a Bunkhouse's Parts and a Relay's Chrome.
+    /// the wanted nodes first (`rose campaign`'s defences), else study a blueprint the Stash holds that opens a tier,
+    /// else start the first node of the lowest open tier the Stash pays for while it keeps a Bunkhouse's Parts and a
+    /// Relay's Chrome.
     fn research(&mut self, w: &mut World, out: &mut Vec<String>) {
         if w.colony.progress.tech.project.is_some() {
             return;
         }
         let f = progress::TechFile::shipped();
         let held: Vec<String> = w.stash.handles().into_iter().map(|(_, _, it)| w.table.def(it.def).id.clone()).collect();
+        let parts = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == items::Category::Part).count() as u32;
+        let chrome = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == items::Category::Chrome).count() as u32;
+        // the wanted first, in their order: the node once it can be picked and paid, with no reserve kept (it is what
+        // the reserves are for), else the blueprint in hand that opens its tier
+        for id in self.wanted.clone() {
+            let Some(n) = f.get(id) else { continue };
+            if w.colony.progress.tech.has(id) {
+                continue;
+            }
+            let p = progress::Project::Node(n.id.clone());
+            if w.colony.progress.tech.cannot_pick(&p).is_none() {
+                let (cp, cc) = f.cost_of(&p);
+                if parts >= cp && chrome >= cc && crate::grow::pick_project(&mut w.colony, &mut w.stash, &mut w.ledger, &w.table, p).is_ok() {
+                    Self::decide(w, format!("research: {}", n.name), out);
+                }
+                return;
+            }
+            let opens = held.iter().find(|item| f.blueprint(item) == Some((n.branch_index(), n.tier))).cloned();
+            if let Some(item) = opens {
+                if crate::grow::pick_project(&mut w.colony, &mut w.stash, &mut w.ledger, &w.table, progress::Project::Study(item)).is_ok() {
+                    let name = w.colony.progress.tech.project_name().unwrap_or_default();
+                    Self::decide(w, format!("research: {name}"), out);
+                    return;
+                }
+            }
+        }
         let mut studies: Vec<(u8, String)> = held.iter().filter_map(|id| f.blueprint(id).map(|(_, t)| (t, id.clone()))).collect();
         studies.sort();
         for (_, item) in studies {
@@ -278,11 +305,9 @@ impl Steward {
                 return;
             }
         }
-        let parts = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == items::Category::Part).count() as u32;
-        let chrome = w.stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == items::Category::Chrome).count() as u32;
         let mut nodes: Vec<&progress::tech::NodeDef> = f.node.iter().filter(|n| w.colony.progress.tech.cannot_pick(&progress::Project::Node(n.id.clone())).is_none()).collect();
-        // the wanted first, in their order; then the cheapest tier
-        nodes.sort_by_key(|n| (self.wanted.iter().position(|&x| x == n.id).unwrap_or(usize::MAX), n.tier));
+        // then the cheapest tier
+        nodes.sort_by_key(|n| n.tier);
         for n in nodes {
             let p = progress::Project::Node(n.id.clone());
             let (cp, cc) = f.cost_of(&p);

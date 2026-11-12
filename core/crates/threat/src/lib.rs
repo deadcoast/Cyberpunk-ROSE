@@ -862,7 +862,7 @@ impl Threats {
         } else {
             // `feral` is Bloom tissue already: the strain's past its line, or the campaign's cut-off strain (v3.19).
             // Each Bloom — a piece of it joined along its tissue — spawns from its Nodes, a crawler a Node a shift, until
-            // it has its most standing: two for every forty of its tiles (Full Design v3.20)
+            // it has its most standing: two for every four hundred of its tiles (Full Design v3.20)
             let mut spawned = 0;
             let mut part = vec![usize::MAX; sim.hy.len()];
             let mut pieces: Vec<(Vec<usize>, usize)> = Vec::new();
@@ -893,11 +893,25 @@ impl Threats {
                 nodes.sort_unstable();
                 pieces.push((nodes, tiles));
             }
+            // a crawler whose Node is gone (severed, burned, taken back) starves with it
+            let mut starved = 0;
+            for b in self.bodies.iter_mut().filter(|b| b.role == Role::Crawler && !b.dead && !sim.is_bloom(b.home)) {
+                b.dead = true;
+                starved += 1;
+            }
+            if starved > 0 {
+                out.notes.push(Note::landing(format!("{starved} Bloom crawler{} starved with their Node", if starved == 1 { "" } else { "s" })));
+            }
             let (per_node, most_each, most_tiles) = (self.rules.bloom.per_node, self.rules.bloom.most, self.rules.bloom.most_tiles.max(1));
+            // the most is the Blooms' tiles together, so a Bloom cut to pieces fields no more than it did whole
+            let all_tiles: usize = pieces.iter().map(|p| p.1).sum();
+            let standing_all = self.bodies.iter().filter(|b| b.role == Role::Crawler && !b.dead).count() as u32;
+            let mut room_all = (most_each * (all_tiles as u32).div_ceil(most_tiles)).saturating_sub(standing_all);
             for (k, (nodes, tiles)) in pieces.iter().enumerate() {
                 let most = most_each * (*tiles as u32).div_ceil(most_tiles);
                 let standing = self.bodies.iter().filter(|b| b.role == Role::Crawler && !b.dead && part.get(b.home).is_some_and(|&p| p == k)).count() as u32;
-                let room = most.saturating_sub(standing);
+                let room = most.saturating_sub(standing).min(room_all);
+                room_all -= room;
                 let spawn: Vec<usize> = nodes.iter().copied().flat_map(|i| std::iter::repeat_n(i, per_node as usize)).take(room as usize).collect();
                 for i in spawn {
                     let (x, y) = ((i % sim.w) as u16, (i / sim.w) as u16);
@@ -1269,6 +1283,10 @@ impl Threats {
         }
         self.due.retain(|d| d.in_ticks > 0 || !send.iter().any(|s| s.1 == d.zone as usize));
         for (st, z, share) in send {
+            // the Oathkeepers answer what they have noticed: a stage that comes down spends its line from the zone's
+            // Attention (Full Design v3.20, Pressure)
+            let line = self.rules.stage[st].at * share;
+            self.zones[z].attention = (self.zones[z].attention - line).max(0.0);
             notes.extend(self.send_share(city, colony, defs, st, z, share));
         }
         if self.bodies.is_empty() && self.events.is_empty() && self.stain.iter().all(|s| *s == 0) {
@@ -1568,7 +1586,10 @@ impl Threats {
                 dmg += 2.0;
             }
             let oath_only = d.oath_only;
-            if let Some(t) = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.hostile() && (!oath_only || o.role.oathkeeper()) && dist2((st.x, st.y), (o.x, o.y)) <= r * r).min_by_key(|o| (dist2((st.x, st.y), (o.x, o.y)), o.id)) {
+            // a seat a slimo works holds its fire on a Patrol's scouts: they map and leave, and each that falls is
+            // +15 at the grate (Full Design v3.20, Pressure); an organ fires on what comes, as it always has
+            let spared = |o: &Body| seated && o.role == Role::Scout;
+            if let Some(t) = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.hostile() && !spared(o) && (!oath_only || o.role.oathkeeper()) && dist2((st.x, st.y), (o.x, o.y)) <= r * r).min_by_key(|o| (dist2((st.x, st.y), (o.x, o.y)), o.id)) {
                 let e = body_dmg.entry(t.id).or_insert((0.0, None));
                 e.0 += dmg;
                 e.1 = Some(Foe::Structure(st.id));
@@ -1605,7 +1626,7 @@ impl Threats {
             if *cd > 0.0 {
                 continue;
             }
-            if let Some(t) = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.hostile() && cheb(at, (o.x, o.y)) <= reach).min_by_key(|o| o.id) {
+            if let Some(t) = self.bodies.iter().filter(|o| !o.dead && !o.gone && o.role.hostile() && o.role != Role::Scout && cheb(at, (o.x, o.y)) <= reach).min_by_key(|o| o.id) {
                 let e = body_dmg.entry(t.id).or_insert((0.0, None));
                 e.0 += (self.rules.defence.guard_strike + fight(id) + if blackline { 2 } else { 0 }) as f32;
                 e.1 = Some(Foe::Slimo(id));
@@ -1777,7 +1798,11 @@ impl Threats {
             }
             if b.role.oathkeeper() {
                 let z = self.zone_at(&city.sim, b.x, b.y).unwrap_or(b.zone as usize);
-                self.zones[z].kills += 1;
+                // a scout killed is +15 at the grate (Pass 1 and 2 name the scouts: "kill only when the salvage is
+                // worth the gauge"); a Sweep's or Cleansing's dead came because of the gauge
+                if b.role == Role::Scout {
+                    self.zones[z].kills += 1;
+                }
                 if let Some(e) = self.events.iter_mut().find(|e| e.id == b.event) {
                     e.fallen += 1;
                     let st = &self.rules.stage[e.stage];
@@ -1978,29 +2003,35 @@ mod tests {
     }
 
     #[test]
-    fn a_turret_with_a_guard_kills_a_scout_for_salvage_and_attention() {
+    fn a_turret_lets_a_patrol_map_and_leave_and_fires_on_a_sweep() {
         let (mut c, mut col, defs, mut t) = city();
         let g = t.zones.iter().position(|z| c.markets.contains(&z.grate)).unwrap();
-        let gx = t.zones[g].grate as u16;
-        // a Turret on the first anchor it can stand within its range of the grate
+        col.progress.tech = progress::Tech::every_structure();
+        // a Turret on the first anchor it can stand by the Heart, where both squads walk
+        let (hx, hy) = c.sim.heart.map(|(x, y)| (x as u16, y as u16)).unwrap();
         let mut placed = None;
-        'p: for y in 0..12u16 {
-            for x in gx.saturating_sub(6)..gx + 6 {
+        'p: for y in hy.saturating_sub(4)..hy + 5 {
+            for x in hx.saturating_sub(4)..hx + 5 {
                 if let Ok(id) = col.place_built(&defs, &c.sim, "turret", x, y, 1) {
                     placed = Some(id);
                     break 'p;
                 }
             }
         }
-        let Some(turret) = placed else { return };
+        let turret = placed.expect("a Turret within range of the grate");
         let posts = Posts { guards: vec![(1, turret)], ..Default::default() };
+        // the Patrol: its scouts are let go, so no kill and no salvage
         t.send(&c, &col, &defs, 0, g);
         run(&mut c, &mut col, &defs, &mut t, &posts, 900);
-        let e = &t.events[0];
-        assert!(e.fallen >= 1, "the Turret killed nothing");
-        assert!(t.owed.0 >= 1, "a scout's 1-2 Blackline");
-        let kills: u32 = t.zones.iter().map(|z| z.kills).sum();
-        assert_eq!(kills, e.fallen);
+        assert_eq!(t.events[0].fallen, 0, "a seated Turret holds its fire on a scout");
+        assert_eq!(t.owed.0, 0);
+        // a Sweep: the Turret fires on it
+        t.events.clear();
+        t.bodies.clear();
+        t.send(&c, &col, &defs, 1, g);
+        run(&mut c, &mut col, &defs, &mut t, &posts, 3000);
+        let hurt = t.bodies.iter().filter(|b| b.hp < t.body_def(b.role).hp as f32).count();
+        assert!(hurt >= 1, "the Turret fired on nothing of the Sweep");
     }
 
     #[test]
@@ -2079,7 +2110,8 @@ mod tests {
         for i in cut {
             c.sim.sever(i % w, i / w);
         }
-        for _ in 0..40 {
+        // feral within a shift at Feral Drive 0.8: 0.010 a step (an eighth of Pass 1's), a shift is 125 steps
+        for _ in 0..125 {
             c.sim.step();
         }
         let bloom: Vec<usize> = (0..c.sim.hy.len()).filter(|&i| c.sim.is_bloom(i)).collect();

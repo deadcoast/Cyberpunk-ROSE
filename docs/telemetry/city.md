@@ -18,17 +18,17 @@ Written by `rose city --seed 11 --shifts 20` on 2026-11-12 (Full Design v3.13, T
 | 8 | 8 | Nia 'Oathless' | extracted | 3:10 | 28 | 23 | 8.0 s | 7.5 s | 9 | 84 | 3 | 0 | 197 (+25 −1) | 0 | 145 | 1482.6 | 0 | held | Salt Works |
 | 9 | 9 | Nia 'Oathless' | extracted | 2:34 | 20 | 16 | 9.7 s | 7.5 s | 9 | 92 | 5 | 5 | 206 (+10 −1) | 0 | 145 | 1612.3 | 0 | held | - |
 | 10 | 10 | Nia 'Oathless' | extracted | 3:39 | 34 | 17 | 7.9 s | 7.5 s | 9 | 113 | 7 | 21 | 228 (+23 −1) | 0 | 152 | 1792.3 | 0 | held | - |
-| 11 | 11 | Nia 'Oathless' | extracted | 3:26 | 31 | 19 | 7.7 s | 7.4 s | 9 | 132 | 7 | 40 | 232 (+5 −1) | 0 | 153 | 1958.6 | 0 | held | - |
-| 12 | 12 | Nia 'Oathless' | extracted | 2:59 | 25 | 16 | 8.0 s | 7.5 s | 9 | 148 | 8 | 54 | 255 (+24 −1) | 0 | 153 | 2091.7 | 0 | held | - |
+| 11 | 11 | Nia 'Oathless' | extracted | 3:26 | 31 | 18 | 7.7 s | 7.5 s | 9 | 132 | 7 | 40 | 232 (+5 −1) | 0 | 153 | 1958.6 | 0 | held | - |
+| 12 | 12 | Nia 'Oathless' | extracted | 2:59 | 25 | 17 | 8.0 s | 7.5 s | 9 | 148 | 8 | 54 | 255 (+24 −1) | 0 | 153 | 2091.7 | 0 | held | - |
 | 13 | 13 | Nia 'Oathless' | extracted | 3:11 | 27 | 18 | 7.9 s | 7.5 s | 9 | 162 | 8 | 68 | 269 (+15 −1) | 0 | 153 | 2241.1 | 0 | held | - |
-| 14 | 14 | Nia 'Oathless' | extracted | 2:46 | 22 | 16 | 8.1 s | 7.7 s | 9 | 167 | 8 | 74 | 288 (+20 −1) | 0 | 153 | 2371.8 | 0 | held | - |
-| 15 | 15 | Nia 'Oathless' | extracted | 2:32 | 21 | 21 | 9.8 s | 7.8 s | 9 | 183 | 8 | 90 | 329 (+42 −1) | 0 | 154 | 2482.7 | 0 | held | - |
+| 14 | 14 | Nia 'Oathless' | extracted | 2:46 | 22 | 15 | 8.1 s | 7.9 s | 9 | 167 | 8 | 74 | 288 (+20 −1) | 0 | 153 | 2371.8 | 0 | held | - |
+| 15 | 15 | Nia 'Oathless' | extracted | 2:32 | 21 | 22 | 9.8 s | 7.8 s | 9 | 183 | 8 | 90 | 329 (+42 −1) | 0 | 154 | 2482.7 | 0 | held | - |
 | 16 | 16 | Nia 'Oathless' | extracted | 2:09 | 19 | 17 | 8.1 s | 7.5 s | 9 | 194 | 8 | 99 | 347 (+19 −1) | 0 | 154 | 2582.5 | 0 | held | - |
-| 17 | 17 | Nia 'Oathless' | extracted | 3:35 | 33 | 12 | 7.8 s | 7.5 s | 9 | 209 | 8 | 112 | 385 (+39 −1) | 0 | 154 | 2743.8 | 0 | held | - |
-| 18 | 18 | Nia 'Oathless' | died | 6:43 | 46 | 20 | 8.1 s | 8.0 s | 8 | 199 | 8 | 103 | 426 (+42 −1) | 0 | 158 | 3019.9 | 0 | held | - |
+| 17 | 17 | Nia 'Oathless' | extracted | 3:35 | 33 | 11 | 7.8 s | 7.5 s | 9 | 209 | 8 | 112 | 385 (+39 −1) | 0 | 154 | 2743.8 | 0 | held | - |
+| 18 | 18 | Nia 'Oathless' | died | 6:43 | 46 | 21 | 8.1 s | 7.9 s | 8 | 199 | 8 | 103 | 426 (+42 −1) | 0 | 158 | 3019.9 | 0 | held | - |
 | 19 | 19 | Moss 'Bleach' | extracted | 3:12 | 27 | 11 | 7.9 s | 7.5 s | 9 | 216 | 8 | 120 | 453 (+29 −2) | 0 | 158 | 3159.5 | 0 | held | Lantern Post |
-| 20 | 20 | Moss 'Bleach' | extracted | 3:28 | 29 | 9 | 9.0 s | 7.5 s | 9 | 229 | 8 | 133 | 451 (+0 −2) | 0 | 161 | 3311.0 | 0 | held | - |
+| 20 | 20 | Moss 'Bleach' | extracted | 3:28 | 29 | 8 | 9.0 s | 7.7 s | 9 | 229 | 8 | 133 | 451 (+0 −2) | 0 | 161 | 3311.0 | 0 | held | - |
 
-**Alerts standing at the last shift's end**: the Flood is up 3 tiles; 133 on the Heart's floor: no room in the grid; Sump Row petitions: lit
+**Alerts standing at the last shift's end**: the Flood is up 3 tiles; 133 on the Heart's floor: no room in the grid; Sump Row petitions: lit; grate 5 is loud: a Patrol is coming
 
 The merged log, every run and city event on one clock, is `out/city.log` (not committed).

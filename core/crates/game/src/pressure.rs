@@ -46,8 +46,10 @@ pub fn tick(threats: &mut Threats, city: &mut City, colony: &mut Colony, defs: &
 #[allow(clippy::too_many_arguments)]
 pub fn end(threats: &mut Threats, city: &mut City, colony: &mut Colony, defs: &StructureFile, roster: &mut Roster, stash: &mut Stash, table: &ItemTable, log: &mut CityLog, died: &mut Vec<Record>, o: &ShiftOutcome, day: u32, run_kills: u32) {
     let tick = city.tick;
-    // Relic containment: what the Stash holds counts as vaulted (Full Design v3.18, Research)
-    let exposed = if colony.progress.tech.flag("stash_vaulted") { 0 } else { stash.exposed_contraband(table) as u32 };
+    // Relic containment: what the Stash holds counts as vaulted (Full Design v3.18, Research); else the built Vaults
+    // hold their capacity of it out of the light (v3.20)
+    let vaulted: u32 = colony.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "vault").map(|s| defs.structure[s.def].value_at("capacity", s.tier).max(0) as u32).sum();
+    let exposed = if colony.progress.tech.flag("stash_vaulted") { 0 } else { (stash.exposed_contraband(table) as u32).saturating_sub(vaulted) };
     let shown = threat::Shown { exposed, run_kills };
     let open = colony.charter.flag_at("attention_x1_5", 0);
     let curfew = colony.charter.flag_at("curfew", 0);

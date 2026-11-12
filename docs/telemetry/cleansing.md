@@ -4,14 +4,14 @@ Written by `rose cleansing --seed 11 --shifts 10` on 2026-11-12 (Full Design v3.
 
 | city | the Heart | Mat cells | structures | slimos | dead | bleeding | Oathkeepers fell | Mat tiles burned | structures ruined | seconds | Blackline |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| as it stands | burned | 152 → 143 | 10 → 9 | 9 → 8 | 1 | 0 | 0 of 8 | 173 | 1 | 1657 | 0 |
-| defended | 165 HP | 152 → 143 | 10 → 12 | 9 → 9 | 0 | 0 | 8 of 8 | 23 | 0 | 570 | 17 |
+| as it stands | burned | 152 → 129 | 10 → 9 | 9 → 8 | 1 | 0 | 0 of 8 | 133 | 1 | 1657 | 0 |
+| defended | 165 HP | 152 → 143 | 10 → 12 | 9 → 9 | 0 | 0 | 8 of 8 | 23 | 0 | 570 | 14 |
 
 **The defence**: Sphincter Gate at 102,260, across the way 20 steps down from the grate; Scrap Turret at 94,265; Dez on Guard at Sphincter Gate; Fenn on Guard at Scrap Turret. The Gates do not close the way from the grate to the Heart.
 
 **After, as it stands** (HP short across the standing structures at the Cleansing's shift end and the next three, the builders mending from the shift after): the Heart burned: nothing left to mend it.
 
-**After, defended** (HP short across the standing structures at the Cleansing's shift end and the next three, the builders mending from the shift after): 89 → 89 → 71 → 71.
+**After, defended** (HP short across the standing structures at the Cleansing's shift end and the next three, the builders mending from the shift after): 35 → 35 → 17 → 17.
 
 **The Cleansing, as it stands**
 
@@ -24,11 +24,9 @@ Written by `rose cleansing --seed 11 --shifts 10` on 2026-11-12 (Full Design v3.
   18.0 s  landing  Street Shard sold for 1 e at grate 5
   18.0 s  landing  Street Shard sold for 1 e at grate 5
  120.0 s  loss  the white light comes down grate 5
- 153.0 s  loss  a Patrol came down grate 5
  210.5 s  loss  flamers come down grate 5 for the Pits and the Heart
- 268.0 s  landing  the Patrol at grate 5 is over: 0 of 2 fell, 0 tiles of Mat burned, 0 structures ruined
  371.5 s  loss  the Heart is burned: the city has lost its signal
-1657.0 s  landing  the Cleansing at grate 5 is over: 0 of 8 fell, 173 tiles of Mat burned, 1 structures ruined
+1657.0 s  landing  the Cleansing at grate 5 is over: 0 of 8 fell, 133 tiles of Mat burned, 1 structures ruined
 1657.0 s  loss  Tweaker Bench at 98,263 is dark: its cord carries no power
 1657.0 s  loss  Stockpile Rack at 100,265 is dark: its cord carries no power
 1657.0 s  loss  Salt Works at 92,262 is dark: its cord carries no power
@@ -49,10 +47,6 @@ Written by `rose cleansing --seed 11 --shifts 10` on 2026-11-12 (Full Design v3.
   18.0 s  landing  Street Shard sold for 1 e at grate 5
   18.0 s  landing  Street Shard sold for 1 e at grate 5
  120.0 s  loss  the white light comes down grate 5
- 153.0 s  loss  a Patrol came down grate 5
- 210.0 s  landing  the Oathkeeper scout fell at 93,263
- 215.0 s  landing  the Oathkeeper scout fell at 95,263
- 215.0 s  landing  the Patrol at grate 5 is over: 2 of 2 fell, 0 tiles of Mat burned, 0 structures ruined
  216.0 s  loss  flamers come down grate 5 for the Pits and the Heart
  447.5 s  landing  the lamp carrier fell at 90,263
  457.5 s  landing  the lamp carrier fell at 92,263
@@ -68,15 +62,14 @@ Written by `rose cleansing --seed 11 --shifts 10` on 2026-11-12 (Full Design v3.
  569.5 s  landing  Heart at 95,264 mended 20 HP (165/200)
  569.5 s  landing  a Lume Bulb grew at 106,253
  569.5 s  landing  Strainbook: Lume Bulb
- 569.5 s  landing  Trophy: Scout
  569.5 s  landing  Trophy: Lamp carrier
  569.5 s  landing  Trophy: Flamer
  569.5 s  landing  Trophy: The Cleansing
- 569.5 s  landing  17 Blackline salvaged into the Stash
+ 569.5 s  landing  14 Blackline salvaged into the Stash
  569.5 s  landing  2 Relics salvaged into the Stash
  569.5 s  loss  Flood shift: the water rises 3 tiles
  569.5 s  landing  Sump Row elected a foreman
- 569.5 s  landing  Scrapdex: 15 new, 21 of 150
+ 569.5 s  landing  Scrapdex: 13 new, 19 of 150
  569.5 s  loss  Brix 'Cordwalker' went feral in the drain
  569.5 s  loss  Gale went feral in the drain
  569.5 s  landing  Heart at 95,264 mended 18 HP (183/200)

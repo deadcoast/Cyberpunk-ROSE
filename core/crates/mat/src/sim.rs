@@ -908,7 +908,7 @@ impl MatSim {
             }
         }
 
-        // isolation -> ferality: tissue without signal gains Pass 1's Feral Drive rate a step and loses it all when
+        // isolation -> ferality: tissue without signal gains its Feral Drive rate a step (an eighth of Pass 1's) and loses it all when
         // signal returns; at 1 it is feral (Full Design, Pressure: Blooms)
         let feral_rate = self.p.feral_rate;
         for i in 0..len {

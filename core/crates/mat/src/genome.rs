@@ -31,6 +31,11 @@ impl Default for Genome {
 /// off; at half it holds the Heart's Mat alone (Full Design, The Mat's metabolism; measured in PAC-045).
 pub const MAINT: f32 = 0.0006 / 8.0;
 pub const DECAY: f32 = 0.001 / 8.0;
+/// Ferality a step without signal at Feral Drive 0 and its rise to 1: an eighth of Pass 1's 0.01 + 0.09 g a tick, the
+/// metabolism's scale, which lands Pass 1's own "whatever survives beyond Relays goes feral within three shifts" (at
+/// Pass 1's rate it took a sixth of a shift; Full Design v3.20, Pressure: Blooms).
+pub const FERAL_BASE: f32 = 0.01 / 8.0;
+pub const FERAL_GAIN: f32 = 0.09 / 8.0;
 
 impl Genome {
     pub fn with(mut self, gene: usize, value: f32) -> Self {
@@ -50,7 +55,7 @@ impl Genome {
             heart_range: 24.0 + 32.0 * g[CONDUCTANCE],
             cord_k: 0.6 + 0.4 * g[CONDUCTANCE],
             pump: 0.30 + 0.40 * g[CONDUCTANCE],
-            feral_rate: 0.01 + 0.09 * g[FERAL],
+            feral_rate: FERAL_BASE + FERAL_GAIN * g[FERAL],
         }
     }
 }

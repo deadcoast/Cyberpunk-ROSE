@@ -1947,7 +1947,9 @@ impl Colony {
         let slots = self.slots(defs);
         // a district in a wake or on strike sits out
         let out_: HashSet<u32> = self.districts.iter().filter(|d| d.wake || d.strike).flat_map(|d| d.members.iter().copied()).collect();
-        let mut pairs: Vec<(f32, u32, usize)> = Vec::new();
+        // (utility, the slimo's own priority for the job, slimo, slot): at equal utility the player's own priority
+        // decides, so a 4 set in the Job grid is not lost to a foreman's 4 on a slot listed earlier (Full Design v3.20)
+        let mut pairs: Vec<(f32, u8, u32, usize)> = Vec::new();
         for r in &roster.records {
             // a slimo whose shift was a run (shift_job set by apply_run) is done; Curfew sends everyone home in Dark
             if out_.contains(&r.id) || r.shift_job.is_some() || !r.on_duty(shift_of_day) {
@@ -1964,11 +1966,11 @@ impl Colony {
                 }
                 let u = *by_job.entry(job).or_insert_with(|| r.utility_at(traits, job, self.priority_for(r, job)));
                 if let Some(u) = u {
-                    pairs.push((u, r.id, k));
+                    pairs.push((u, r.priorities[job.index()], r.id, k));
                 }
             }
         }
-        pairs.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+        pairs.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)));
         let mut taken_slot = vec![false; slots.len()];
         let mut taken_slimo = std::collections::HashSet::new();
         let mut out = Vec::new();
@@ -1988,7 +1990,7 @@ impl Colony {
                 out.push((slimo, slots[k].0, sid));
             }
         }
-        for (_, slimo, k) in pairs {
+        for (_, _, slimo, k) in pairs {
             if taken_slot[k] || taken_slimo.contains(&slimo) {
                 continue;
             }
@@ -2851,8 +2853,11 @@ mod tests {
         let id = c.place(&defs, &mat, "pod", x, y).unwrap();
         assert!(matches!(c.can_place(&defs, &mat, "pod", x, y), Err(PlaceError::Overlaps(i)) if i == id));
         assert!(!c.get(id).unwrap().built);
-        // a Vault needs the Heart at tier 2; a Shrine a Relay; a Market a grate
-        assert_eq!(c.can_place(&defs, &mat, "vault", x, y), Err(PlaceError::HeartTier(2)));
+        // a structure marked for the Heart at tier 2 waits on it; a Shrine a Relay; a Market a grate
+        let mut tiered = defs.clone();
+        let v = tiered.index("vault").unwrap();
+        tiered.structure[v].heart_tier = 2;
+        assert_eq!(c.can_place(&tiered, &mat, "vault", x, y), Err(PlaceError::HeartTier(2)));
         assert!(matches!(c.can_place(&defs, &mat, "shrine", x, y), Err(PlaceError::NeedsRelay) | Err(PlaceError::Overlaps(_))));
         let (rx, ry) = mat.relays[0];
         // the relay carries a founding Pit; a shrine there overlaps it, so the rule that fires is the overlap

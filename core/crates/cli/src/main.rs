@@ -829,10 +829,10 @@ fn cmd_campaign(t: &Term, seed: u64, aim: &str, shifts: u32, report: &Path) {
     t.head("campaign", &format!("seed {seed}: {} script{} up to {shifts} shifts", aims.len(), if aims.len() == 1 { "" } else { "s" }));
     let _ = report;
     for a in aims {
-        t.hrow(&[("shift", 5), ("ch", 3), ("S", 2), ("run", 4), ("result", 10), ("pop", 4), ("beds", 4), ("cells", 6), ("top", 4), ("genes (aim)", 12), ("tiers", 5), ("def", 3), ("bloom", 12), ("P/C/e", 10), ("research", 18), ("story", 50)]);
+        t.hrow(&[("shift", 5), ("ch", 3), ("S", 2), ("run", 4), ("result", 10), ("pop", 4), ("beds", 4), ("cells", 6), ("top", 4), ("genes (aim)", 12), ("tiers", 5), ("def", 3), ("bloom", 12), ("P/C/e", 10), ("att", 9), ("research", 18), ("story", 50)]);
         let (run_, _) = game::proof::play(seed, a, shifts, &mut |c, _| {
             let story = c.story.join("; ");
-            t.row(&[(&c.day.to_string(), 5), (&c.chapter.to_string(), 3), (&c.stratum.to_string(), 2), (&format!("S{}", c.run_on), 4), (&c.result, 10), (&c.population.to_string(), 4), (&c.beds.to_string(), 4), (&c.cells.to_string(), 6), (&c.top_row.to_string(), 4), (&format!("{:.2} {:.2}", c.genes[a.genes[0]], c.genes[a.genes[1]]), 12), (&format!("{}{}{}", c.open[0], c.open[1], c.open[2]), 5), (&c.defences.to_string(), 3), (&format!("{}/{}/{}", c.bloom.0, c.bloom.1, c.bloom.2), 12), (&format!("{}/{}/{}", c.stock.0, c.stock.1, c.stock.2), 10), (&c.research.chars().take(18).collect::<String>(), 18), (&story.chars().take(50).collect::<String>(), 50)]);
+            t.row(&[(&c.day.to_string(), 5), (&c.chapter.to_string(), 3), (&c.stratum.to_string(), 2), (&format!("S{}", c.run_on), 4), (&c.result, 10), (&c.population.to_string(), 4), (&c.beds.to_string(), 4), (&c.cells.to_string(), 6), (&c.top_row.to_string(), 4), (&format!("{:.2} {:.2}", c.genes[a.genes[0]], c.genes[a.genes[1]]), 12), (&format!("{}{}{}", c.open[0], c.open[1], c.open[2]), 5), (&c.defences.to_string(), 3), (&format!("{}/{}/{}", c.bloom.0, c.bloom.1, c.bloom.2), 12), (&format!("{}/{}/{}", c.stock.0, c.stock.1, c.stock.2), 10), (&format!("{:.0}+{:.0}", c.attention.0, c.attention.1), 9), (&c.research.chars().take(18).collect::<String>(), 18), (&story.chars().take(50).collect::<String>(), 50)]);
         });
         println!("  {}: ending {:?} warchest {:?} in {} shifts, {:.0} s", a.ending, run_.ending, run_.warchest, run_.shifts.len(), run_.seconds);
         let log = PathBuf::from(format!("out/campaign_{}_{seed}.log", a.ending));

@@ -130,7 +130,7 @@ In hand at the end: Nomads 2/3: shelter Brix five shifts, 62 e by shift 34.
 | | the nearer grate reached | shifts with no market | eddies at the end | sold | Chrome fed to the Heart |
 |---|---|---|---|---|---|
 | trading | not in 30 shifts | 0 | 905 | 318 | 76 |
-| feeding | not in 30 shifts | 0 | 752 | 210 | 196 |
+| feeding | not in 30 shifts | 0 | 755 | 210 | 196 |
 
 ## Services
 

@@ -204,11 +204,11 @@ category = "stores"
 footprint = [2, 2]
 sigma = 0.5
 node = true
-heart_tier = 2
 cost = { parts = 12, chrome = 6, eddies = 0 }
 build = 20
 hp = 100
-capacity = [4, 8, 12]
+# a Cleansing's salvage is 8-15 Blackline and 0-2 Relics (Pass 1): a Vault holds one (Full Design v3.20)
+capacity = [12, 24, 36]
 text = "A sealed ooze chamber. Relics and Blackline inside show nothing at the grate."
 art = "struct.vault"
 

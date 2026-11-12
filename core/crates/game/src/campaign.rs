@@ -14,6 +14,9 @@ use threat::{Due, Role, Threats};
 
 use crate::log::{CityLog, Class};
 
+/// Chapter 2's close: the tweakers' plans (Full Design v3.20).
+const CHAPTER_2_PLANS: &str = "tec_blueprint_chrome1";
+
 /// The Empire's card: 2,000 slimos (Full Design v3.18, the city tiers).
 const EMPIRE: u32 = 2000;
 
@@ -327,6 +330,15 @@ pub fn shift_end(c: &mut Campaign, p: &mut Parts, day: u32) -> Vec<String> {
         if n == 7 {
             end(c, p, day, &mut lines);
             return lines;
+        }
+        // the Tweakers' plans: Chrome's Blueprint I, unless its tier 2 is open (Full Design v3.20)
+        if n == 2 && p.colony.progress.tech.open[0] < 2 {
+            if let Some(id) = p.table.id_of(CHAPTER_2_PLANS) {
+                p.stash.place_or_floor(p.table, items::ItemInstance::new(id));
+                let line = format!("the tweakers' plans: {} into the Stash", p.table.def(id).name);
+                p.log.push(p.city.tick, Class::Landing, line.clone());
+                lines.push(line);
+            }
         }
         c.panels.push(format!("ch{n}.close"));
         c.chapter = n + 1;

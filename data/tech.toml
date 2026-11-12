@@ -53,7 +53,7 @@ branch = "chrome"
 tier = 2
 name = "Reliquary Vault"
 structures = ["vault"]
-text = "Relics and Blackline kept outside Attention (the Heart at tier 2)."
+text = "Relics and Blackline kept outside Attention."
 pass2 = true
 
 [[node]]
