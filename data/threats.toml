@@ -41,6 +41,9 @@ salvage = [1, 2]
 salvage_per = "body"
 relics = [0, 0]
 arrive_in = 375
+# it maps and leaves (Pass 1): four minutes down, reached its source or not (a Patrol a Gate held waited out the shift
+# with its lamps on the cords round the Gate; Full Design v3.20)
+lasts = 480
 
 [[stage]]
 id = "sweep"

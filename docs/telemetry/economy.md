@@ -60,35 +60,35 @@ Written by `rose economy --seed 11 --shifts 30` on 2026-11-12 (Full Design v3.15
 | shift | day | grates | sold | earned | eddies | widest walk |
 |---|---|---|---|---|---|---|
 | 1 | 1 | 1 | 0 | 0 | 0 | 0.06 |
-| 2 | 1 | 1 | 3 | 83 | 82 | 0.06 |
-| 3 | 1 | 1 | 7 | 32 | 113 | 0.09 |
-| 4 | 2 | 1 | 8 | 30 | 142 | 0.09 |
-| 5 | 2 | 1 | 13 | 21 | 162 | 0.09 |
-| 6 | 2 | 1 | 11 | 25 | 186 | 0.13 |
-| 7 | 3 | 1 | 12 | 28 | 213 | 0.13 |
-| 8 | 3 | 1 | 12 | 30 | 242 | 0.13 |
-| 9 | 3 | 1 | 11 | 15 | 256 | 0.13 |
-| 10 | 4 | 1 | 13 | 30 | 285 | 0.13 |
-| 11 | 4 | 1 | 10 | 24 | 308 | 0.13 |
-| 12 | 4 | 1 | 11 | 20 | 327 | 0.14 |
-| 13 | 5 | 1 | 11 | 21 | 347 | 0.14 |
-| 14 | 5 | 1 | 12 | 27 | 373 | 0.14 |
-| 15 | 5 | 1 | 17 | 47 | 419 | 0.16 |
-| 16 | 6 | 1 | 13 | 24 | 442 | 0.16 |
-| 17 | 6 | 1 | 13 | 47 | 488 | 0.16 |
-| 18 | 6 | 1 | 14 | 47 | 534 | 0.12 |
-| 19 | 7 | 1 | 10 | 32 | 564 | 0.12 |
-| 20 | 7 | 1 | 0 | 0 | 562 | 0.12 |
-| 21 | 7 | 1 | 10 | 30 | 589 | 0.13 |
-| 22 | 8 | 1 | 14 | 37 | 623 | 0.13 |
-| 23 | 8 | 1 | 13 | 23 | 642 | 0.13 |
-| 24 | 8 | 1 | 12 | 29 | 707 | 0.10 |
-| 25 | 9 | 1 | 13 | 30 | 732 | 0.10 |
-| 26 | 9 | 1 | 13 | 46 | 773 | 0.10 |
-| 27 | 9 | 1 | 12 | 38 | 806 | 0.10 |
-| 28 | 10 | 1 | 8 | 24 | 824 | 0.10 |
-| 29 | 10 | 1 | 12 | 35 | 873 | 0.10 |
-| 30 | 10 | 1 | 10 | 39 | 905 | 0.12 |
+| 2 | 1 | 1 | 2 | 54 | 49 | 0.06 |
+| 3 | 1 | 1 | 6 | 31 | 75 | 0.09 |
+| 4 | 2 | 1 | 9 | 31 | 101 | 0.09 |
+| 5 | 2 | 1 | 13 | 20 | 118 | 0.09 |
+| 6 | 2 | 1 | 11 | 25 | 140 | 0.13 |
+| 7 | 3 | 1 | 12 | 28 | 163 | 0.13 |
+| 8 | 3 | 1 | 11 | 15 | 173 | 0.13 |
+| 9 | 3 | 1 | 8 | 27 | 193 | 0.13 |
+| 10 | 4 | 1 | 13 | 15 | 201 | 0.13 |
+| 11 | 4 | 1 | 13 | 47 | 241 | 0.13 |
+| 12 | 4 | 1 | 12 | 30 | 264 | 0.14 |
+| 13 | 5 | 1 | 9 | 24 | 281 | 0.14 |
+| 14 | 5 | 1 | 13 | 22 | 296 | 0.14 |
+| 15 | 5 | 1 | 11 | 24 | 313 | 0.16 |
+| 16 | 6 | 1 | 7 | 10 | 316 | 0.16 |
+| 17 | 6 | 1 | 16 | 60 | 369 | 0.16 |
+| 18 | 6 | 1 | 14 | 40 | 402 | 0.12 |
+| 19 | 7 | 1 | 12 | 31 | 425 | 0.12 |
+| 20 | 7 | 1 | 12 | 19 | 436 | 0.12 |
+| 21 | 7 | 1 | 12 | 34 | 461 | 0.13 |
+| 22 | 8 | 1 | 16 | 63 | 515 | 0.13 |
+| 23 | 8 | 1 | 13 | 23 | 528 | 0.13 |
+| 24 | 8 | 1 | 10 | 19 | 537 | 0.10 |
+| 25 | 9 | 1 | 15 | 63 | 589 | 0.10 |
+| 26 | 9 | 1 | 10 | 23 | 601 | 0.10 |
+| 27 | 9 | 1 | 14 | 40 | 630 | 0.10 |
+| 28 | 10 | 1 | 13 | 32 | 650 | 0.10 |
+| 29 | 10 | 1 | 12 | 64 | 722 | 0.10 |
+| 30 | 10 | 1 | 15 | 43 | 752 | 0.12 |
 
 ## What sold, against its base
 
@@ -96,41 +96,38 @@ Realised price over base × condition (× 0.4 for an item sold blind), by the fa
 
 | faction | category | sold | blind | eddies | of base |
 |---|---|---|---|---|---|
-| Corpo remnants | curio | 7 | 7 | 23 | 137 % |
-| Corpo remnants | tech | 5 | 5 | 20 | 235 % |
-| Gangs | gear | 4 | 4 | 23 | 145 % |
-| Nomads | chrome | 108 | 107 | 149 | 89 % |
-| Nomads | contraband | 20 | 20 | 186 | 135 % |
-| Nomads | curio | 70 | 69 | 167 | 97 % |
-| Nomads | gear | 50 | 49 | 196 | 99 % |
-| Nomads | tech | 54 | 53 | 150 | 89 % |
+| Corpo remnants | curio | 4 | 4 | 18 | 141 % |
+| Corpo remnants | tech | 5 | 5 | 36 | 193 % |
+| Gangs | gear | 1 | 1 | 3 | 152 % |
+| Nomads | chrome | 134 | 133 | 169 | 93 % |
+| Nomads | contraband | 17 | 17 | 182 | 148 % |
+| Nomads | curio | 62 | 61 | 162 | 107 % |
+| Nomads | gear | 47 | 46 | 187 | 108 % |
+| Nomads | tech | 64 | 63 | 200 | 89 % |
 
 ## Standing at the end
 
 | faction | reputation | favour | traded | tier open |
 |---|---|---|---|---|
-| Nomads | +1 | 8 | 848 e | 3 |
-| Gangs | +0 | 6 | 23 e | 1 |
-| Corpo remnants | +0 | -4 | 43 e | 1 |
+| Nomads | +2 | 16 | 900 e | 3 |
+| Gangs | +0 | 0 | 3 e | 1 |
+| Corpo remnants | +0 | -2 | 54 e | 1 |
 | Badges | +0 | 0 | 0 e | 1 |
 | Oathkeepers | +0 | 0 | 0 e | 1 |
 
 ## Contracts
 
-- took Nomads 1/3: shelter Sorrel five shifts, 40 e by shift 24
-- the Nomads' link 1/3 done: 40 e
-- the Nomads' contract missed (host): the chain breaks, reputation +1
 - took Nomads 1/3: deliver 4 organic at 20+ (0/4), 20 e by shift 31
 - the Nomads' link 1/3 done: 20 e
 
-In hand at the end: Nomads 2/3: shelter Brix five shifts, 62 e by shift 34.
+In hand at the end: Nomads 2/3: shelter Kett five shifts, 62 e by shift 34.
 
 ## Trading against feeding
 
 | | the nearer grate reached | shifts with no market | eddies at the end | sold | Chrome fed to the Heart |
 |---|---|---|---|---|---|
-| trading | not in 30 shifts | 0 | 905 | 318 | 76 |
-| feeding | not in 30 shifts | 0 | 755 | 210 | 196 |
+| trading | not in 30 shifts | 0 | 752 | 334 | 54 |
+| feeding | not in 30 shifts | 0 | 553 | 200 | 215 |
 
 ## Services
 

@@ -35,6 +35,9 @@ pub const PETITION_AFTER: u8 = 2;
 /// floor this replaced starved a fed city onto paste; PAC-045: four sleepers drawing on one anchor tile starved two of
 /// them while the tiles about it held their meals).
 pub const MEAL_TAKES: f32 = 0.05;
+/// A meal leaves each tile this much above its starvation line (v3.20: meals that took the tissue to nothing starved the
+/// Mat round every home of a populous city).
+pub const MEAL_MARGIN: f32 = 0.01;
 pub const PASTE_EDDIES: u32 = 2;
 /// City tiers by population: Hamlet, Quarter, City, Empire.
 pub const CITY_TIERS: [usize; 4] = [20, 100, 500, 2000];
@@ -2298,14 +2301,17 @@ impl Colony {
             // a meal: the Mat's nutrient at the home, else paste; Rationing halves the draw
             let (takes, paste) = if rationed { (MEAL_TAKES * 0.5, PASTE_EDDIES / 2) } else { (MEAL_TAKES, PASTE_EDDIES) };
             let mut fed = false;
-            let held: f32 = table.iter().map(|&j| mat.n[j]).sum();
+            // only what each tile holds above its starvation line: a meal never starves the tissue (Full Design v3.20)
+            let line = mat.p.theta_starve + MEAL_MARGIN;
+            let spare = |n: f32| (n - line).max(0.0);
+            let held: f32 = table.iter().map(|&j| spare(mat.n[j])).sum();
             if signalled && held >= takes {
                 // the richest tile first
                 let mut order = table.clone();
                 order.sort_by(|a, b| mat.n[*b].partial_cmp(&mat.n[*a]).unwrap().then(a.cmp(b)));
                 let mut left = takes;
                 for j in order {
-                    let t = mat.n[j].min(left);
+                    let t = spare(mat.n[j]).min(left);
                     mat.n[j] -= t;
                     left -= t;
                     if left <= 0.0 {

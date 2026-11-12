@@ -72,6 +72,8 @@ pub struct CampaignSteward {
     stood: u32,
     /// whether the Pits' quotas are feeding
     feeding: bool,
+    /// the Pit at the climb's frontier, the one the climb feeds (a Pit left behind by the frontier pulls nothing)
+    front_pit: Option<u32>,
 }
 
 /// Defences the steward raises before a Cleansing (this design's: the `rose cleansing` proof held the Heart with two
@@ -107,11 +109,13 @@ fn heart_xy(w: &World) -> (u16, u16) {
     w.city.sim.heart.map(|(x, y)| (x as u16, y as u16)).unwrap_or((0, 0))
 }
 
-/// The anchor joined to the Heart whose 3 x 3 holds the most nutrient, nearest the Heart on a tie.
+/// A home's anchor: joined to the Heart, five tiles or more from it (a meal is taken from the tissue about a home,
+/// and homes round the Heart starve the Heart's own tissue to nothing) and ten from the grates (the squads' way down),
+/// where Deposits feed the tissue about it, then where it holds the most nutrient; nearest the Heart on a tie.
 fn richest_spot(w: &World, def: &str) -> Option<(u16, u16)> {
     let sim = &w.city.sim;
     let joined = logistics::joined_to_heart(sim);
-    let (hx, hy) = heart_xy(w);
+    let (hx, hy) = (heart_xy(w).0 as i32, heart_xy(w).1 as i32);
     let food = |i: usize| -> f32 {
         let (x, y) = ((i % sim.w) as i32, (i / sim.w) as i32);
         let mut t = 0.0;
@@ -119,18 +123,26 @@ fn richest_spot(w: &World, def: &str) -> Option<(u16, u16)> {
             for dx in -1..=1 {
                 let (nx, ny) = (x + dx, y + dy);
                 if nx >= 0 && ny >= 0 && (nx as usize) < sim.w && (ny as usize) < sim.h {
-                    t += sim.n[ny as usize * sim.w + nx as usize];
+                    let j = ny as usize * sim.w + nx as usize;
+                    t += sim.n[j] + if sim.sub[j] == mat::sim::sub::DEPOSIT { 1.0 } else { 0.0 };
                 }
             }
         }
         t
     };
+    let far = |i: usize| ((i % sim.w) as i32 - hx).abs().max(((i / sim.w) as i32 - hy).abs());
+    // and off the way the squads come down: ten tiles or more from every grate the Mat reaches
+    let grates: Vec<(i32, i32)> = w.city.markets.iter().map(|&g| ((g % sim.w) as i32, (g / sim.w) as i32)).collect();
+    let off_way = |i: usize| grates.iter().all(|&(gx, gy)| ((i % sim.w) as i32 - gx).abs().max(((i / sim.w) as i32 - gy).abs()) >= 10);
     (0..joined.len())
-        .filter(|&i| joined[i] && w.colony.can_place(&w.defs, sim, def, (i % sim.w) as u16, (i / sim.w) as u16).is_ok())
-        .map(|i| (food(i), (i % sim.w) as i32, (i / sim.w) as i32))
-        .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(((b.1 - hx as i32).abs() + (b.2 - hy as i32).abs()).cmp(&((a.1 - hx as i32).abs() + (a.2 - hy as i32).abs()))).then(b.2.cmp(&a.2)).then(b.1.cmp(&a.1)))
-        .map(|(_, x, y)| (x as u16, y as u16))
+        .filter(|&i| joined[i] && far(i) >= HOME_FROM_HEART && off_way(i) && w.colony.can_place(&w.defs, sim, def, (i % sim.w) as u16, (i / sim.w) as u16).is_ok())
+        .map(|i| (food(i), far(i), i))
+        .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(b.1.cmp(&a.1)).then(b.2.cmp(&a.2)))
+        .map(|(_, _, i)| ((i % sim.w) as u16, (i / sim.w) as u16))
 }
+
+/// Homes stand this far from the Heart (Chebyshev): its 3 x 3 and the ring the Heart's Pit feeds are its own.
+const HOME_FROM_HEART: i32 = 5;
 
 fn place_near(w: &mut World, def: &str, from: (u16, u16), why: &str, out: &mut Vec<String>) -> Option<u32> {
     let (x, y) = nearest_spot(w, def, from)?;
@@ -172,8 +184,11 @@ impl CampaignSteward {
         if w.campaign.chapter == 5 && !w.campaign.vault_home && board.contains(&5) {
             return 5;
         }
-        // the lowest route not yet on a loop, so each earns its two runs home and a crew of its own
-        board.iter().copied().find(|&s| !w.colony.loops.iter().any(|l| l.stratum == s)).or_else(|| board.first().copied()).unwrap_or(1)
+        // a seasoned Runner takes the lowest route not yet on a loop, so each earns its two runs home and a crew of its
+        // own; a green one the lowest (the deep routes kill a Runner of Scav 2 every time)
+        let seasoned = w.roster.eligible().first().is_some_and(|r| r.skill(people::Skill::Scav) >= SEASONED);
+        let open = board.iter().copied().find(|&s| !w.colony.loops.iter().any(|l| l.stratum == s));
+        open.filter(|_| seasoned).or_else(|| board.first().copied()).unwrap_or(1)
     }
 
     /// Route loops (Full Design v3.18): every Board route the Runners have come home from twice gets a crew of one,
@@ -300,9 +315,9 @@ impl CampaignSteward {
             if beds + ghost_beds(w) >= want {
                 break;
             }
-            // where the Mat is richest: a slimo with a bed eats from the tissue about its home (Homes, meals), so a
-            // city housed round the Heart starves the Heart's own tissue
-            let Some((x, y)) = richest_spot(w, def) else { break };
+            // a slimo with a bed eats from the tissue about its home (Homes, meals): away from the Heart, on the
+            // Deposits, else where the Mat holds most; with no such spot, nearest the Heart as before
+            let Some((x, y)) = richest_spot(w, def).or_else(|| nearest_spot(w, def, heart_xy(w))) else { break };
             if w.colony.place(&w.defs, &w.city.sim, def, x, y).is_err() {
                 break;
             }
@@ -480,6 +495,7 @@ impl CampaignSteward {
                 if !within(w, "pit", x, y, 3) {
                     if let Ok(id) = w.colony.place(&w.defs, &w.city.sim, "pit", x, y) {
                         w.colony.set_quota(&w.defs, id, Some(FRONT_KEEP));
+                        self.front_pit = Some(id);
                         out.push(format!("a Pit at the frontier {x},{y}, {d} tiles from the crossing, keeping {:.0}", FRONT_KEEP.target));
                     }
                 }
@@ -530,14 +546,15 @@ impl CampaignSteward {
         // the frontier waits
         let hungry = logistics::joined_to_heart(&w.city.sim).iter().filter(|&&j| j).count() < HUNGRY;
         let feeding = chrome >= CHROME_WANTED || hungry;
-        // the frontier's Pits feed on what a Relay leaves (the climb stands without them)
+        // the frontier's Pit feeds on what a Relay leaves (the climb stands without it); a Pit the frontier left behind
+        // pulls nothing, or the nearest of them, nearest the Heart, would take the climb's every Chrome
         let frontier = chrome >= FRONT_RESERVE && !hungry;
         let pits: Vec<(u32, bool)> = w.colony.pits(&w.defs).into_iter().filter_map(|id| w.colony.get(id).map(|s| (id, w.defs.structure[s.def].id == "heart"))).collect();
         for (id, heart) in pits {
             let q = if heart {
                 QuotaSet { target: if feeding { crate::city::HEART_KEEP.target } else { 0.0 }, ceiling: if hungry { FRONT_KEEP.ceiling } else { 0 } }
             } else {
-                QuotaSet { target: if frontier { FRONT_KEEP.target } else { 0.0 }, ceiling: FRONT_KEEP.ceiling }
+                QuotaSet { target: if frontier && self.front_pit == Some(id) { FRONT_KEEP.target } else { 0.0 }, ceiling: FRONT_KEEP.ceiling }
             };
             if w.colony.get(id).and_then(|s| s.quota) != Some(q) {
                 w.colony.set_quota(&w.defs, id, Some(q));
@@ -676,6 +693,9 @@ fn lead(aim: Aim, genome: &[f32; 10]) -> f32 {
     let blooms = own != "world_eater" && genome[mat::genome::FERAL] > BLOOM_LINE;
     mine - rival - if blooms { 1.0 } else { 0.0 }
 }
+
+/// A Runner's Scav at which the steward sends them up the Board.
+const SEASONED: u8 = 5;
 
 /// Feral Drive over which a strain's cut-off tissue blooms (`data/threats.toml`'s bloom.feral_drive, Pass 1).
 const BLOOM_LINE: f32 = 0.5;

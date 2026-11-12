@@ -343,10 +343,12 @@ impl Steward {
     }
 
     /// The kit kept for the Runner: every piece of it in the Stash, the spares for the run a Runner does not come
-    /// home from.
+    /// home from, and the best weapons and armour the Stash holds.
     fn kit(w: &World) -> Vec<u32> {
         let defs: Vec<items::ItemId> = std::iter::once(KIT_HAND).chain(KIT_QUICK).filter_map(|id| w.table.id_of(id)).collect();
-        w.stash.handles().into_iter().filter(|(_, _, it)| defs.contains(&it.def)).map(|(h, _, _)| h).collect()
+        let mut v: Vec<u32> = w.stash.handles().into_iter().filter(|(_, _, it)| defs.contains(&it.def)).map(|(h, _, _)| h).collect();
+        v.extend(WORN.iter().filter_map(|(slot, kind)| best_gear(w, slot, kind)));
+        v
     }
 
     /// The markets the Mat reaches from the Heart.
@@ -583,10 +585,38 @@ fn take_kit(w: &mut World, id: &str) -> Option<ItemInstance> {
     w.stash.take(h)
 }
 
-/// The rig packed from the Stash for this Runner.
+/// The Stash's best gear for a slot and kind (the weapon of most damage, the armour of most): the Runner goes out in it
+/// rather than the kit's pipe when the runs have brought better home (this design's steward).
+fn best_gear(w: &World, slot: &str, kind: &str) -> Option<u32> {
+    w.stash
+        .handles()
+        .into_iter()
+        .filter(|(_, _, it)| !it.pinned)
+        .filter_map(|(h, _, it)| {
+            let g = w.table.def(it.def).gear.as_ref()?;
+            (g.slot == slot && g.kind == kind).then_some((g.dmg + g.armour, w.table.def(it.def).value, h))
+        })
+        .max_by_key(|&(score, value, h)| (score, value, std::cmp::Reverse(h)))
+        .map(|(_, _, h)| h)
+}
+
+/// The best gear the Runner wears: the melee and the ranged weapon for the hands, the head, body and feet armour.
+const WORN: [(&str, &str); 5] = [("hand", "melee"), ("hand", "ranged"), ("head", "armour"), ("body", "armour"), ("feet", "armour")];
+
+/// The rig packed from the Stash for this Runner: the best weapons and armour it holds (the kit's pipe when it holds
+/// none better), the kit's quick items.
 fn pack(w: &mut World, rows: u8, carry: f32) -> Rig {
     let mut rig = Rig::new(8, rows.clamp(3, 8), 4, carry);
-    rig.gear.hands[0] = take_kit(w, KIT_HAND);
+    let picks: Vec<Option<u32>> = WORN.iter().map(|(slot, kind)| best_gear(w, slot, kind)).collect();
+    let mut take = |h: Option<u32>| h.and_then(|h| w.stash.take(h));
+    rig.gear.hands[0] = take(picks[0]);
+    rig.gear.hands[1] = take(picks[1]);
+    rig.gear.head = take(picks[2]);
+    rig.gear.body = take(picks[3]);
+    rig.gear.feet = take(picks[4]);
+    if rig.gear.hands[0].is_none() {
+        rig.gear.hands[0] = take_kit(w, KIT_HAND);
+    }
     for (i, id) in KIT_QUICK.iter().enumerate() {
         rig.quick[i] = take_kit(w, id);
     }
