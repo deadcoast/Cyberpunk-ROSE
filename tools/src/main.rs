@@ -1,7 +1,7 @@
 //! rose-tools — the asset pipeline for Cyberpunk: ROSE.
 //!
 //!   rose-tools placeholders   manifest -> game/assets/placeholders/*.png, one visual language
-//!   rose-tools validate       game/assets/art/*.png against size, SEEPAGE v2 palette, outline rule
+//!   rose-tools validate       game/assets/art/*.png and the anchors against size, SEEPAGE v2 palette, outline rule
 //!   rose-tools prompts        manifest -> docs/pixellab-prompts.md (per-slot generation briefs)
 //!   rose-tools sheet          every placeholder (and art) on one labelled contact sheet
 //!   rose-tools all            the four above, in order
@@ -42,6 +42,7 @@ struct Paths {
     manifest: PathBuf,
     placeholders: PathBuf,
     art: PathBuf,
+    anchors: PathBuf,
     palette: PathBuf,
     items: PathBuf,
     docs: PathBuf,
@@ -53,6 +54,7 @@ impl Paths {
             manifest: root.join("game/assets/manifest"),
             placeholders: root.join("game/assets/placeholders"),
             art: root.join("game/assets/art"),
+            anchors: root.join("game/assets/anchors"),
             palette: root.join("game/assets/palette/SEEPAGE_v2.gpl"),
             items: root.join("data/items.toml"),
             docs: root.join("docs"),
@@ -275,19 +277,20 @@ fn validate(paths: &Paths, manifest: &Manifest, pal: &Palette) -> bool {
         }
     }
     row(&[("placeholders", 14), (&if missing == 0 { "every slot and state has a placeholder".to_string() } else { format!("{missing} missing") }, 60)]);
-    // 2. art files: known slot, exact size, palette lock, outline
+    // 2. art files and the style anchors: known slot (an anchor's in anchors/), exact size, palette lock, outline
     let mut checked = 0;
     let mut failed = 0;
-    if let Ok(rd) = std::fs::read_dir(&paths.art) {
+    for (dir, anchors) in [(&paths.art, false), (&paths.anchors, true)] {
+        let Ok(rd) = std::fs::read_dir(dir) else { continue };
         let mut entries: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "png")).collect();
         entries.sort();
         for path in entries {
             checked += 1;
             let name = path.file_name().unwrap().to_string_lossy().to_string();
-            let (slot, state) = match manifest.slot_for_file(&name) {
+            let (slot, state) = match manifest.slot_for_file(&name).filter(|(s, _)| (s.kind == "anchor") == anchors) {
                 Some(s) => s,
                 None => {
-                    row(&[("art", 14), (&format!("{name}: no manifest slot"), 60)]);
+                    row(&[("art", 14), (&format!("{name}: no {} slot", if anchors { "anchor" } else { "manifest" }), 60)]);
                     failed += 1;
                     continue;
                 }
@@ -310,7 +313,9 @@ fn validate(paths: &Paths, manifest: &Manifest, pal: &Palette) -> bool {
             if off > 0.02 {
                 problems.push(format!("{:.1}% off-palette", off * 100.0));
             }
-            if matches!(slot.kind.as_str(), "sprite" | "icon" | "vfx" | "prop") {
+            // an anchor keeps the rule of what it anchors: the slimo and the item outlined, the tile not
+            let outlined = matches!(slot.kind.as_str(), "sprite" | "icon" | "vfx" | "prop") || (slot.kind == "anchor" && slot.silhouette != "hatch");
+            if outlined {
                 // outline rule (art bible): the darkest step of the object's ramp, stepping to Void on dark ground
                 let mut allowed = vec![pal.by_name("Void")];
                 allowed.push(pal.ramp(&slot.ramp)[0]);
