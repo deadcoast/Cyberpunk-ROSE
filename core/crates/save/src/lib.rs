@@ -1,10 +1,13 @@
 //! save — seed + input log + periodic snapshots. A save is small; a replay rebuilds the run from inputs.
-//! Encoded with postcard (compact binary), versioned, checksummed.
+//! Encoded with postcard (compact binary), versioned, checksummed. The strain code and the profile: `meta`.
 
 use inventory::Stash;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_VERSION: u16 = 15;
+pub mod meta;
+pub use meta::{EndingRecord, EndlessRecord, Profile, StrainCode};
+
+pub const SAVE_VERSION: u16 = 16;
 const MAGIC: &[u8; 4] = b"ROSE";
 
 /// Every player action that changes simulation state, in sim ticks. Replaying these on the same seed
@@ -107,7 +110,8 @@ pub struct SaveFile {
     pub economy: economy::EconomySave,
     /// the campaign: the chapter, the accord, the Bloom, the alliance, the Great Cleansing, the ending and the panels
     /// (v15, Full Design v3.19); the stack's Mat (the snapshots), the threats' stratum and campaign state, a street's
-    /// stratum, the economy's chapter, accord grate and ally (v15)
+    /// stratum, the economy's chapter, accord grate and ally (v15); the run's seed, its strain code, the ending's shift
+    /// and Endless's Empire, the difficulty's rules on the threats, the laws New Game+ unlocked (v16)
     #[serde(default)]
     pub campaign: story::Campaign,
 }
@@ -237,39 +241,6 @@ impl SaveFile {
         }
         postcard::from_bytes(body).map_err(|e| SaveError::Decode(e.to_string()))
     }
-
-    /// Strain code: genome as 10 two-hex-digit values plus a class letter and a checksum nibble.
-    pub fn encode_strain(genome: &[f32; 10], class: char) -> String {
-        let mut s = String::with_capacity(24);
-        let mut sum = 0u32;
-        for g in genome {
-            let v = (g.clamp(0.0, 1.0) * 255.0).round() as u32;
-            sum += v;
-            s.push_str(&format!("{v:02X}"));
-        }
-        s.push(class);
-        s.push_str(&format!("{:X}", sum % 16));
-        s
-    }
-
-    pub fn decode_strain(code: &str) -> Option<([f32; 10], char)> {
-        if code.len() != 22 {
-            return None;
-        }
-        let mut g = [0.0f32; 10];
-        let mut sum = 0u32;
-        for i in 0..10 {
-            let v = u32::from_str_radix(&code[i * 2..i * 2 + 2], 16).ok()?;
-            sum += v;
-            g[i] = v as f32 / 255.0;
-        }
-        let class = code.chars().nth(20)?;
-        let check = u32::from_str_radix(&code[21..22], 16).ok()?;
-        if check != sum % 16 {
-            return None;
-        }
-        Some((g, class))
-    }
 }
 
 #[cfg(test)]
@@ -383,21 +354,6 @@ mod tests {
         let mut other = b"NOPE".to_vec();
         other.extend_from_slice(&[0; 20]);
         assert_eq!(SaveFile::decode(&other), Err(SaveError::BadMagic));
-    }
-
-    #[test]
-    fn strain_codes_round_trip() {
-        let g = [0.5, 0.9, 0.1, 0.0, 1.0, 0.33, 0.66, 0.25, 0.75, 0.5];
-        let code = SaveFile::encode_strain(&g, 'H');
-        assert_eq!(code.len(), 22);
-        let (back, class) = SaveFile::decode_strain(&code).unwrap();
-        assert_eq!(class, 'H');
-        for i in 0..10 {
-            assert!((back[i] - g[i]).abs() < 1.0 / 255.0 + 1e-6);
-        }
-        let mut bad = code.clone();
-        bad.replace_range(0..2, "FF");
-        assert!(SaveFile::decode_strain(&bad).is_none());
     }
 
     #[test]

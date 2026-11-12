@@ -17,6 +17,10 @@ impl RoseSim {
         let mut d = VarDictionary::new();
         d.set("mode", if c.mode == story::Mode::Endless { "endless" } else { "campaign" });
         d.set("difficulty", c.difficulty.name());
+        d.set("seed", c.seed as i64);
+        d.set("founded_on", c.founded_on.clone().unwrap_or_default().as_str());
+        d.set("ended_at", c.ended_at.map_or(-1, |x| x as i64));
+        d.set("empire_at", c.empire_at.map_or(-1, |x| x as i64));
         d.set("chapter", c.chapter as i64);
         d.set("card", c.card(day).as_str());
         d.set("accord", match c.accord {
@@ -224,19 +228,9 @@ impl RoseSim {
     /// (postcard), whose best item names the run's tier.
     #[func]
     fn campaign_run_home(&mut self, stratum: i64, name: GString, extracted: bool, died: bool, rig: PackedByteArray) {
-        let table = items::ItemTable::from_toml(items::ITEMS_TOML).ok();
-        let best = postcard::from_bytes::<inventory::Rig>(rig.as_slice()).ok().and_then(|r| {
-            let t = table.as_ref()?;
-            r.backpack.items().chain(r.quick.iter().flatten()).map(|it| t.def(it.def).tier).max()
-        });
-        let hauled = !rig.is_empty();
-        let n = name.to_string();
-        if died {
-            self.log.bark("runner_dead", &[("name", n.as_str())]);
-        } else if extracted && hauled {
-            self.log.bark("haul", &[("name", n.as_str())]);
-        }
-        game::campaign::note_run(&mut self.campaign, stratum.clamp(0, 255) as u8, extracted, best);
+        let table = items::ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
+        let r = postcard::from_bytes::<inventory::Rig>(rig.as_slice()).ok();
+        game::campaign::run_home(&mut self.campaign, &mut self.log, &table, stratum.clamp(0, 255) as u8, &name.to_string(), extracted, died, r.as_ref());
     }
 }
 

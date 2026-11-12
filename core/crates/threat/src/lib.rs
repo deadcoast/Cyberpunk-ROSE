@@ -444,11 +444,17 @@ pub struct Campaign {
     /// every zone's gain multiplied (Endless Sump: 1 + the Mat's cells / 2,000)
     #[serde(default = "whole")]
     pub gain_mult: f32,
+    /// the difficulty's rules (Full Design v3.19, Game shell): raiders roll for a Runner's corpse on the routes (never
+    /// in Sump); a dead Runner's Spored gear regrows at the Heart, all of it or the first only (Undercroft); the
+    /// day's first shift floods as well as its third (Undercroft)
+    pub raid_corpses: bool,
+    pub spored_first_only: bool,
+    pub dawn_flood: bool,
 }
 
 impl Default for Campaign {
     fn default() -> Self {
-        Campaign { decay: 2.0, any_cleansing: false, mapped: false, calm_until: 0, gain_mult: 1.0 }
+        Campaign { decay: 2.0, any_cleansing: false, mapped: false, calm_until: 0, gain_mult: 1.0, raid_corpses: true, spored_first_only: false, dawn_flood: false }
     }
 }
 
@@ -771,7 +777,13 @@ impl Threats {
         }
     }
 
-    /// The tiles under water now that were not before the flood.
+    /// Whether a shift (the game's day counter) is a Flood shift: the day's third (Pass 1's Dim, Dark, Flood), and its
+    /// first as well where the difficulty floods at dawn.
+    pub fn is_flood_shift(&self, shift: u32) -> bool {
+        let of_day = (shift.max(1) - 1) % 3;
+        of_day == 2 || (self.campaign.dawn_flood && of_day == 0)
+    }
+
     /// A Flood shift's roll before the Lungs, for a run on it (the Lungs are the city's); None on another shift.
     pub fn flood_roll(&self) -> Option<u8> {
         self.flood.roll

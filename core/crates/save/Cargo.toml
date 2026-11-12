@@ -1,6 +1,6 @@
 [package]
 name = "save"
-description = "Cyberpunk: ROSE - seed + input log + snapshots; strain codes"
+description = "Cyberpunk: ROSE - seed + input log + snapshots; the strain code and the profile"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

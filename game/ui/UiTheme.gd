@@ -69,4 +69,18 @@ static func build() -> Theme:
 	t.set_color("font_hover_color", "Button", CYAN)
 	t.set_color("font_pressed_color", "Button", ACID)
 	t.set_color("font_color", "Label", CHALK)
+	# a one-line field (New Run's seed and strain code): a 1 px Dust border, Cyan when focused, 2 px in
+	t.set_font_size("font_size", "LineEdit", 6)
+	t.set_color("font_color", "LineEdit", CHALK)
+	t.set_color("caret_color", "LineEdit", CYAN)
+	var field := StyleBoxFlat.new()
+	field.bg_color = Color(0.04, 0.05, 0.07)
+	field.border_color = DUST
+	field.set_border_width_all(1)
+	field.set_content_margin_all(2)
+	field.content_margin_left = 3
+	t.set_stylebox("normal", "LineEdit", field)
+	var focused := field.duplicate() as StyleBoxFlat
+	focused.border_color = CYAN
+	t.set_stylebox("focus", "LineEdit", focused)
 	return t

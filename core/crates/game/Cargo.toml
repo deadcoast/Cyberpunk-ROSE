@@ -15,6 +15,7 @@ people = { path = "../people" }
 colony = { path = "../colony" }
 progress = { path = "../progress" }
 story = { path = "../story" }
+save = { path = "../save" }
 threat = { path = "../threat" }
 economy = { path = "../economy" }
 run = { path = "../run" }

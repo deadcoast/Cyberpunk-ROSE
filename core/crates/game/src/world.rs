@@ -92,8 +92,19 @@ impl World {
         World::found_with(seed, table, story::Campaign::default(), mat::Genome::default())
     }
 
+    /// New Run (Full Design v3.19, the Game shell): founded from its seed, mode, difficulty and strain code; with a
+    /// code, New Game+ carries the profile's laws and Scrapdex.
+    pub fn new_run(n: &crate::meta::NewRun, table: ItemTable, profile: &save::Profile) -> World {
+        let mut w = World::found_with(n.seed as u64, table, n.campaign(), n.genome());
+        if n.code.is_some() {
+            crate::meta::carry(profile, &mut w.colony);
+        }
+        w
+    }
+
     /// The founding of a run in a mode and difficulty, on a genome (New Game+: the strain code's).
-    pub fn found_with(seed: u64, table: ItemTable, campaign: story::Campaign, genome: mat::Genome) -> World {
+    pub fn found_with(seed: u64, table: ItemTable, mut campaign: story::Campaign, genome: mat::Genome) -> World {
+        campaign.seed = seed as u32;
         let city = City::game(logistics::founding_with(seed, genome), seed);
         let defs = StructureFile::shipped();
         let mut colony = Colony::new();
@@ -137,7 +148,7 @@ impl World {
         crate::grow::refresh_mat(&mut w.city, &w.colony);
         crate::ivan::found(&mut w.campaign, &w.city.sim);
         w.campaign.barker = story::Barker::new(seed);
-        let notes = w.threats.start_shift(&mut w.city, &mut w.colony, &w.defs, 1, shift::shift_of_day(1) == 2);
+        let notes = w.threats.start_shift(&mut w.city, &mut w.colony, &w.defs, 1, w.threats.is_flood_shift(1));
         w.note(notes);
         w.publish();
         w.movers();
@@ -217,7 +228,7 @@ impl World {
         let story = crate::campaign::shift_end(&mut self.campaign, &mut parts, self.day);
         s.people_lines.extend(story);
         self.day += 1;
-        let notes = self.threats.start_shift(&mut self.city, &mut self.colony, &self.defs, self.day, shift::shift_of_day(self.day) == 2);
+        let notes = self.threats.start_shift(&mut self.city, &mut self.colony, &self.defs, self.day, self.threats.is_flood_shift(self.day));
         self.note(notes);
         if self.threats.flood.level > 0 {
             self.log.bark("flood", &[]);

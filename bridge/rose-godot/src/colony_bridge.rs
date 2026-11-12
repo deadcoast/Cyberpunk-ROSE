@@ -257,7 +257,7 @@ pub fn laws_array(colony: &Colony, laws: &colony::LawFile, mat: &mat::MatSim) ->
         e.set("cost", l.cost.as_str());
         e.set("live", l.live.as_str());
         e.set("offered_by", l.offered_by.as_str());
-        let why = colony.charter.cannot_sign(l);
+        let why = colony.cannot_sign(l);
         let state = match colony.charter.law(&l.id) {
             Some(s) if s.repeal_reach.is_some() => "repealing",
             Some(s) if s.reach >= mat_farthest => "signed",

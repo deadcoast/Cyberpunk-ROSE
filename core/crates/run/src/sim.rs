@@ -247,6 +247,8 @@ pub struct RunSim {
     pub open_source: Option<usize>,
     /// the Arasaka set: a locked locker opens by hand as an unlocked one (Full Design v3.18, Collections)
     pub locks_open: bool,
+    /// Undercroft: of a dead Runner's Spored gear only the first piece regrows (Full Design v3.19, Game shell)
+    pub spored_first_only: bool,
 }
 
 /// how long a buffered press waits for the Runner to be free (ticks): combat presses briefly, interactions long
@@ -309,9 +311,9 @@ impl RunSim {
             f.bonded = fs.bonded;
             followers.push(f);
         }
-        // the dead of earlier runs: raiders roll once per day since each death, 10 % + 5 % per stratum
+        // the dead of earlier runs: raiders roll once per day since each death, 10 % + 5 % per stratum (never in Sump)
         for c in &setup.corpses {
-            let days = setup.day.saturating_sub(c.day);
+            let days = if has("corpses_unraided") { 0 } else { setup.day.saturating_sub(c.day) };
             let mut raided = c.raided;
             let mut roll = Pcg32::new(map.seed ^ (c.x as u64) << 20 ^ (c.y as u64) << 8 ^ 0x5A1D);
             let chance = 0.10 + 0.05 * map.stratum as f32;
@@ -381,6 +383,7 @@ impl RunSim {
             buf_shoot: 0,
             open_source: None,
             locks_open,
+            spored_first_only: has("spored_first_only"),
         }
     }
 
@@ -1431,23 +1434,24 @@ impl RunSim {
             RunResult::Died { .. } => {
                 let mut rig = self.runner.rig.clone();
                 let mut regrown = Vec::new();
-                // Spored gear leaves the body and regrows at the Heart, once
+                // Spored gear leaves the body and regrows at the Heart, once (Undercroft: the first piece only)
+                let cap = if self.spored_first_only { 1 } else { usize::MAX };
                 let spored: Vec<u32> = rig.backpack.iter().filter(|(_, p)| p.item.spored).map(|(h, _)| *h).collect();
-                for h in spored {
+                for h in spored.into_iter().take(cap) {
                     if let Some(mut it) = rig.backpack.remove(h) {
                         it.spored = false;
                         regrown.push(it);
                     }
                 }
                 for q in rig.quick.iter_mut() {
-                    if q.as_ref().is_some_and(|it| it.spored) {
+                    if regrown.len() < cap && q.as_ref().is_some_and(|it| it.spored) {
                         let mut it = q.take().unwrap();
                         it.spored = false;
                         regrown.push(it);
                     }
                 }
                 for slot in [&mut rig.gear.head, &mut rig.gear.body, &mut rig.gear.feet, &mut rig.gear.back].into_iter().chain(rig.gear.hands.iter_mut()) {
-                    if slot.as_ref().is_some_and(|it| it.spored) {
+                    if regrown.len() < cap && slot.as_ref().is_some_and(|it| it.spored) {
                         let mut it = slot.take().unwrap();
                         it.spored = false;
                         regrown.push(it);

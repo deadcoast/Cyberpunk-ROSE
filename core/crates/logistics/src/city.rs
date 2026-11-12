@@ -918,12 +918,12 @@ mod tests {
         let heart = c.heart_cell().unwrap();
         // the Relay with the highest demand per tile of distance from the Heart wins
         let best = c.choose(Kind::Pit, heart).unwrap();
-        let mut scores: Vec<(f32, u32)> = c.consumers.iter().filter_map(|k| c.distance(heart, k.cell).map(|d| (k.demand / (1.0 + d), k.key))).collect();
+        let mut scores: Vec<(f32, u32)> = c.consumers.iter().filter(|k| k.kind == Kind::Pit).filter_map(|k| c.distance(heart, k.cell).map(|d| (k.demand / (1.0 + d), k.key))).collect();
         scores.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
         assert_eq!(best.0, scores[0].1);
         // raise the demand of a farther one far enough and it wins
         let far = scores.last().unwrap().1;
-        for k in c.consumers.iter_mut() {
+        for k in c.consumers.iter_mut().filter(|k| k.kind == Kind::Pit) {
             k.demand = if k.key == far { 1.0 } else { 0.01 };
         }
         assert_eq!(c.choose(Kind::Pit, heart).unwrap().0, far);

@@ -1,6 +1,7 @@
 extends ScreenBase
 ## The ending (Full Design v3.19, Endings): after its panels, the final Stack-view shot of the city the player built,
-## held for as long as they look at it, with the ending's name, the warchest and the strain code; a key: the menu.
+## held for as long as they look at it, with the ending's name, the warchest, the strain code and NEW GAME+; an
+## Endless city's burning with the shift its Empire came. The profile keeps either.
 
 func _ready() -> void:
 	screen_title = "THE END"
@@ -30,15 +31,23 @@ func _build_content(c: Control) -> void:
 		tex.position = Vector2(0, 14)
 		tex.size = Vector2(632, 246)
 		c.add_child(tex)
-	var ending := String(camp.get("ending", ""))
-	var name := ending.replace("_", "-").to_upper()
-	make_label(c, "THE %s ENDING" % name, Vector2(0, 0), UiTheme.OOZE_GLOW)
+	# the profile keeps the ending (or the Endless city's rank), once
+	if not Sim.ending_recorded and Sim.ensure_profile().record_end(sim):
+		Sim.ending_recorded = true
+		Sim.save_profile()
+	var code: String = sim.strain_code()
 	var f := make_frame(c, Vector2(0, 264), Vector2(632, 40))
-	make_label(f, "WARCHEST %d" % int(camp.get("warchest", 0)), Vector2(8, 6), UiTheme.CYAN)
-	make_label(f, "%s   DIFFICULTY %s" % [String(camp.get("card", "")), String(camp.get("difficulty", "")).to_upper()], Vector2(8, 20), UiTheme.DUST)
-	make_label(f, "ANY KEY: THE MENU", Vector2(500, 20), UiTheme.DUST)
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		get_viewport().set_input_as_handled()
-		Screens.show_screen("menu")
+	if String(camp.get("mode", "")) == "endless":
+		var empire := int(camp.get("empire_at", -1))
+		make_label(c, "THE HEART BURNED ON SHIFT %d" % int(camp.get("ended_at", 0)), Vector2(0, 0), UiTheme.HOT_PINK)
+		make_label(f, ("THE EMPIRE AT SHIFT %d" % empire) if empire >= 0 else "THE EMPIRE NEVER CAME", Vector2(8, 6), UiTheme.CYAN)
+		make_label(f, "SEED %d   WARCHEST %d   DIFFICULTY %s" % [int(camp.get("seed", 0)), int(camp.get("warchest", 0)), String(camp.get("difficulty", "")).to_upper()], Vector2(8, 20), UiTheme.DUST)
+	else:
+		var ending := String(camp.get("ending", ""))
+		make_label(c, "THE %s ENDING" % ending.replace("_", "-").to_upper(), Vector2(0, 0), UiTheme.OOZE_GLOW)
+		make_label(f, "WARCHEST %d   %s" % [int(camp.get("warchest", 0)), code], Vector2(8, 6), UiTheme.CYAN)
+		make_label(f, "SHIFT %d   DIFFICULTY %s" % [int(camp.get("ended_at", 0)), String(camp.get("difficulty", "")).to_upper()], Vector2(8, 20), UiTheme.DUST)
+		make_button(f, "NEW GAME+", Vector2(420, 16), func():
+			Sim.newrun_preset = {"mode": "campaign", "code": code}
+			Screens.show_screen("newrun"))
+	make_button(f, "THE MENU", Vector2(520, 16), func(): Screens.show_screen("menu"))

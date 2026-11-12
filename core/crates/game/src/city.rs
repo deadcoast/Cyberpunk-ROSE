@@ -622,41 +622,117 @@ pub fn play_world(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftReco
 /// The same with the steward's haul given (`rose economy` plays both).
 pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize, &ShiftRecord)) -> (CityRun, World) {
     let table = ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
-    let lib = ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
-    let (tables, creatures) = (LootTables::shipped(), CreatureFile::shipped());
-    let mut w = World::found(seed, table.clone());
-    let mut steward = Steward { haul, ..Steward::default() };
-    let route_seed = run::route_seed(seed, 1);
-    let map = RouteMap::compile(&lib, &run::route(&lib, route_seed, 1).expect("the first route of S1"));
-    let mut memory: Vec<u8> = Vec::new();
-    let mut runs = 0u16;
-    let mut out = CityRun { seed, ..Default::default() };
-    for _ in 0..shifts {
+    let mut p = Player::new(World::found(seed, table), seed, haul);
+    for k in 0..shifts as usize {
+        let r = p.shift(1, &mut |_| Vec::new());
+        each(k, r);
+    }
+    let Player { w, steward, mut out, .. } = p;
+    out.plan_built = steward.plan_built(&w);
+    // the assertions (the design's Phase C proof)
+    for (k, r) in out.shifts.iter().enumerate().skip(1) {
+        if r.late > 0 {
+            out.failures.push(format!("shift {}: {} of the last shift's cargo still on the Mat", k + 1, r.late));
+        }
+    }
+    for (k, r) in out.shifts.iter().enumerate() {
+        if !r.reached && !r.steering {
+            out.failures.push(format!("shift {}: the cord to the first grate is lost and no Relay can go out to win it back", k + 1));
+        }
+        if r.starving > 0 {
+            out.failures.push(format!("shift {}: {} starving", k + 1, r.starving));
+        }
+        if r.heart_signal < SIGNAL_FLOOR {
+            out.failures.push(format!("shift {}: the Heart's core at signal {:.2}", k + 1, r.heart_signal));
+        }
+    }
+    if shifts as usize >= BUILD_PLAN.len() * 2 && out.plan_built < BUILD_PLAN.len() {
+        out.failures.push(format!("the build plan stands at {} of {}", out.plan_built, BUILD_PLAN.len()));
+    }
+    (out, w)
+}
+
+/// One stratum's Board route as the headless game runs it: its map, what the fog remembers, its runs so far.
+struct Route {
+    stratum: u8,
+    map: RouteMap,
+    memory: Vec<u8>,
+    runs: u16,
+}
+
+/// The whole game headless, a shift at a time (`rose city`, `rose cleansing`, `rose economy`, `rose campaign`): the
+/// steward's standing orders and the caller's, the eligible slimo of best Scav on a stratum's Board route as the bot,
+/// alone, with the kit packed from the Stash; the city through the run at the bot's pace, the haul home, the shift's
+/// end in core.
+pub struct Player {
+    pub w: World,
+    pub steward: Steward,
+    pub out: CityRun,
+    seed: u64,
+    table: ItemTable,
+    lib: ChunkLib,
+    tables: LootTables,
+    creatures: CreatureFile,
+    routes: Vec<Route>,
+}
+
+impl Player {
+    pub fn new(w: World, seed: u64, haul: Haul) -> Player {
+        let table = w.table.clone();
+        Player {
+            w,
+            steward: Steward { haul, ..Steward::default() },
+            out: CityRun { seed, ..Default::default() },
+            seed,
+            table,
+            lib: ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml"),
+            tables: LootTables::shipped(),
+            creatures: CreatureFile::shipped(),
+            routes: Vec::new(),
+        }
+    }
+
+    fn route(&mut self, stratum: u8) -> usize {
+        if let Some(k) = self.routes.iter().position(|r| r.stratum == stratum) {
+            return k;
+        }
+        let map = RouteMap::compile(&self.lib, &run::route(&self.lib, run::route_seed(self.seed, stratum), stratum).expect("a Board route"));
+        self.routes.push(Route { stratum, map, memory: Vec::new(), runs: 0 });
+        self.routes.len() - 1
+    }
+
+    /// One shift with the run on `stratum`'s Board route (none when no one can run); `orders` are the caller's,
+    /// given after the steward's and before the run.
+    pub fn shift(&mut self, stratum: u8, orders: &mut dyn FnMut(&mut World) -> Vec<String>) -> &ShiftRecord {
+        let rk = self.route(stratum);
+        let w = &mut self.w;
         let day = w.day;
         let mut rec = ShiftRecord { day, ..Default::default() };
         let start_tick = w.city.tick;
         let log_from = w.log.events.len();
-        rec.decisions = steward.act(&mut w);
-        // the Runner: the eligible slimo of best Scav, alone; a contract's guest stays home
+        rec.decisions = self.steward.act(w);
+        rec.decisions.extend(orders(w));
+        // the Runner: the eligible slimo of best Scav, alone; a contract's guest and a loop's slimo stay home
         let hosts: Vec<u32> = w.economy.s.contracts.iter().filter_map(|c| c.host).collect();
         let looping: Vec<u32> = w.colony.loops.iter().map(|l| l.slimo).collect();
         let runner = w.roster.eligible().into_iter().filter(|r| !hosts.contains(&r.id) && !looping.contains(&r.id)).max_by_key(|r| (r.skill(Skill::Scav), std::cmp::Reverse(r.id))).map(|r| r.id);
         let riding: Vec<u32> = w.ledger.in_flight.iter().map(|s| s.id).collect();
         let mut moments: Vec<Moment> = Vec::new();
         let mut run_times: Vec<f32> = Vec::new();
+        let route = &mut self.routes[rk];
         let outcome = runner.map(|id| {
             let r = w.roster.get(id).unwrap();
             let mut setup = r.runner_setup(&w.traits);
             setup.flags.extend(crate::grow::run_flags(&w.colony, Some(&w.threats), &w.city.sim));
             rec.runner = r.full_name();
-            let rig = pack(&mut w, setup.rig_rows, setup.carry_kg());
+            let rig = pack(w, setup.rig_rows, setup.carry_kg());
             w.roster.depart(id, &[]);
             w.movers();
             let lume = w.city.sim.genome.0[mat::genome::LUME];
             let nonce = w.city.tick * 131 + day as u64;
-            let mem = if memory.is_empty() { None } else { Some(memory.as_slice()) };
-            let rs = RunSetup { mat_lume_gene: lume, memory: mem, run_nonce: nonce, route_runs: runs, day, rig, runner: setup, followers: Vec::new(), corpses: Vec::new(), flood: w.threats.flood_roll(), next_flood: (crate::shift::shift_of_day(day + 1) == 2).then(|| w.threats.roll_for(day + 1)) };
-            run::bot::play_setup(map.clone(), table.clone(), tables.clone(), creatures.clone(), rs)
+            let mem = if route.memory.is_empty() { None } else { Some(route.memory.as_slice()) };
+            let rs = RunSetup { mat_lume_gene: lume, memory: mem, run_nonce: nonce, route_runs: route.runs, day, rig, runner: setup, followers: Vec::new(), corpses: Vec::new(), flood: w.threats.flood_roll(), next_flood: w.threats.is_flood_shift(day + 1).then(|| w.threats.roll_for(day + 1)) };
+            run::bot::play_setup(route.map.clone(), self.table.clone(), self.tables.clone(), self.creatures.clone(), rs)
         });
         let run_ticks = outcome.as_ref().map_or(IDLE_SHIFT_TICKS * RUN_TICKS_PER_CITY_TICK, |o| o.ticks);
         // the city through the run, at the bot's pace
@@ -667,7 +743,7 @@ pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize,
         rec.late = w.ledger.in_flight.iter().filter(|s| riding.contains(&s.id)).count();
         // home
         if let (Some(id), Some(o)) = (runner, outcome.as_ref()) {
-            runs += 1;
+            route.runs += 1;
             w.run_kills += o.oath_kills;
             w.economy.raider_kills(o.raider_kills);
             for k in &o.killed {
@@ -675,7 +751,7 @@ pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize,
                     w.log.push(w.city.tick, crate::log::Class::Landing, format!("Trophy: {name}"));
                 }
             }
-            memory = o.route_memory.clone();
+            route.memory = o.route_memory.clone();
             rec.result = match o.result {
                 RunResult::Extracted { .. } => "extracted".into(),
                 RunResult::Died { .. } => "died".into(),
@@ -689,8 +765,10 @@ pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize,
             }
             let extracted = matches!(o.result, RunResult::Extracted { .. });
             if extracted {
-                w.colony.home_from(1);
+                w.colony.home_from(stratum);
             }
+            // Ivan's line and the campaign's note of it (chapter 5 reads a Vault run's best item)
+            crate::campaign::run_home(&mut w.campaign, &mut w.log, &w.table, stratum, &rec.runner, extracted, !extracted, o.rig.as_ref().filter(|_| extracted));
             let report = RunReport {
                 runner: id,
                 followers: Vec::new(),
@@ -742,45 +820,23 @@ pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize,
         rec.mat_cells = (ms.tips + ms.cords + ms.nodes) as usize;
         rec.mat_nutrient = ms.nutrient;
         rec.starving = w.roster.records.iter().filter(|r| r.is_up() && r.need(people::Need::Fed) < 10).count();
-        rec.reached = reaches_first_grate(&w);
-        rec.steering = steward.steering(&w);
+        rec.reached = reaches_first_grate(w);
+        rec.steering = self.steward.steering(w);
         rec.heart_signal = w.city.heart_cell().map_or(0.0, |i| w.city.sim.sig[i]);
         rec.alerts = w.alerts().into_iter().map(|a| a.text).collect();
-        rec.markets = Steward::in_reach(&w).len();
+        rec.markets = Steward::in_reach(w).len();
         rec.sales = std::mem::take(&mut w.sales);
         rec.drift = (0..w.economy.file.factions.len() as u8).flat_map(|f| economy::CATEGORIES.map(|c| w.economy.drift(f, c).abs())).fold(0.0, f32::max);
-        rec.digest = digest(&w);
+        rec.digest = digest(w);
         // the shift's block of the merged log
         moments.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap().then(a.from.cmp(b.from)));
-        out.log.push_str(&format!("shift {}  day {}  {}  {}  {:.0} s\n", out.shifts.len() + 1, day, if rec.runner.is_empty() { "-" } else { &rec.runner }, rec.result, rec.seconds));
+        self.out.log.push_str(&format!("shift {}  day {}  {}  {}  {:.0} s\n", self.out.shifts.len() + 1, day, if rec.runner.is_empty() { "-" } else { &rec.runner }, rec.result, rec.seconds));
         for m in &moments {
-            out.log.push_str(&format!("  {:>3}:{:04.1}  {:<4} {}  {}\n", (m.t / 60.0) as u32, m.t % 60.0, m.from, m.class, m.what));
+            self.out.log.push_str(&format!("  {:>3}:{:04.1}  {:<4} {}  {}\n", (m.t / 60.0) as u32, m.t % 60.0, m.from, m.class, m.what));
         }
-        each(out.shifts.len(), &rec);
-        out.shifts.push(rec);
+        self.out.shifts.push(rec);
+        self.out.shifts.last().unwrap()
     }
-    out.plan_built = steward.plan_built(&w);
-    // the assertions (the design's Phase C proof)
-    for (k, r) in out.shifts.iter().enumerate().skip(1) {
-        if r.late > 0 {
-            out.failures.push(format!("shift {}: {} of the last shift's cargo still on the Mat", k + 1, r.late));
-        }
-    }
-    for (k, r) in out.shifts.iter().enumerate() {
-        if !r.reached && !r.steering {
-            out.failures.push(format!("shift {}: the cord to the first grate is lost and no Relay can go out to win it back", k + 1));
-        }
-        if r.starving > 0 {
-            out.failures.push(format!("shift {}: {} starving", k + 1, r.starving));
-        }
-        if r.heart_signal < SIGNAL_FLOOR {
-            out.failures.push(format!("shift {}: the Heart's core at signal {:.2}", k + 1, r.heart_signal));
-        }
-    }
-    if shifts as usize >= BUILD_PLAN.len() * 2 && out.plan_built < BUILD_PLAN.len() {
-        out.failures.push(format!("the build plan stands at {} of {}", out.plan_built, BUILD_PLAN.len()));
-    }
-    (out, w)
 }
 
 /// Two plays of one seed, compared shift by shift: the city replays bit-exact or says where it parted.

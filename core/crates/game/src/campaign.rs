@@ -14,6 +14,9 @@ use threat::{Due, Role, Threats};
 
 use crate::log::{CityLog, Class};
 
+/// The Empire's card: 2,000 slimos (Full Design v3.18, the city tiers).
+const EMPIRE: u32 = 2000;
+
 /// What the campaign reads and moves at a shift's end.
 pub struct Parts<'a> {
     pub city: &'a mut City,
@@ -30,9 +33,13 @@ pub struct Parts<'a> {
     pub guards: usize,
 }
 
-/// A new run's campaign on its threats and economy: the difficulty's Attention decay, the chapter the surface reads.
+/// A new run's campaign on its threats and economy: the difficulty's Attention decay, corpses, Spored gear and Floods,
+/// the chapter the surface reads.
 pub fn found(c: &Campaign, threats: &mut Threats, economy: &mut economy::Economy) {
     threats.campaign.decay = c.difficulty.decay();
+    threats.campaign.raid_corpses = c.difficulty.raid_corpses();
+    threats.campaign.spored_first_only = c.difficulty.spored_first_only();
+    threats.campaign.dawn_flood = c.difficulty.dawn_flood();
     economy.s.chapter = c.chapter.max(1);
 }
 
@@ -49,7 +56,20 @@ pub fn mults(c: &Campaign, sim: &mat::MatSim) -> (f32, f32) {
     }
 }
 
-/// A Runner home from a run (the bridge's extraction and the headless city's): chapter 5 reads the Vault's.
+/// A run over (the bridge's and the headless game's): Ivan's line on it, and the campaign's note — chapter 5 reads a
+/// Vault run's best item (the rig home, backpack and quick slots).
+#[allow(clippy::too_many_arguments)]
+pub fn run_home(c: &mut Campaign, log: &mut CityLog, table: &ItemTable, stratum: u8, name: &str, extracted: bool, died: bool, rig: Option<&inventory::Rig>) {
+    let best = rig.and_then(|r| r.backpack.items().chain(r.quick.iter().flatten()).map(|it| table.def(it.def).tier).max());
+    if died {
+        log.bark("runner_dead", &[("name", name)]);
+    } else if extracted && rig.is_some() {
+        log.bark("haul", &[("name", name)]);
+    }
+    note_run(c, stratum, extracted, best);
+}
+
+/// A Runner home from a run: chapter 5 reads the Vault's.
 pub fn note_run(c: &mut Campaign, stratum: u8, extracted: bool, best: Option<Tier>) {
     if extracted && stratum == 5 && best.is_some_and(|t| t >= Tier::Rare) {
         c.vault_home = true;
@@ -160,12 +180,13 @@ pub fn warchest(p: &Parts) -> u32 {
     cells + 2 * armoured + 10 * tamed + 10 * (militia + p.guards as u32) + p.colony.downer_made + 100 * p.economy.ally_rep().max(0) as u32
 }
 
-fn end(c: &mut Campaign, p: &mut Parts, lines: &mut Vec<String>) {
+fn end(c: &mut Campaign, p: &mut Parts, day: u32, lines: &mut Vec<String>) {
     let f = ChapterFile::shipped();
     let e = f.ending_of(&p.city.sim.genome.0, p.economy.ally_rep(), p.city.sim.heart_lost, c.ivan_fell);
     let chest = warchest(p);
     c.ending = Some(e.id.clone());
     c.warchest = Some(chest);
+    c.ended_at = Some(day);
     if e.id != "scattered" && c.chapter == 7 {
         c.panels.push("ch7.close".into());
     }
@@ -253,12 +274,27 @@ pub fn ally(c: &Campaign, p: &mut Parts, faction: u8) -> Result<(), String> {
 pub fn shift_end(c: &mut Campaign, p: &mut Parts, day: u32) -> Vec<String> {
     let mut lines = Vec::new();
     tithe(c, p);
-    if c.mode != Mode::Campaign || c.over() {
+    if c.over() {
+        return lines;
+    }
+    // Endless Sump: no chapters; ranked by the shift the Empire's card landed on, over when the Heart burns
+    if c.mode == Mode::Endless {
+        if c.empire_at.is_none() && p.colony.progress.collections.titles.contains(&EMPIRE) {
+            c.empire_at = Some(day);
+        }
+        if p.city.sim.heart_lost {
+            c.ending = Some("burned".into());
+            c.warchest = Some(warchest(p));
+            c.ended_at = Some(day);
+            let line = format!("the Heart burned on shift {day}{}", c.empire_at.map_or(String::new(), |at| format!("; the Empire stood from shift {at}")));
+            p.log.push(p.city.tick, Class::Loss, line.clone());
+            lines.push(line);
+        }
         return lines;
     }
     // a burned Heart ends the campaign Scattered, then or at the Great Cleansing
     if p.city.sim.heart_lost {
-        end(c, p, &mut lines);
+        end(c, p, day, &mut lines);
         return lines;
     }
     // the envoy's offer stands two shifts, then counts as refused
@@ -289,7 +325,7 @@ pub fn shift_end(c: &mut Campaign, p: &mut Parts, day: u32) -> Vec<String> {
         p.log.push(p.city.tick, Class::Landing, line.clone());
         lines.push(line);
         if n == 7 {
-            end(c, p, &mut lines);
+            end(c, p, day, &mut lines);
             return lines;
         }
         c.panels.push(format!("ch{n}.close"));

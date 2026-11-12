@@ -14,6 +14,9 @@ signal ticked
 func ensure() -> RoseSim:
 	if sim == null:
 		sim = RoseSim.new()
+		# New Run's choices (mode, difficulty, strain code): the founding reads them
+		if not run_config.is_empty():
+			sim.configure_run(String(run_config.mode), String(run_config.difficulty), String(run_config.code), ensure_profile())
 		sim.start_city(seed_value)
 		# the Board's open strata: whether raiders walk its routes (the clear-raiders contracts)
 		sim.set_strata_open(strata_open)
@@ -162,6 +165,9 @@ func end_shift() -> void:
 	var st := ensure_stash()
 	var city := ensure()
 	last_shift = city.colony_end_shift(ensure_people(), st, day)
+	# the Strainbook and the Scrapdex outlive the run (Full Design v3.19, Meta)
+	if ensure_profile().absorb(city) > 0:
+		save_profile()
 	shift_report = last_shift.get("report", {})
 	people_lines = last_shift.get("lines", PackedStringArray())
 	lay_bodies(last_shift.get("laid", []))
@@ -306,3 +312,71 @@ func note_run(stratum: int, seed_value: int) -> void:
 func run_nonce() -> int:
 	var s: Dictionary = ensure().stats()
 	return int(s.get("tick", 0)) * 131 + day
+
+# ---------------------------------------------------------------- the profile, New Run, the Daily (Full Design v3.19)
+## What outlives a run (the save crate's profile): the menu's endings and Daily best, New Run's last code, the Codex.
+## The tests keep their own (profile_path), so a test's ending or Daily never lands in the player's.
+var profile_path := "user://profile"
+var profile: RoseProfile
+## New Run's choices for the next founding: {mode, difficulty, code}; empty: the campaign at Culvert, no code.
+var run_config := {}
+## The ending has been written to the profile (the Ending screen writes it once).
+var ending_recorded := false
+## What the New Run screen opens with: {mode, code} (the menu's Endless Sump, the Ending's NEW GAME+).
+var newrun_preset := {}
+## Every variable's starting value, so a New Run founds from a clean slate; the tests' settings are kept.
+var _defaults := {}
+const _KEEP := ["_defaults", "ticks_per_frame", "panel_hold", "profile", "profile_path"]
+
+func _init() -> void:
+	for p in get_script().get_script_property_list():
+		if p.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and not (p.name in _KEEP):
+			var v = get(p.name)
+			_defaults[p.name] = v.duplicate(true) if (v is Array or v is Dictionary) else v
+
+func ensure_profile() -> RoseProfile:
+	if profile == null:
+		profile = RoseProfile.new()
+		if FileAccess.file_exists(profile_path) and not profile.load_bytes(FileAccess.get_file_as_bytes(profile_path)):
+			# a profile that does not read is set aside, never overwritten in place
+			DirAccess.rename_absolute(profile_path, profile_path + ".bad")
+	return profile
+
+func save_profile() -> void:
+	var f := FileAccess.open(profile_path, FileAccess.WRITE)
+	if f != null:
+		f.store_buffer(ensure_profile().to_bytes())
+
+## New Run: the city so far is let go and the next is founded on the seed, mode ("campaign" or "endless"), difficulty
+## and strain code ("" none; New Game+ otherwise). "" or why not — a code that does not read keeps the city.
+func new_run(seed_v: int, mode: String, difficulty: String, code: String) -> String:
+	var why: String = RoseSim.new().configure_run(mode, difficulty, code, ensure_profile())
+	if why != "":
+		return why
+	if _city_log != null:
+		_city_log.close()
+		_city_log = null
+	for k in _defaults:
+		var v = _defaults[k]
+		set(k, v.duplicate(true) if (v is Array or v is Dictionary) else v)
+	seed_value = seed_v
+	run_config = {"mode": mode, "difficulty": difficulty, "code": code}
+	ensure()
+	return ""
+
+## Today as the Daily's seed (YYYYMMDD, the system's date).
+func today() -> int:
+	var d := Time.get_date_dict_from_system()
+	return int(d.year) * 10000 + int(d.month) * 100 + int(d.day)
+
+## The Daily Seed: the day's one try at its route with its Runner and the fixed rig (Full Design v3.19). "" and the
+## Run is on screen, or why not.
+func start_daily(date: int) -> String:
+	var tried: int = ensure_profile().daily_of(date)
+	if tried >= 0:
+		return "the Daily of %d is tried: score %d" % [date, tried]
+	var d: Dictionary = RoseRun.daily(date)
+	var r: Dictionary = RosePeople.daily_runner(date)
+	launch = {"daily": date, "stratum": int(d.stratum), "seed": int(d.seed), "name": String(d.name), "hand": String(d.hand), "kit": d.kit, "runner": r, "runner_name": String(r.full_name), "followers": []}
+	Screens.show_screen("run")
+	return ""

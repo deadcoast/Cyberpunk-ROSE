@@ -165,7 +165,8 @@ pub fn fed(city: &mut City, colony: &mut Colony, table: &ItemTable, item: items:
 }
 
 /// The run's flags from the city (Full Design v3.18, Collections: Scav yield): the Street set's +1, the Arasaka set's
-/// locks, the Feral set's notice, and Conscription's cost while the Heart's zone is under a Patrol or worse.
+/// locks, the Feral set's notice, Conscription's cost while the Heart's zone is under a Patrol or worse, and the
+/// difficulty's rules for corpses and Spored gear.
 pub fn run_flags(colony: &Colony, threats: Option<&threat::Threats>, sim: &mat::MatSim) -> Vec<String> {
     let c = &colony.progress.collections;
     let mut v = Vec::new();
@@ -177,6 +178,13 @@ pub fn run_flags(colony: &Colony, threats: Option<&threat::Threats>, sim: &mat::
     let alarm = threats.is_some_and(|t| t.heart_zone(sim).is_some_and(|z| t.down_in(z, 0)));
     if alarm && colony.charter.flag_at("d2_militia", 0) {
         v.push("alarm_yield_cut".into());
+    }
+    // the difficulty's (Full Design v3.19, Game shell)
+    if threats.is_some_and(|t| !t.campaign.raid_corpses) {
+        v.push("corpses_unraided".into());
+    }
+    if threats.is_some_and(|t| t.campaign.spored_first_only) {
+        v.push("spored_first_only".into());
     }
     v
 }

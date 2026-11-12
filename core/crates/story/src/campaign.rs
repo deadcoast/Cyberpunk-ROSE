@@ -35,12 +35,31 @@ impl Difficulty {
         }
     }
 
+    /// Raiders roll for a Runner's corpse on the routes: never in Sump.
+    pub fn raid_corpses(self) -> bool {
+        self != Difficulty::Sump
+    }
+
+    /// A dead Runner's Spored gear: only the first piece regrows in Undercroft.
+    pub fn spored_first_only(self) -> bool {
+        self == Difficulty::Undercroft
+    }
+
+    /// The day's first shift floods as well as its third in Undercroft.
+    pub fn dawn_flood(self) -> bool {
+        self == Difficulty::Undercroft
+    }
+
     pub fn name(self) -> &'static str {
         match self {
             Difficulty::Sump => "Sump",
             Difficulty::Culvert => "Culvert",
             Difficulty::Undercroft => "Undercroft",
         }
+    }
+
+    pub fn from_name(s: &str) -> Option<Difficulty> {
+        [Difficulty::Sump, Difficulty::Culvert, Difficulty::Undercroft].into_iter().find(|d| d.name().eq_ignore_ascii_case(s))
     }
 }
 
@@ -101,6 +120,9 @@ pub const GREAT_GRATES: usize = 3;
 pub struct Campaign {
     pub mode: Mode,
     pub difficulty: Difficulty,
+    /// the run's seed (the strain code carries it) and the strain code it was founded on (New Game+), if any
+    pub seed: u32,
+    pub founded_on: Option<String>,
     /// the open chapter, 1-7; 8 once an ending is reached (none in Endless)
     pub chapter: u8,
     pub open_since: u32,
@@ -125,6 +147,10 @@ pub struct Campaign {
     pub great_at: Option<u32>,
     pub ending: Option<String>,
     pub warchest: Option<u32>,
+    /// the shift the ending came (an Endless city: the shift its Heart burned)
+    pub ended_at: Option<u32>,
+    /// Endless Sump's rank: the shift the Empire's card landed on
+    pub empire_at: Option<u32>,
     pub ivan_fell: bool,
     /// panel sets waiting for the screen ("ch3.open", "ch3.close", "end.garden"), and those seen
     pub panels: Vec<String>,
@@ -150,6 +176,8 @@ impl Campaign {
         Campaign {
             mode,
             difficulty,
+            seed: 0,
+            founded_on: None,
             chapter: if campaign { 1 } else { 0 },
             open_since: 1,
             closed: Vec::new(),
@@ -166,6 +194,8 @@ impl Campaign {
             great_at: None,
             ending: None,
             warchest: None,
+            ended_at: None,
+            empire_at: None,
             ivan_fell: false,
             panels: if campaign { vec!["ch1.open".into()] } else { Vec::new() },
             seen: Vec::new(),
@@ -182,7 +212,11 @@ impl Campaign {
     /// The HUD's chapter card ("CH 3 THE HAND: ANSWER THE ENVOY"); the Great Cleansing's count in chapter 7.
     pub fn card(&self, day: u32) -> String {
         if self.mode == Mode::Endless {
-            return "ENDLESS SUMP".into();
+            return match (self.over(), self.empire_at) {
+                (true, _) => "ENDLESS SUMP: THE HEART BURNED".into(),
+                (false, Some(at)) => format!("ENDLESS SUMP: THE EMPIRE AT SHIFT {at}"),
+                (false, None) => "ENDLESS SUMP".into(),
+            };
         }
         if let Some(e) = &self.ending {
             return format!("THE END: {}", ChapterFile::shipped().ending(e).map_or(e.to_uppercase(), |d| d.name.to_uppercase()));

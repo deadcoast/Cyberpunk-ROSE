@@ -99,6 +99,8 @@ pub struct MatSim {
     starve: Vec<i16>,
     lonely: Vec<i16>,
     pub sig: Vec<f32>,
+    /// tiles from the Heart along the city's tissue (-1 where it does not lead): the Heart pump's direction
+    pub outward: Vec<f32>,
     /// damage a hyphal tile has taken against its armour, 1 + 9 x Chrome Affinity (Pass 1; Full Design, Pressure)
     pub wear: Vec<f32>,
     /// lit or bleached this step: it does not mend
@@ -180,6 +182,7 @@ impl MatSim {
             starve: vec![0; n],
             lonely: vec![0; n],
             sig: vec![0.0; n],
+            outward: vec![-1.0; n],
             wear: vec![0.0; n],
             hurt: vec![false; n],
             ferality: vec![0.0; n],
@@ -259,7 +262,9 @@ impl MatSim {
         self.sub[crossing] == sub::SLAB || self.sub.get(crossing + 1) == Some(&sub::SLAB)
     }
 
-    /// Open a crossing's slab: the breach (Full Design v3.19). Returns whether anything opened.
+    /// Open a crossing's slab: the breach (Full Design v3.19). The Mat touching it pours in — each opened tile beside
+    /// tissue is a Tip (Pass 2: "the camera following the first tip up the shaft"), as a Relay raised sprouts its
+    /// neighbours. Returns whether anything opened.
     pub fn open_slab(&mut self, crossing: usize) -> bool {
         let mut opened = false;
         for i in [crossing, crossing + 1] {
@@ -267,6 +272,14 @@ impl MatSim {
                 self.sub[i] = sub::OPEN;
                 self.changed.push(i as u32);
                 opened = true;
+            }
+        }
+        for i in [crossing, crossing + 1] {
+            if opened && self.hy[i] == hy::EMPTY && (0..4).any(|d| self.nb(i, d).is_some_and(|j| is_hyphal(self.hy[j]))) {
+                self.set_hy(i, hy::TIP);
+                self.age[i] = 0;
+                self.stall[i] = 0;
+                self.n[i] = (self.n[i] + self.tip_starter).min(1.0);
             }
         }
         opened
@@ -591,6 +604,28 @@ impl MatSim {
             }
         }
         self.scratch = dist;
+        // the Heart's own distance along its tissue, without the signal's range: the pump pushes outward from it
+        for v in self.outward.iter_mut() {
+            *v = -1.0;
+        }
+        if let Some((hx, hy_)) = self.heart.filter(|_| !self.heart_lost) {
+            let h = self.idx(hx, hy_);
+            if is_hyphal(self.hy[h]) {
+                self.outward[h] = 0.0;
+                dq.clear();
+                dq.push_back(h);
+                while let Some(i) = dq.pop_front() {
+                    for d in 0..4 {
+                        if let Some(j) = self.nb(i, d) {
+                            if self.outward[j] < 0.0 && is_hyphal(self.hy[j]) && (graft || !self.bloom_at(j, bloom)) {
+                                self.outward[j] = self.outward[i] + 1.0;
+                                dq.push_back(j);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------------ nutrient
@@ -686,8 +721,11 @@ impl MatSim {
             self.n[i] += delta[i];
         }
 
-        // 3. Heart pump: surplus above a working reserve moves outward (to lower signal), split across links,
-        //    each gift capped by the receiver's free capacity
+        // 3. Heart pump: surplus above a working reserve moves outward — to the hyphal neighbours farther from the
+        //    Heart along the tissue (Pass 1), to lower signal where the tissue does not lead to the Heart — split
+        //    across links, each gift capped by the receiver's free capacity. A Relay is a source of signal, not of
+        //    food: the pump runs where its signal reaches, and pushes the Heart's food past it (this design's reading
+        //    of Pass 1's "farther from the Heart (lower σ)", which a Relay's own peak of σ would turn back)
         let reserve = self.p.theta_starve + 0.05;
         let pump = self.p.pump;
         let snap = std::mem::take(&mut self.scratch2);
@@ -704,10 +742,13 @@ impl MatSim {
             if surplus <= 0.0 {
                 continue;
             }
+            let out = &self.outward;
+            let sig = &self.sig;
+            let farther = |j: usize| if out[i] >= 0.0 && out[j] >= 0.0 { out[j] > out[i] } else { sig[j] < sig[i] };
             let mut c = 0u32;
             for d in 0..4 {
                 if let Some(j) = self.nb(i, d) {
-                    if is_hyphal(self.hy[j]) && self.sig[j] < self.sig[i] {
+                    if is_hyphal(self.hy[j]) && farther(j) {
                         c += 1;
                     }
                 }
@@ -718,7 +759,7 @@ impl MatSim {
             let share = pump * surplus / c as f32;
             for d in 0..4 {
                 if let Some(j) = self.nb(i, d) {
-                    if is_hyphal(self.hy[j]) && self.sig[j] < self.sig[i] {
+                    if is_hyphal(self.hy[j]) && farther(j) {
                         let gift = share.min((1.0 - snap[j]).max(0.0));
                         delta[i] -= gift;
                         delta[j] += gift;
@@ -928,7 +969,20 @@ impl MatSim {
         let lat_p = self.p.branch_p * 0.05;
         for i in 0..len {
             if old[i] == hy::CORD && ncount[i] == 2 && self.rng.f32() < lat_p {
-                let _ = self.try_sprout(i, 1, &ncount, &mut occupied);
+                let _ = self.try_sprout(i, 2, &ncount, &mut occupied);
+            }
+        }
+
+        // reawakening (this design's; Pass 1: "the frontier speed is set by supply, not by a timer"): a strand's end — a
+        // Cord with one hyphal neighbour, the Tip that stalled on a lean supply — that the network has since fed to the
+        // extension reserve is a Tip again, at the lateral sprout's rate; without it a frontier that stalls in a
+        // corridor never grows again however much food reaches it
+        let need = self.p.theta_grow + self.grow_cost + self.tip_starter;
+        for i in 0..len {
+            if old[i] == hy::CORD && self.hy[i] == hy::CORD && ncount[i] == 1 && self.n[i] >= need && self.rng.f32() < lat_p {
+                self.set_hy(i, hy::TIP);
+                self.age[i] = 0;
+                self.stall[i] = 0;
             }
         }
 

@@ -242,7 +242,7 @@ func _refresh_lines(sim: RoseSim) -> void:
 	var secs := int(s.get("tick", 0)) / 2
 	var ov := String(Sim.overlay).to_upper() if Sim.overlay != "" else "none"
 	clock_label.text = "DAY %d %s  %d:%02d:%02d   %s %dx   %s   overlay %s   cargo %d riding %d waiting   jam %d   salt bag %d" % [
-		Sim.day, ["DIM", "DARK", "FLOOD"][(Sim.day - 1) % 3], secs / 3600, (secs / 60) % 60, secs % 60,
+		Sim.day, _shift_name(sim), secs / 3600, (secs / 60) % 60, secs % 60,
 		"PAUSED" if Sim.paused else "RUN", 1 << _speed_index(), VIEW_NAMES[view_index], ov,
 		s.get("riding", 0), s.get("waiting", 0), s.get("jammed", 0), int(sim.salt_left())]
 	var pop: int = Sim.ensure_people().count()
@@ -1235,3 +1235,8 @@ func _hover_tile(tx: int, ty: int) -> void:
 			answer = ""
 		_refresh_hint()
 	cursor.queue_redraw()
+
+## The shift of the day (Dim, Dark, Flood); a Flood on the day's first shift too in Undercroft ("DIM FLOOD").
+func _shift_name(sim: RoseSim) -> String:
+	var name: String = ["DIM", "DARK", "FLOOD"][(Sim.day - 1) % 3]
+	return (name + " FLOOD") if sim.flood_shift(Sim.day) and name != "FLOOD" else name

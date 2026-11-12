@@ -26,6 +26,9 @@ func _initialize() -> void:
 	assets = _autoload("Assets", "res://autoload/Assets.gd")
 	screens = _autoload("Screens", "res://autoload/Screens.gd")
 	sim = _autoload("Sim", "res://autoload/Sim.gd")
+	# the tests' own profile, fresh each time: nothing lands in the player's
+	sim.profile_path = "user://profile_test"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(sim.profile_path))
 	root.add_child((load("res://Main.tscn") as PackedScene).instantiate())
 	# the campaign's panel sets play when the script shows them, not on their own
 	sim.panel_hold = true

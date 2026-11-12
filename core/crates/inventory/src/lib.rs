@@ -259,6 +259,11 @@ impl Rig {
     pub fn overweight(&self, table: &ItemTable) -> bool {
         self.weight(table) > self.carry_cap
     }
+    /// Everything the rig holds: the backpack, the quick slots, the gear.
+    pub fn all_items(&self) -> impl Iterator<Item = &ItemInstance> {
+        let g = &self.gear;
+        self.backpack.items().chain(self.quick.iter().flatten()).chain([&g.head, &g.body, &g.feet, &g.back].into_iter().flatten()).chain(g.hands.iter().flatten()).chain(g.implants.iter().flatten())
+    }
 }
 
 /// Stash tiers: grid size by Heart tier.

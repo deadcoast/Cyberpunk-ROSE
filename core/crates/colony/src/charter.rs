@@ -135,6 +135,9 @@ pub struct Charter {
     pub offered: Vec<String>,
     /// a D5 was dissolved without the Rite: every slimo's target takes the hit this shift
     pub dissolution_hit: bool,
+    /// laws a past run signed (New Game+, the profile's): signable without their tech, Authority still paid
+    #[serde(default)]
+    pub unlocked: Vec<String>,
 }
 
 impl Charter {

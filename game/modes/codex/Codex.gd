@@ -18,6 +18,15 @@ func _ready() -> void:
 
 func _build_content(c: Control) -> void:
 	data = Sim.ensure().codex(Sim.ensure_people())
+	# what outlives a run (Full Design v3.19, Meta): an entry seen or earned in any run counts
+	var dex_ever: PackedStringArray = Sim.ensure_profile().scrapdex()
+	for e in data.get("scrapdex", []):
+		if not bool(e.seen) and dex_ever.has(String(e.id)):
+			e.seen = true
+	var book_ever: PackedStringArray = Sim.ensure_profile().strainbook()
+	for e in data.get("strainbook", []):
+		if int(e.earned) < 0 and book_ever.has(String(e.id)):
+			e.earned = 0
 	var x := 0
 	for t in TABS:
 		var tt: String = t
@@ -163,11 +172,21 @@ func _trophies() -> void:
 		make_label(f, String(e.text).left(24), Vector2(6, 16), UiTheme.CHALK if got else UiTheme.DUST)
 		make_label(f, "SHIFT %d" % int(e.won) if got else "", Vector2(6, 34), UiTheme.DUST)
 
-## The panel sets seen, in the order they played; a click replays one.
+## The panel sets seen, in the order they played; a click replays one. Beside them, the endings reached in every run
+## with their warchests and strain codes (the profile).
 func _lore() -> void:
 	var camp: Dictionary = Sim.ensure().campaign()
 	var seen: PackedStringArray = camp.get("seen", PackedStringArray())
 	make_label(view, "LORE   %d panel set%s seen   click one to see it again" % [seen.size(), "" if seen.size() == 1 else "s"], Vector2(0, 2), UiTheme.CYAN)
+	var ends: Array = Sim.ensure_profile().summary().get("endings", [])
+	make_label(view, "ENDINGS REACHED %d" % ends.size(), Vector2(330, 2), UiTheme.CYAN)
+	var ey := 18
+	for e in ends:
+		make_label(view, "%s  WARCHEST %d  SHIFT %d  %s" % [String(e.name).to_upper(), int(e.warchest), int(e.shift), String(e.difficulty).to_upper()], Vector2(330, ey), UiTheme.OOZE_GLOW)
+		make_label(view, String(e.code), Vector2(330, ey + 10), UiTheme.DUST)
+		ey += 24
+		if ey > 270:
+			break
 	var y := 18
 	if seen.is_empty():
 		make_label(view, "nothing yet: a chapter's panels land here once they have played", Vector2(0, y), UiTheme.DUST)

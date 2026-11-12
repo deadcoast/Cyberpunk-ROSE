@@ -35,6 +35,9 @@ func _initialize() -> void:
 	assets = _autoload("Assets", "res://autoload/Assets.gd")
 	screens = _autoload("Screens", "res://autoload/Screens.gd")
 	sim = _autoload("Sim", "res://autoload/Sim.gd")
+	# the tests' own profile, fresh each time: nothing lands in the player's
+	sim.profile_path = "user://profile_test"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(sim.profile_path))
 	var scene := load("res://Main.tscn")
 	main = scene.instantiate()
 	root.add_child(main)
@@ -79,8 +82,23 @@ func _verify_current() -> void:
 	_check(scr != null and scr.has_method("_build_content"), "%s: did not instantiate as a ScreenBase" % id)
 	var slots := _count_slots(scr)
 	# the Colony's art is the world's tiles (checked below) and the Job grid is a table; the rest draw AssetSlots
-	_check(slots > 0 or id in ["colony", "jobs", "panels", "ending"], "%s: no AssetSlot resolved a texture" % id)
+	_check(slots > 0 or id in ["colony", "jobs", "panels", "ending", "newrun"], "%s: no AssetSlot resolved a texture" % id)
 	match id:
+		"newrun":
+			# the strain code (Full Design v3.19, Meta): the city's own reads back, a digit off does not
+			var code: String = sim.ensure().strain_code()
+			_check(code.begins_with("ROSE-") and code.length() == 44, "newrun: the strain code is %s" % code)
+			_check(RoseSim.new().configure_run("campaign", "Culvert", code, null) == "", "newrun: the city's own code does not read")
+			var bad := code.substr(0, 5) + ("1" if code[5] == "0" else "0") + code.substr(6)
+			_check(RoseSim.new().configure_run("campaign", "Culvert", bad, null) != "", "newrun: a code a digit off read")
+			# the Daily: the date fixes the route and the Runner, D2 or D3
+			var dl: Dictionary = RoseRun.daily(20261111)
+			var dr: Dictionary = RosePeople.daily_runner(20261111)
+			_check(int(dl.stratum) in [1, 2, 3] and String(dr.depth) in ["D2", "D3"] and dl.kit.size() == 4, "newrun: the Daily %s %s" % [str(dl), str(dr)])
+			# the profile: the city's Strainbook and Scrapdex reach it, and it round-trips
+			var p: RoseProfile = sim.ensure_profile()
+			p.absorb(sim.ensure())
+			_check(RoseProfile.new().load_bytes(p.to_bytes()), "newrun: the profile does not round-trip")
 		"panels":
 			# the campaign opens on chapter 1's four panels, each with Ivan's caption (Full Design v3.19)
 			var ps: Array = scr.set_data.get("panels", [])
@@ -91,7 +109,8 @@ func _verify_current() -> void:
 			var s: Dictionary = sim.ensure().stats()
 			# the founding: the Mat steered from the Heart to the first grate, its market reached
 			_check(int(s.get("tick", 0)) > 50, "colony: sim did not advance (tick %d)" % int(s.get("tick", 0)))
-			_check(int(s.get("cells", 0)) > 80, "colony: Mat did not grow (%d cells)" % int(s.get("cells", 0)))
+			# the founding's strand, Heart to grate: 75 cells on seed 11 (Full Design v3.20, The Mat's growth)
+			_check(int(s.get("cells", 0)) > 50, "colony: Mat did not grow (%d cells)" % int(s.get("cells", 0)))
 			var reached: PackedByteArray = sim.ensure().sites().get("markets_reached", PackedByteArray())
 			_check(reached.size() >= 1 and reached[0] == 1, "colony: the founding Mat does not reach the first grate")
 			# Pressure: a zone a grate, the founded grate reached, its gauge pinned in the world
@@ -106,7 +125,7 @@ func _verify_current() -> void:
 				if ch.has_method("full_paint"):
 					wv = ch
 			_check(wv != null and wv.substrate.get_used_cells().size() > 1000, "colony: world tiles not painted")
-			_check(wv != null and wv.matlayer.get_used_cells().size() > 80, "colony: Mat tiles not painted")
+			_check(wv != null and wv.matlayer.get_used_cells().size() > 50, "colony: Mat tiles not painted")
 			# the city founded on the Mat: the Heart, the Route Board, a Bench; 25 defs
 			var rs: RoseSim = sim.ensure()
 			var defs: Array = rs.structure_defs()
@@ -590,7 +609,7 @@ func _count_slots(n: Node) -> int:
 func _finish() -> bool:
 	var missing: Array = assets.missing()
 	_check(missing.is_empty(), "missing assets: %s" % str(missing))
-	_check(screen_ids.size() == 16, "expected 16 screens, got %d" % screen_ids.size())
+	_check(screen_ids.size() == 17, "expected 17 screens, got %d" % screen_ids.size())
 	var elapsed := Time.get_ticks_msec() - t_start
 	print("[smoke] %d screens, %d textures resolved, %d frames in %d ms" % [screen_ids.size(), assets.resolved_count(), frames, elapsed])
 	if failures.is_empty():

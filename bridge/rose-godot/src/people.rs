@@ -231,19 +231,17 @@ impl RosePeople {
     fn runner_setup(&mut self, id: i64) -> VarDictionary {
         self.ensure();
         let Some(r) = self.roster.get(id as u32) else { return VarDictionary::new() };
-        let s = r.runner_setup(self.t());
-        let mut d = VarDictionary::new();
-        d.set("id", s.id as i64);
-        d.set("name", s.name.as_str());
-        d.set("body", s.body as i64);
-        d.set("nerve", s.nerve as i64);
-        d.set("hands", s.hands as i64);
-        d.set("eye", s.eye as i64);
-        d.set("veins", s.veins as i64);
-        d.set("rig_rows", s.rig_rows as i64);
-        d.set("carry_kg", s.carry_kg() as f64);
-        d.set("back_off_pct", s.back_off_pct() as i64);
-        d.set("flags", &strings(&s.flags));
+        setup_dict(&r.runner_setup(self.t()))
+    }
+
+    /// The Daily Seed's Runner for a date (YYYYMMDD): a record rolled by Creation from the seed, D2 or D3 (Full
+    /// Design v3.19): the run's setup with {full_name, depth}.
+    #[func]
+    fn daily_runner(date: i64) -> VarDictionary {
+        let dl = game::daily::daily(date.max(0) as u32);
+        let mut d = setup_dict(&dl.runner.runner_setup(&TraitFile::shipped()));
+        d.set("full_name", dl.runner.full_name().as_str());
+        d.set("depth", dl.runner.depth.tag());
         d
     }
 
@@ -333,19 +331,27 @@ impl RosePeople {
     /// A plain Runner setup dict for a run without a record (tests, the bot).
     #[func]
     fn plain_runner(body: i64) -> VarDictionary {
-        let s = RunnerSetup::plain(body.clamp(1, 10) as u8);
-        let mut d = VarDictionary::new();
+        let mut d = setup_dict(&RunnerSetup::plain(body.clamp(1, 10) as u8));
         d.set("id", 0i64);
-        d.set("name", s.name.as_str());
-        d.set("body", s.body as i64);
-        d.set("nerve", s.nerve as i64);
-        d.set("hands", s.hands as i64);
-        d.set("eye", s.eye as i64);
-        d.set("veins", s.veins as i64);
-        d.set("rig_rows", s.rig_rows as i64);
-        d.set("carry_kg", s.carry_kg() as f64);
         d.set("back_off_pct", 30i64);
-        d.set("flags", &PackedStringArray::new());
         d
     }
+}
+
+/// What the run needs from a record: {id, name, body, nerve, hands, eye, veins, rig_rows, carry_kg, back_off_pct,
+/// flags} (`RoseRun.runner_from` reads it back).
+fn setup_dict(s: &RunnerSetup) -> VarDictionary {
+    let mut d = VarDictionary::new();
+    d.set("id", s.id as i64);
+    d.set("name", s.name.as_str());
+    d.set("body", s.body as i64);
+    d.set("nerve", s.nerve as i64);
+    d.set("hands", s.hands as i64);
+    d.set("eye", s.eye as i64);
+    d.set("veins", s.veins as i64);
+    d.set("rig_rows", s.rig_rows as i64);
+    d.set("carry_kg", s.carry_kg() as f64);
+    d.set("back_off_pct", s.back_off_pct() as i64);
+    d.set("flags", &strings(&s.flags));
+    d
 }

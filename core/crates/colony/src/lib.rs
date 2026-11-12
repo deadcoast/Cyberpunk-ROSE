@@ -1851,7 +1851,22 @@ impl Colony {
 
     /// Sign a law: the districts with a Board vote through their foremen (against when it costs Mood), the
     /// Authority is paid and the wave leaves the Heart.
+    /// Why a law cannot be signed now, or None: the Charter's rules, then the tree's node (Full Design v3.18: the Rite
+    /// waits on its node) unless a past run unlocked it (New Game+).
+    pub fn cannot_sign(&self, law: &LawDef) -> Option<String> {
+        if let Some(why) = self.charter.cannot_sign(law) {
+            return Some(why);
+        }
+        if self.charter.unlocked.contains(&law.id) {
+            return None;
+        }
+        self.progress.tech.law_locked(&law.id).map(|n| format!("needs {} researched", n.name))
+    }
+
     pub fn sign(&mut self, defs: &StructureFile, mat: &MatSim, law: &LawDef) -> Result<(), String> {
+        if let Some(why) = self.cannot_sign(law) {
+            return Err(why);
+        }
         let voters = self.districts.iter().filter(|d| d.foreman.is_some() && self.has_board(defs, d)).count() as u32;
         let votes = if law.mood < 0 { (0, voters) } else { (voters, 0) };
         self.charter.sign(law, self.shift, charter::wave_speed(mat), votes)
@@ -2790,7 +2805,12 @@ mod tests {
         assert!(o.contexts[&other].extra_target > charter::DISSOLUTION_HIT, "the hit is one shift");
         // with the Rite: no hit, a standing -3
         c.charter.authority = 2;
-        c.sign(&defs, &mat, LawFile::shipped().get("dissolution_rite").unwrap()).unwrap();
+        let laws = LawFile::shipped();
+        let rite = laws.get("dissolution_rite").unwrap();
+        c.progress.tech.researched.retain(|n| n != "f4_rite");
+        assert_eq!(c.sign(&defs, &mat, rite).unwrap_err(), "needs The Rite researched");
+        c.charter.unlocked.push("dissolution_rite".into());
+        c.sign(&defs, &mat, rite).unwrap();
         let id2 = r.records[0].id;
         r.get_mut(id2).unwrap().depth = people::Depth::D5;
         let line = c.dissolve(&mut r, &mut mat, id2).unwrap();

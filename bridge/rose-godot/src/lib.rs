@@ -15,6 +15,7 @@ mod progress_bridge;
 mod story_bridge;
 mod colony_bridge;
 mod people;
+mod profile_bridge;
 
 use crate::people::RosePeople;
 
@@ -58,10 +59,47 @@ pub struct RoseSim {
     raiders: bool,
     /// the campaign (Full Design v3.19, Narrative and Ivan)
     campaign: story::Campaign,
+    /// New Run's choices waiting for `start_city` (mode, difficulty, strain code), and the profile New Game+ carries
+    /// into `found_city`
+    new_run: Option<(story::Mode, story::Difficulty, Option<save::StrainCode>)>,
+    carry: Option<save::Profile>,
 }
 
 #[godot_api]
 impl RoseSim {
+    /// New Run (Full Design v3.19, the Game shell), before `start_city`: "campaign" or "endless", the difficulty by
+    /// name, a strain code ("" none: New Game+ otherwise, carrying the profile's laws and Scrapdex). "" or why not.
+    #[func]
+    fn configure_run(&mut self, mode: GString, difficulty: GString, code: GString, profile: Option<Gd<profile_bridge::RoseProfile>>) -> GString {
+        let mode = if mode.to_string() == "endless" { story::Mode::Endless } else { story::Mode::Campaign };
+        let Some(diff) = story::Difficulty::from_name(&difficulty.to_string()) else { return GString::from("no such difficulty") };
+        let code_s = code.to_string();
+        let code = if code_s.trim().is_empty() {
+            None
+        } else {
+            match save::StrainCode::parse(&code_s) {
+                Some(c) => Some(c),
+                None => return GString::from("that strain code does not read: 32 hex digits after ROSE-"),
+            }
+        };
+        self.carry = code.and(profile.map(|p| p.bind().p.clone()));
+        self.new_run = Some((mode, diff, code));
+        GString::new()
+    }
+
+    /// The city's strain code as it stands: ROSE- and eight groups of four (Full Design v3.19, Meta).
+    #[func]
+    fn strain_code(&self) -> GString {
+        let Some(c) = self.city.as_ref() else { return GString::new() };
+        GString::from(game::meta::strain_code(&c.sim, &self.colony, self.campaign.seed).encode().as_str())
+    }
+
+    /// Whether a shift (the colony's day counter) is a Flood shift: the day's third, its first too in Undercroft.
+    #[func]
+    fn flood_shift(&self, day: i64) -> bool {
+        self.threats.as_ref().is_some_and(|t| t.is_flood_shift(day.max(1) as u32))
+    }
+
     /// The scale proof (Phase A): a grown stratum with `agents` synthetic slimos and synthetic market hauls. A load
     /// test of the arrays, not the game's city (Full Design v3.11, The city's clock).
     #[func]
@@ -73,7 +111,10 @@ impl RoseSim {
     /// clock, no phantoms; the movers are the roster and the cargo is the Stash's.
     #[func]
     fn start_city(&mut self, seed: i64) {
-        let city = City::game(logistics::founding(seed as u64), seed as u64);
+        let (mode, difficulty, code) = self.new_run.take().unwrap_or((story::Mode::Campaign, story::Difficulty::Culvert, None));
+        let n = game::meta::NewRun { seed: seed as u32, mode, difficulty, code };
+        self.campaign = n.campaign();
+        let city = City::game(logistics::founding_with(seed as u64, n.genome()), seed as u64);
         self.threats = Some(threat::Threats::new(&city.sim, seed as u64));
         let table = items::ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
         self.economy = Some(game::world::found_economy(&city.sim, &table, seed as u64));
@@ -466,7 +507,7 @@ impl RoseSim {
     fn next_flood_roll(&self) -> i64 {
         let Some(t) = self.threats.as_ref() else { return -1 };
         let next = t.shift + 1;
-        if game::shift_of_day(next) == 2 { t.roll_for(next) as i64 } else { -1 }
+        if t.is_flood_shift(next) { t.roll_for(next) as i64 } else { -1 }
     }
 
     #[func]
@@ -717,8 +758,12 @@ impl RoseSim {
         match &self.city {
             Some(c) => match self.colony.found(&defs, &c.sim) {
                 Ok(()) => {
+                    // New Game+: the profile's laws unlocked and its Scrapdex kept
+                    if let Some(p) = self.carry.take() {
+                        game::meta::carry(&p, &mut self.colony);
+                    }
                     if let (Some(t), Some(c)) = (self.threats.as_mut(), self.city.as_mut()) {
-                        let notes = t.start_shift(c, &mut self.colony, &defs, 1, false);
+                        let notes = t.start_shift(c, &mut self.colony, &defs, 1, t.is_flood_shift(1));
                         game::pressure::note(&mut self.log, c.tick, notes);
                     }
                     true
@@ -1078,7 +1123,7 @@ impl RoseSim {
             }
             if let Some(t) = self.threats.as_mut() {
                 let next = day.max(1) as u32 + 1;
-                let notes = t.start_shift(city, &mut self.colony, &defs, next, game::shift_of_day(next) == 2);
+                let notes = t.start_shift(city, &mut self.colony, &defs, next, t.is_flood_shift(next));
                 game::pressure::note(&mut self.log, city.tick, notes);
                 if t.flood.level > 0 {
                     self.log.bark("flood", &[]);
@@ -2254,9 +2299,29 @@ impl RoseRun {
         out
     }
 
+    /// The Daily Seed of a date (YYYYMMDD): {date, stratum, seed, name, hand, kit} — one route, a stratum from S1-S3
+    /// and its route from the date, the bot's fixed rig (Full Design v3.19). The Runner: `RosePeople.daily_runner`.
+    #[func]
+    fn daily(date: i64) -> VarDictionary {
+        let dl = game::daily::daily(date.max(0) as u32);
+        let mut d = VarDictionary::new();
+        d.set("date", date);
+        d.set("stratum", dl.stratum as i64);
+        d.set("seed", dl.route_seed as i64);
+        let region = logistics::StrataFile::shipped().stratum.iter().find(|s| s.n == dl.stratum).map(|s| s.region.clone()).unwrap_or_default();
+        d.set("name", region.as_str());
+        d.set("hand", game::city::KIT_HAND);
+        let mut kit = PackedStringArray::new();
+        for k in game::city::KIT_QUICK {
+            kit.push(k);
+        }
+        d.set("kit", &kit);
+        d
+    }
+
     /// The run's outcome once it is over: {result, ticks, rig: bytes, corpse: {x, y, chunk, day, rig: bytes} or null,
     /// followers_extracted, followers_stranded, followers_dead, mat_haul: bytes (Vec<ItemInstance>), regrown: bytes,
-    /// kills, chunks_seen, blind_value, route_memory: bytes}. Empty while running.
+    /// kills, chunks_seen, blind_value, score (the Daily's), route_memory: bytes}. Empty while running.
     #[func]
     fn outcome(&self) -> VarDictionary {
         let mut d = VarDictionary::new();
@@ -2295,6 +2360,12 @@ impl RoseRun {
         d.set("killed", &killed);
         d.set("chunks_seen", o.chunks_seen as i64);
         d.set("blind_value", o.blind_value as i64);
+        // the Daily Seed's score: the base value of what was found and came home (game::daily)
+        let score = match (&o.rig, self.sim.as_ref()) {
+            (Some(rig), Some(s)) => game::daily::score(&s.table, rig.all_items()),
+            _ => 0,
+        };
+        d.set("score", score as i64);
         d.set("route_memory", &PackedByteArray::from(o.route_memory.as_slice()));
         // what the roster reads (RosePeople.apply_run)
         d.set("items_taken", o.items_taken as i64);

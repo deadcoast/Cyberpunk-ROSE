@@ -1,5 +1,5 @@
 extends Node
-## Screen registry: sixteen shells, one visible at a time, under the root Main hands us.
+## Screen registry: seventeen shells, one visible at a time, under the root Main hands us.
 
 const SCREENS := {
 	"menu": "res://modes/menu/Menu.tscn",
@@ -18,6 +18,7 @@ const SCREENS := {
 	"settings": "res://modes/settings/Settings.tscn",
 	"panels": "res://modes/panels/Panels.tscn",
 	"ending": "res://modes/ending/Ending.tscn",
+	"newrun": "res://modes/newrun/NewRun.tscn",
 }
 
 var root: Control

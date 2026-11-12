@@ -30,6 +30,9 @@ const B_LANTERN := 512
 const B_DROP := 32768
 const ORDER_SHIFT := 13
 ## A run without the Route Board (tests): two plain followers and the plain Runner (RosePeople.plain_runner).
+## The Daily Seed (Full Design v3.19): the date (YYYYMMDD) when this run is the day's one try, 0 otherwise. A Daily
+## touches no city: the founding's Lume, no route memory, no corpses, no followers; its score goes to the profile.
+var daily_date := 0
 const FOLLOWERS := [{"id": 101, "name": "Pell", "body": 5, "damage": 4, "back_off_pct": 30, "bonded": false}, {"id": 102, "name": "Rook", "body": 4, "damage": 4, "back_off_pct": 30, "bonded": false}]
 const RUNNER_NAME := "the Runner"
 
@@ -76,6 +79,7 @@ var ring_channel := -1.0
 var ring_channel_color := UiTheme.OOZE_GLOW
 var clock_label: Label
 var route_label: Label
+var route_frame: Panel
 ## Ivan over the comm (Full Design v3.19: barks during runs are his), under the route strip
 var bark_label: Label
 var kills_label: Label
@@ -126,23 +130,30 @@ func _ready() -> void:
 		crew = {"runner_id": int(launch.get("runner_id", -1)), "followers": launch.get("followers", [])}
 		if int(crew.runner_id) < 0:
 			crew = {}
-	screen_title = "RUN  -  S%d %s" % [stratum, route_name]
+	daily_date = int(launch.get("daily", 0))
+	screen_title = ("DAILY %d  -  S%d %s" % [daily_date, stratum, route_name]) if daily_date > 0 else ("RUN  -  S%d %s" % [stratum, route_name])
 	# the simulation first: the HUD is built from the route (chunk count) in _build_content
 	route = RoseRun.new()
-	route.set_mat_lume(Sim.ensure().gene(4))
+	# the founding genome's Lume for a Daily (Pass 1's 0.5): it has no city
+	route.set_mat_lume(0.5 if daily_date > 0 else Sim.ensure().gene(4))
 	if route.assemble(seed_value, stratum, 0) == 0:
 		push_error("Run: no route assembled")
-	if memory_bits.is_empty():
+	if memory_bits.is_empty() and daily_date == 0:
 		memory_bits = Sim.memory_of(stratum, seed_value)
 	if not memory_bits.is_empty():
 		route.restore_memory(memory_bits)
-	route.set_shift(Sim.day, Sim.flood_roll(), Sim.next_flood_roll())
 	var rig: PackedByteArray = launch.get("rig", PackedByteArray())
 	var followers: Array = launch.get("followers", FOLLOWERS)
 	var runner_setup: Dictionary = launch.get("runner", RosePeople.plain_runner(BODY))
-	if rig.is_empty():
+	if daily_date > 0:
+		# shift one of a day: no Flood; the date is the run's nonce, a first run's generosity applies
+		route.set_shift(1, -1, -1)
+		route.begin_run(daily_date, 0, 1, PackedStringArray(launch.get("kit", KIT)), String(launch.get("hand", WEAPON)), runner_setup, [], [])
+	elif rig.is_empty():
+		route.set_shift(Sim.day, Sim.flood_roll(), Sim.next_flood_roll())
 		route.begin_run(Sim.run_nonce(), Sim.runs_of(stratum, seed_value), Sim.day, PackedStringArray(KIT), WEAPON, runner_setup, followers, Sim.corpses_on(stratum, seed_value))
 	else:
+		route.set_shift(Sim.day, Sim.flood_roll(), Sim.next_flood_roll())
 		route.begin_run_rig(Sim.run_nonce(), Sim.runs_of(stratum, seed_value), Sim.day, rig, runner_setup, followers, Sim.corpses_on(stratum, seed_value))
 	super._ready()
 	nav.visible = false
@@ -223,8 +234,8 @@ func _refresh_sources() -> void:
 
 func _build_content(c: Control) -> void:
 	# top: the route, the shift clock over the route strip, kills — each in a small frame so it reads over lit tiles
-	var tl := make_frame(c, Vector2(0, 0), Vector2(120, 14))
-	route_label = make_label(tl, "", Vector2(4, 2), UiTheme.DUST)
+	route_frame = make_frame(c, Vector2(0, 0), Vector2(120, 14))
+	route_label = make_label(route_frame, "", Vector2(4, 2), UiTheme.DUST)
 	bark_label = make_label(c, "", Vector2(2, 16), UiTheme.OOZE_GLOW)
 	var strip_w := maxi(64, route.chunk_count() * 8)
 	var tc := make_frame(c, Vector2(316 - strip_w / 2 - 4, 0), Vector2(strip_w + 8, 22))
@@ -356,7 +367,9 @@ func _process(delta: float) -> void:
 	if over != "":
 		over_t += delta
 		if over_t > 3.0:
-			if over == "extracted":
+			if daily_date > 0:
+				Screens.show_screen("menu")
+			elif over == "extracted":
 				Screens.show_screen("stash")
 			else:
 				Screens.show_screen("colony")
@@ -375,7 +388,7 @@ func _process(delta: float) -> void:
 		lantern_pressed = false
 		order_pressed = 0
 		steps += 1
-	var line: String = Sim.ensure().bark()
+	var line: String = Sim.ensure().bark() if daily_date == 0 else ""
 	bark_label.text = ("IVAN: " + line) if line != "" else ""
 	# manifest unroll: one tile per beat, the notable last on a longer one
 	if loot_panel.visible and loot_shown < loot_items.size():
@@ -430,7 +443,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_L:
 			lantern_pressed = true
-		elif event.keycode == KEY_TAB:
+		elif event.keycode == KEY_TAB and daily_date == 0:
 			Screens.show_screen("stash")
 
 func _handle_events() -> void:
@@ -527,7 +540,8 @@ func _handle_events() -> void:
 					_flash(n2.position + Vector2(0, -20), "!" if e.phase == "alert" else "?", UiTheme.VESTMENT)
 			"down":
 				_flash(runner.position + Vector2(0, -28), "DOWN", UiTheme.HOT_PINK)
-				Sim.ensure().bark_event("runner_down", String(Sim.launch.get("runner_name", "the Runner")))
+				if daily_date == 0:
+					Sim.ensure().bark_event("runner_down", String(Sim.launch.get("runner_name", "the Runner")))
 			"dead":
 				over = "died"
 				over_t = 0.0
@@ -566,6 +580,9 @@ func _finish_run() -> void:
 	var o: Dictionary = route.outcome()
 	if o.is_empty():
 		return
+	if daily_date > 0:
+		_finish_daily(o)
+		return
 	Sim.take_outcome(stratum, seed_value, runner_name, o, crew)
 	var parts := []
 	parts.append(String(o.result).to_upper())
@@ -591,6 +608,21 @@ func _finish_run() -> void:
 	for i in mini(lines.size(), 2):
 		parts.append(String(lines[i]))
 	summary.text = "   ".join(parts)
+	summary.add_theme_color_override("font_color", UiTheme.OOZE_GLOW if String(o.result) == "extracted" else UiTheme.HOT_PINK)
+	_write_cadence_log(o)
+	summary_frame.size = Vector2(summary.text.length() * 4 + 12, 18)
+	summary_frame.position = Vector2(316 - summary_frame.size.x / 2, 150)
+	summary_frame.visible = true
+
+## The Daily's one try: the base value of what was found and came home, into the profile (a death scores 0).
+func _finish_daily(o: Dictionary) -> void:
+	var score: int = int(o.get("score", 0)) if String(o.result) == "extracted" else 0
+	var prof: RoseProfile = Sim.ensure_profile()
+	prof.daily_score(daily_date, score)
+	Sim.save_profile()
+	Sim.launch = {}
+	var best: Dictionary = prof.summary().get("daily_best", {})
+	summary.text = "DAILY %d  %s  SCORE %d   BEST %d (%d)" % [daily_date, String(o.result).to_upper(), score, int(best.get("score", score)), int(best.get("date", daily_date))]
 	summary.add_theme_color_override("font_color", UiTheme.OOZE_GLOW if String(o.result) == "extracted" else UiTheme.HOT_PINK)
 	_write_cadence_log(o)
 	summary_frame.size = Vector2(summary.text.length() * 4 + 12, 18)
@@ -878,6 +910,8 @@ func _hud() -> void:
 		else:
 			clock_label.text += "   WATER +%d OF %d" % [int(sh.get("water", 0)), flood_rise]
 	route_label.text = "S%d %s   %s" % [stratum, route_name, runner_name]
+	# the frame fits the Runner's whole name (the pixel font is 4 px a character)
+	route_frame.size.x = route_label.text.length() * 4 + 8
 	var cs: PackedInt32Array = route.run_stats()
 	kills_label.text = "KILLS %d   %d ALIVE" % [kills_seen, cs[6] if cs.size() > 6 else 0]
 	var seen: PackedByteArray = route.chunk_seen()
