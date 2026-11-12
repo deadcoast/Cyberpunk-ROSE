@@ -2492,6 +2492,12 @@ impl RoseRun {
         self.map_ref().map_or_else(PackedInt32Array::new, |m| tiles_array(m.w, &m.entry))
     }
 
+    /// The city's Mat in the route: where the Runner may extract.
+    #[func]
+    fn mat(&self) -> PackedInt32Array {
+        self.map_ref().map_or_else(PackedInt32Array::new, |m| tiles_array(m.w, &m.mat()))
+    }
+
     #[func]
     fn grates(&self) -> PackedInt32Array {
         self.map_ref().map_or_else(PackedInt32Array::new, |m| tiles_array(m.w, &m.grates))
@@ -2650,8 +2656,7 @@ impl RoseRun {
         d.set("rig_free", r.rig.backpack.free_cells() as i64);
         let blind: i64 = r.rig.backpack.items().map(|it| items::price(s.table.def(it.def), it, PriceContext::default()) as i64).sum();
         d.set("blind_value", blind);
-        let t16 = (tx as u16, ty as u16);
-        d.set("on_extraction", s.map.entry.contains(&t16) || s.map.grates.contains(&t16));
+        d.set("on_extraction", s.on_extraction());
         d.set("source_here", s.source_here().map_or(-1, |i| i as i64));
         d.set("open_source", s.open_source.map_or(-1, |i| i as i64));
         d.set("melee", {

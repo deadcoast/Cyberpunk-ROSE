@@ -63,8 +63,8 @@ func _draw_laws() -> void:
 		var state := String(l.state)
 		var state_col: Color = {"signed": UiTheme.OOZE_GLOW, "spreading": UiTheme.ACID, "repealing": UiTheme.HOT_PINK, "open": UiTheme.CYAN, "locked": UiTheme.DUST}[state]
 		f.modulate = Color.WHITE if state != "locked" else Color(0.75, 0.75, 0.8)
-		make_label(f, String(l.name).to_upper(), Vector2(4, 3), UiTheme.CYAN)
-		make_label(f, state.to_upper(), Vector2(CARD_W - 4 - state.length() * 4, 3), state_col)
+		make_label(f, String(l.name).to_upper(), Vector2(4, 4), UiTheme.CYAN)
+		make_label(f, state.to_upper(), Vector2(CARD_W - 4 - state.length() * 4, 4), state_col)
 		# effect then cost, four lines between them
 		var eff := _wrap(String(l.effect), 37)
 		var cost := _wrap(String(l.cost), 37)

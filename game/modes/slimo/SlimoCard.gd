@@ -210,7 +210,7 @@ func _draw_card() -> void:
 		var cell := make_frame(card_frame, Vector2(x, y + 11), Vector2(40, 16))
 		var p := int(pri[j])
 		var ptext := "-" if not allowed else ("never" if p == 0 else "#".repeat(p))
-		make_label(cell, ptext, Vector2(3, 2), UiTheme.CYAN if p > 0 and allowed else UiTheme.DUST)
+		make_label(cell, ptext, Vector2(4, 5), UiTheme.CYAN if p > 0 and allowed else UiTheme.DUST)
 		var jj := j
 		var b := Button.new()
 		b.flat = true

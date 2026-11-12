@@ -470,10 +470,11 @@ impl RunSim {
 
 
 
-    fn on_extraction(&self) -> bool {
+    /// The Runner stands where it may extract: the city's Mat in the route, or a grate.
+    pub fn on_extraction(&self) -> bool {
         let t = self.runner.tile();
         let t16 = (t.0 as u16, t.1 as u16);
-        self.map.entry.contains(&t16) || self.map.grates.contains(&t16)
+        self.map.mat().contains(&t16) || self.map.grates.contains(&t16)
     }
 
     pub fn source_here(&self) -> Option<usize> {

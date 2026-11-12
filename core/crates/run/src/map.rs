@@ -75,7 +75,8 @@ pub struct RouteMap {
     pub h: usize,
     /// substrate codes (mat::sim::sub), row-major
     pub substrate: Vec<u8>,
-    /// the Mat edge: cells of the entry chunk's west window; the Runner starts here and may extract here
+    /// the Mat edge: cells of the entry chunk's west window; the Runner starts here, and the Mat reaches
+    /// `MAT_REACH` tiles east of them (`mat`), where a Runner may extract
     pub entry: Vec<(u16, u16)>,
     /// grate tiles: extraction for a toll, or free when the grate is held
     pub grates: Vec<(u16, u16)>,
@@ -89,6 +90,8 @@ pub struct RouteMap {
 }
 
 pub const LIGHT_RADIUS: u8 = 4;
+/// How far the city's Mat reaches into a route from its edge, in tiles: the Mat a Runner stands on to extract.
+pub const MAT_REACH: u16 = 3;
 pub const NO_CHUNK: u16 = u16::MAX;
 
 impl RouteMap {
@@ -185,9 +188,23 @@ impl RouteMap {
         reach as f32 / total as f32
     }
 
-    /// Every tile a run can extract from: the Mat edge and the grates.
+    /// The city's Mat in the route: each entry cell and the open tiles east of it, `MAT_REACH` deep.
+    pub fn mat(&self) -> Vec<(u16, u16)> {
+        let mut v = Vec::new();
+        for &(x, y) in &self.entry {
+            for k in 0..MAT_REACH {
+                let tx = x + k;
+                if (tx as usize) < self.w && self.passable(tx as usize, y as usize) {
+                    v.push((tx, y));
+                }
+            }
+        }
+        v
+    }
+
+    /// Every tile a run can extract from: the Mat and the grates.
     pub fn extraction_tiles(&self) -> Vec<(u16, u16)> {
-        let mut v = self.entry.clone();
+        let mut v = self.mat();
         v.extend(self.grates.iter().copied());
         v
     }

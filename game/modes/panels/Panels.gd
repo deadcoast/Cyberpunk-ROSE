@@ -42,7 +42,7 @@ func _build_content(c: Control) -> void:
 	caption.autowrap_mode = TextServer.AUTOWRAP_WORD
 	caption.size = Vector2(536, 30)
 	count_label = make_label(c, "", Vector2(520, -18), UiTheme.DUST)
-	make_label(c, "CLICK OR ANY KEY: ON   ESC: SKIP", Vector2(8, 312), UiTheme.DUST)
+	make_label(c, "CLICK OR ANY KEY: NEXT   ESC: SKIP", Vector2(8, 312), UiTheme.DUST)
 	_show()
 
 func _panels() -> Array:

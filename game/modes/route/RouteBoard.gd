@@ -79,7 +79,7 @@ func _build_content(c: Control) -> void:
 	rig_row = Control.new()
 	rig_frame.add_child(rig_row)
 	depart_note = make_label(rig_frame, "", Vector2(6, 150), UiTheme.DUST)
-	depart_button = make_button(rig_frame, "DEPART", Vector2(258, 134), _depart)
+	depart_button = make_button(rig_frame, "DEPART", Vector2(284, 148), _depart)
 	_redraw_rig()
 	_select(0)
 
@@ -264,6 +264,8 @@ func _select(i: int) -> void:
 	selected = clampi(i, 0, routes.size() - 1)
 	for k in card_frames.size():
 		card_frames[k].modulate = Color.WHITE if k == selected else Color(0.72, 0.72, 0.78)
+		# the picked card's own frame in Cyan
+		card_frames[k].self_modulate = UiTheme.CYAN if k == selected else Color.WHITE
 	_draw_strip()
 	_redraw_rig()
 
@@ -387,7 +389,20 @@ func _slot_frame(parent: Control, pos: Vector2, handle: int, key: String, on_cli
 	b.focus_mode = Control.FOCUS_NONE
 	b.size = Vector2(SLOT, SLOT)
 	b.pressed.connect(on_click)
+	if handle >= 0:
+		# what the tile is, on the note line while the pointer is over it
+		b.mouse_entered.connect(func(): depart_note.text = _describe(handle))
+		b.mouse_exited.connect(func(): depart_note.text = _note())
 	f.add_child(b)
+
+## One line for an item under the pointer: its name, what it is, its footprint and weight, its condition.
+func _describe(handle: int) -> String:
+	var it := _stash_item(handle)
+	if it.is_empty():
+		return ""
+	var d: Dictionary = items.get(int(it.index))
+	var kind := String(d.get("gear_kind", "")) if d.has("gear_kind") else String(d.category)
+	return "%s   %s %s   %dx%d   %.1f kg   condition %d" % [String(it.name).to_upper(), String(d.tier), kind, int(d.w), int(d.h), float(d.weight), int(it.get("condition", 0))]
 
 func _runner_setup() -> Dictionary:
 	var rs: Dictionary = people.runner_setup(runner_id) if runner_id >= 0 else RosePeople.plain_runner(5)
@@ -436,20 +451,24 @@ func _redraw_rig() -> void:
 	var w := _weight()
 	if hand_label != null:
 		var hit := _stash_item(hand_handle) if hand_handle >= 0 else {}
-		hand_label.text = "in hand: " + (String(hit.name) if not hit.is_empty() else "fists")
+		# the weapon under RUNNER, cut to the frame's edge
+		hand_label.text = (String(hit.name) if not hit.is_empty() else "fists").left(16)
 	weight_label.text = "%.1f / %.0f kg" % [w, carry]
 	weight_label.add_theme_color_override("font_color", UiTheme.HOT_PINK if w > carry else UiTheme.CYAN)
+	depart_note.text = _note()
+
+## The note under the rig: what stands in the way of departing, else the route picked.
+func _note() -> String:
 	var r: Dictionary = routes[selected] if not routes.is_empty() else {}
-	var note := ""
 	if runner_id < 0:
-		note = "nobody can run"
-	elif hand_handle < 0:
-		note = "no weapon in hand: fists"
-	elif w > carry:
-		note = "overweight: half sprint, double noise"
-	elif not r.is_empty():
-		note = "%s  S%d  %s danger     1-3 pick  ENTER go" % [String(r.name), int(r.stratum), String(r.card.danger_band)]
-	depart_note.text = note
+		return "nobody can run"
+	if hand_handle < 0:
+		return "no weapon in hand: fists"
+	if _weight() > carry:
+		return "overweight: half sprint, double noise"
+	if not r.is_empty():
+		return "%s  S%d  %s danger     1-3 pick  ENTER go" % [String(r.name), int(r.stratum), String(r.card.danger_band)]
+	return ""
 
 ## Pack the rig out of the Stash, hand the Run its route, crew and rig, go.
 func _depart() -> void:

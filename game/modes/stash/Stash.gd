@@ -422,9 +422,10 @@ func _draw_queue() -> void:
 		foot = "last shift: sold %d for %d e, fed %d, crafted %d, %d left" % [int(r.sold), int(r.earned), int(r.fed), int(r.get("crafted", 0)), int(r.get("left", 0))]
 		if int(r.get("spilled", 0)) > 0:
 			foot += ", %d spilled" % int(r.spilled)
-		# the roster's first line of the shift (who worked what, a level gained); the rest are on the Slimo card
-		if Sim.people_lines.size() > 0:
-			foot += "   " + String(Sim.people_lines[0]).left(40)
+		# the roster's first line of the shift (who worked what, a level gained), where the frame has room for it
+		# whole; the rest are on the Slimo card
+		if Sim.people_lines.size() > 0 and foot.length() + 3 + String(Sim.people_lines[0]).length() <= 54:
+			foot += "   " + String(Sim.people_lines[0])
 	else:
 		foot = "nothing queued   shift ends after a run"
-	make_label(queue_panel, foot, Vector2(6, 70), UiTheme.DUST)
+	make_label(queue_panel, foot.left(54), Vector2(6, 70), UiTheme.DUST)

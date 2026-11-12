@@ -127,7 +127,7 @@ func _ready() -> void:
 		seed_value = int(launch.get("seed", seed_value))
 		route_name = String(launch.get("name", route_name))
 		runner_name = String(launch.get("runner_name", runner_name))
-		crew = {"runner_id": int(launch.get("runner_id", -1)), "followers": launch.get("followers", [])}
+		crew = {"runner_id": int(launch.get("runner_id", -1)), "followers": launch.get("followers", []), "route_name": String(launch.get("name", ""))}
 		if int(crew.runner_id) < 0:
 			crew = {}
 	daily_date = int(launch.get("daily", 0))
@@ -193,12 +193,18 @@ func _ready() -> void:
 
 func _paint_route() -> void:
 	world.paint_substrate(route.substrate(), route.width(), route.height())
+	# the city's Mat in the route (RoseRun.mat: the entry cells and the tiles east of them), a cord at the edge
+	# thinning to a tip; standing anywhere on it extracts
+	var edge_x := world.w
 	for i in route.entry():
+		edge_x = mini(edge_x, i % world.w)
+	for i in route.mat():
 		var x := i % world.w
 		var y := i / world.w
-		world.put_mat(x, y, 3 if y == 12 else 2, "fed")
-		world.put_mat(x + 1, y, 2, "fed")
-		world.put_mat(x + 2, y, 1, "")
+		match x - edge_x:
+			0: world.put_mat(x, y, 3 if y == 12 else 2, "fed")
+			1: world.put_mat(x, y, 2, "fed")
+			_: world.put_mat(x, y, 1, "")
 	_refresh_sources()
 	for s in route.spawns():
 		match String(s.kind):
@@ -235,16 +241,16 @@ func _refresh_sources() -> void:
 func _build_content(c: Control) -> void:
 	# top: the route, the shift clock over the route strip, kills — each in a small frame so it reads over lit tiles
 	route_frame = make_frame(c, Vector2(0, 0), Vector2(120, 14))
-	route_label = make_label(route_frame, "", Vector2(4, 2), UiTheme.DUST)
+	route_label = make_label(route_frame, "", Vector2(4, 4), UiTheme.DUST)
 	bark_label = make_label(c, "", Vector2(2, 16), UiTheme.OOZE_GLOW)
 	var strip_w := maxi(64, route.chunk_count() * 8)
 	var tc := make_frame(c, Vector2(316 - strip_w / 2 - 4, 0), Vector2(strip_w + 8, 22))
-	clock_label = make_label(tc, "", Vector2(4, 2), UiTheme.CYAN)
+	clock_label = make_label(tc, "", Vector2(4, 4), UiTheme.CYAN)
 	strip = Control.new()
-	strip.position = Vector2(4, 13)
+	strip.position = Vector2(4, 14)
 	tc.add_child(strip)
 	var tr := make_frame(c, Vector2(548, 0), Vector2(84, 14))
-	kills_label = make_label(tr, "", Vector2(4, 2), UiTheme.CHALK)
+	kills_label = make_label(tr, "", Vector2(4, 4), UiTheme.CHALK)
 	for i in route.chunk_count():
 		var cell := ColorRect.new()
 		cell.position = Vector2(i * 8, 0)
@@ -282,8 +288,8 @@ func _build_content(c: Control) -> void:
 	down_label = make_label(bl, "", Vector2(32, 30), UiTheme.HOT_PINK)
 	# bottom centre: the prompt in its own frame (hidden when empty) and the first-six-seconds hint
 	prompt_frame = make_frame(c, Vector2(250, 278), Vector2(100, 14))
-	prompt_key = make_label(prompt_frame, "", Vector2(4, 2), UiTheme.CYAN)
-	prompt_verb = make_label(prompt_frame, "", Vector2(4, 2), UiTheme.CHALK)
+	prompt_key = make_label(prompt_frame, "", Vector2(4, 4), UiTheme.CYAN)
+	prompt_verb = make_label(prompt_frame, "", Vector2(4, 4), UiTheme.CHALK)
 	hint_label = make_label(c, "WASD move  SHIFT sprint  CTRL sneak  Q dim veins  SPACE dodge  J swing  K shoot  F dig  E open/extract  R take  V drop  1-4 kit  L lantern  Z/X/C orders", Vector2(0, 298), UiTheme.DUST)
 	# bottom-right: the hand and the quick slots
 	hand_slot = _hud_slot(c, Vector2(432, 254), "J")
@@ -764,9 +770,9 @@ func _chip(f: Dictionary) -> void:
 	if not chip_nodes.has(id):
 		var i := chip_nodes.size()
 		var frame_ := make_frame(chips, Vector2(0, i * 24), Vector2(72, 20))
-		var name := make_label(frame_, "", Vector2(4, 2), UiTheme.CHALK)
+		var name := make_label(frame_, "", Vector2(4, 4), UiTheme.CHALK)
 		var back := ColorRect.new()
-		back.position = Vector2(4, 13)
+		back.position = Vector2(4, 14)
 		back.size = Vector2(52, 3)
 		back.color = UiTheme.VOID
 		frame_.add_child(back)
@@ -879,7 +885,7 @@ func _redraw_rig_grid() -> void:
 func _set_prompt(key: String, verb: String, color: Color = UiTheme.CHALK) -> void:
 	prompt_key.text = key
 	prompt_verb.text = verb
-	prompt_verb.position = Vector2(4 + key.length() * 4 + (8 if key != "" else 0), 2)
+	prompt_verb.position = Vector2(4 + key.length() * 4 + (8 if key != "" else 0), 4)
 	prompt_verb.add_theme_color_override("font_color", color)
 	var chars := key.length() + (2 if key != "" else 0) + verb.length()
 	prompt_frame.visible = chars > 0

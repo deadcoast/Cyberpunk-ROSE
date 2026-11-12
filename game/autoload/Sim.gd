@@ -270,7 +270,8 @@ func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Diction
 		var b: PackedByteArray = o.get(key, PackedByteArray())
 		if int(o.get(key + "_count", 0)) > 0 and not b.is_empty():
 			held += maxi(0, st.import_items(b))
-	last_haul = {"placed": st.count() - before, "held": held, "from": "S%d route %d" % [stratum, seed_value]}
+	var from := String(crew.get("route_name", ""))
+	last_haul = {"placed": st.count() - before, "held": held, "from": ("S%d %s" % [stratum, from]) if from != "" else ("S%d route %d" % [stratum, seed_value])}
 	if int(last_haul.placed) + held > 0:
 		haul_note = "haul from %s: %d in%s" % [last_haul.from, int(last_haul.placed), ("   %d waiting at the Heart for room" % held) if held > 0 else ""]
 	if o.has("corpse"):

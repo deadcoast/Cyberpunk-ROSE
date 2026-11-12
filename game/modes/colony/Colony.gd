@@ -99,10 +99,10 @@ func _exit_tree() -> void:
 
 func _build_content(c: Control) -> void:
 	var top := make_frame(c, Vector2(0, -2), Vector2(632, 26))
-	clock_label = make_label(top, "", Vector2(4, 2), UiTheme.CYAN)
-	city_label = make_label(top, "", Vector2(4, 13), UiTheme.DUST)
+	clock_label = make_label(top, "", Vector2(4, 4), UiTheme.CYAN)
+	city_label = make_label(top, "", Vector2(4, 15), UiTheme.DUST)
 	chapter_frame = make_frame(c, Vector2(0, 26), Vector2(430, 14))
-	chapter_label = make_label(chapter_frame, "", Vector2(4, 1), UiTheme.OOZE_GLOW)
+	chapter_label = make_label(chapter_frame, "", Vector2(4, 4), UiTheme.OOZE_GLOW)
 	for k in 2:
 		var accept := k == 0
 		var b := make_button(chapter_frame, "ACCEPT" if accept else "REFUSE", Vector2(300 + k * 64, 0), func():
@@ -157,11 +157,13 @@ func _build_content(c: Control) -> void:
 		_draw_card())
 	ivan_frame.add_child(pick)
 	make_label(ivan_frame, "IVAN", Vector2(3, 36), UiTheme.OOZE_GLOW)
-	bark_label = make_label(ivan_frame, "", Vector2(38, 2), UiTheme.CHALK)
+	# his line inside the box: off the frame's edge, five lines at most
+	bark_label = make_label(ivan_frame, "", Vector2(38, 4), UiTheme.CHALK)
 	bark_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	bark_label.size = Vector2(86, 50)
+	bark_label.size = Vector2(86, 46)
+	bark_label.max_lines_visible = 5
 	var hint := make_frame(c, Vector2(0, 272), Vector2(432, 15))
-	hint_label = make_label(hint, "", Vector2(4, 2), UiTheme.DUST)
+	hint_label = make_label(hint, "", Vector2(4, 4), UiTheme.DUST)
 	var bar := make_frame(c, Vector2(0, 288), Vector2(432, 18))
 	var tools := HBoxContainer.new()
 	tools.position = Vector2(3, 1)
@@ -194,7 +196,7 @@ func _build_content(c: Control) -> void:
 	# the small card under the cursor
 	hover = make_frame(c, Vector2.ZERO, Vector2(150, 26))
 	hover.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hover_label = make_label(hover, "", Vector2(4, 2), UiTheme.CHALK)
+	hover_label = make_label(hover, "", Vector2(4, 4), UiTheme.CHALK)
 	hover.visible = false
 
 # ---------------------------------------------------------------- the clock
@@ -536,7 +538,7 @@ func _refresh_hover() -> void:
 	var width := 0
 	for l in text.split("\n"):
 		width = maxi(width, l.length() * 4)
-	hover.size = Vector2(width + 8, lines * 10 + 4)
+	hover.size = Vector2(width + 8, lines * 10 + 6)
 	var local := mp - Vector2(4, 26) + Vector2(10, 10)
 	local.x = minf(local.x, 632 - hover.size.x)
 	local.y = minf(local.y, 306 - hover.size.y)
@@ -1037,14 +1039,17 @@ func _draw_alerts() -> void:
 	for ch in alert_rows.get_children():
 		ch.queue_free()
 	alert_frame.visible = not rows.is_empty()
-	alert_frame.size = Vector2(196, rows.size() * 11 + 4)
+	# every alert whole: a long one wraps onto a second line inside the frame (48 characters a line)
+	var height := 4
 	for a in rows:
+		var lines := ceili(String(a.text).length() / 47.0)
 		var b := Button.new()
 		b.flat = true
 		b.focus_mode = Control.FOCUS_NONE
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.clip_text = true
-		b.custom_minimum_size = Vector2(192, 11)
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.custom_minimum_size = Vector2(192, 2 + lines * 9)
+		height += 2 + lines * 9
 		b.text = String(a.text)
 		b.tooltip_text = String(a.text)
 		var col := _level_color(String(a.level))
@@ -1060,6 +1065,7 @@ func _draw_alerts() -> void:
 				cam.position = Vector2(x * WorldView.TILE + 16, y * WorldView.TILE + 16)
 				minimap_frame.queue_redraw())
 		alert_rows.add_child(b)
+	alert_frame.size = Vector2(196, height)
 
 # ---------------------------------------------------------------- the minimap
 ## The stratum the camera is in, held to the strata reached.
