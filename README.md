@@ -2,7 +2,7 @@ Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
 An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `docs/todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, closed (PAC-060–063 done: the threats, the surface's factions and the Market, mending); Phase E, progression, closed (PAC-080 done: the tech tree, the organs, the strain classes, the Strainbook, Nerve logic, route loops, the handoff, Authority's deeds, the city tiers and the collections; PAC-081 done: the stack of six strata, the seven chapters, Ivan, the endings, New Run, the strain code, the profile, the Daily Seed and Endless, and `rose campaign` playing each of the five endings headless); Phase F, art, is next (PAC-090, the style anchors).
+Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, closed (PAC-060–063 done: the threats, the surface's factions and the Market, mending); Phase E, progression, closed (PAC-080 done: the tech tree, the organs, the strain classes, the Strainbook, Nerve logic, route loops, the handoff, Authority's deeds, the city tiers and the collections; PAC-081 done: the stack of six strata, the seven chapters, Ivan, the endings, New Run, the strain code, the profile, the Daily Seed and Endless, and `rose campaign` playing each of the five endings headless); Phase F, art, is next (PAC-090, the style anchors).
 
     ./run.sh /path/to/godot4.5
 
@@ -13,13 +13,14 @@ Layout
 ------
 
     Cargo.toml         workspace root
+    todo.PACER.csv     the task register
     core/crates/       mat · logistics · items · inventory · bench · people · colony · threat · economy · game · save · run · render · cli (`rose`)   — rules and numbers, no engine; `game` is the whole shift
     bridge/rose-godot  GDExtension: RoseSim, RoseItems, RoseStash, RoseRun, RosePeople                         — typed arrays only
     tools/             `rose-tools`: manifest -> placeholders, validate, prompts, contact sheet
     game/              Godot 4.5 project: Main, autoloads (Assets, Screens, Sim), ui/, modes/<screen>/, tests/
     game/assets/       palette/ manifest/ placeholders/ anchors/ art/   (read as files at runtime; .gdignore)
     data/              items.toml (164 items), chunks.toml (19 run chunks), loot.toml, creatures.toml, recipes.toml (60), traits.toml (40), names.toml, structures.toml (25), laws.toml (8), strings.toml
-    docs/              design · art bible · research/ (01-21) · telemetry/ · pixellab-prompts.md · shots/ · todo.PACER.csv · VERIFICATION-*
+    docs/              design · art bible · research/ (01-21) · telemetry/ · pixellab-prompts.md · shots/ · VERIFICATION-*
     src/, history/     the Python prototypes and the M1 archive
 
 Where things come from

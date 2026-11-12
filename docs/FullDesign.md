@@ -653,6 +653,7 @@ Rust owns every rule and every number; Godot owns the clock, the input, the came
 
 ```markdown
 rose/
+  todo.PACER.csv             the task register
   core/                      Rust workspace (no engine dependency; headless-testable)
     crates/mat               CA + nutrient field, organs, strains, signal       (M1, re-gridded to 32)
     crates/logistics         the city's clock (Mat step every 12 ticks), consumer fields (signal-weighted), cargo packets with capacity and re-routing, jams, the roster's movers; the scale proof
@@ -682,7 +683,7 @@ rose/
     art/                     PixelLab output after validation; same ids as placeholders
   tools/                     placeholder generator · palette-lock validator · manifest -> prompt sheets · importer/cutter · contact-sheet differ
   data/                      items, chunks, loot, creatures, recipes, structures, laws, traits, barks, vendors, tech, as TOML; the file beside the project wins in debug, the compiled copy ships
-  docs/                      design bible (this doc, exported) · art bible · module specs · todo.PACER.csv
+  docs/                      design bible (this doc, exported) · art bible · module specs
   tests/                     Rust scenario tests · Godot headless smoke · contact-sheet regression per commit
 ```
 
