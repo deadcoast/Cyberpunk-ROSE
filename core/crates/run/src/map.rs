@@ -16,7 +16,7 @@ pub struct Container {
     pub x: u16,
     pub y: u16,
     pub kind: ContainerKind,
-    /// loot tier: the stratum for lockers, one above for crates (PAC-022 reads this)
+    /// loot tier: the chunk's stratum, the row of `data/loot.toml` its source reads
     pub tier: u8,
     pub chunk: u16,
 }
@@ -140,7 +140,7 @@ impl RouteMap {
                         }
                         b'G' => m.grates.push((gx as u16, gy as u16)),
                         b'L' => m.containers.push(Container { x: gx as u16, y: gy as u16, kind: ContainerKind::Locker, tier: c.stratum, chunk: pi as u16 }),
-                        b'K' => m.containers.push(Container { x: gx as u16, y: gy as u16, kind: ContainerKind::Crate, tier: (c.stratum + 1).min(6), chunk: pi as u16 }),
+                        b'K' => m.containers.push(Container { x: gx as u16, y: gy as u16, kind: ContainerKind::Crate, tier: c.stratum, chunk: pi as u16 }),
                         b'R' => m.spawns.push(Spawn { x: gx as u16, y: gy as u16, kind: SpawnKind::Corpse, chunk: pi as u16 }),
                         b'S' => m.spawns.push(Spawn { x: gx as u16, y: gy as u16, kind: SpawnKind::Sewerat, chunk: pi as u16 }),
                         b'O' => m.spawns.push(Spawn { x: gx as u16, y: gy as u16, kind: SpawnKind::Patrol, chunk: pi as u16 }),
@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn compiled_routes_are_connected_and_extractable() {
         let l = lib();
-        for stratum in 1..=3u8 {
+        for stratum in 1..=6u8 {
             for seed in 0..150u64 {
                 let lay = route(&l, seed, stratum).unwrap();
                 let m = RouteMap::compile(&l, &lay);
@@ -292,8 +292,7 @@ mod tests {
         for c in &m.containers {
             assert!(m.passable(c.x as usize, c.y as usize));
             match c.kind {
-                ContainerKind::Locker => assert_eq!(c.tier, 2),
-                ContainerKind::Crate => assert_eq!(c.tier, 3),
+                ContainerKind::Locker | ContainerKind::Crate => assert_eq!(c.tier, 2),
             }
         }
         for s in &m.spawns {

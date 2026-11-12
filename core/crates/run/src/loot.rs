@@ -373,10 +373,8 @@ impl LootState {
     #[allow(clippy::too_many_arguments)]
     pub fn roll(&mut self, tables: &LootTables, table: &ItemTable, source: &str, tier: u8, generous: bool, extra_picks: u8, rng: &mut Pcg32, chunk: u16) -> (Vec<ItemInstance>, usize) {
         let Some(def) = tables.source(source) else { return (Vec::new(), 0) };
-        // S2 tops out at Uncommon (design): in S1-S2 a crate's +1 tier buys picks and condition, not a higher row;
-        // generosity is the one scripted exception
-        let capped = if self.stratum <= 2 { tier.clamp(1, 6).min(self.stratum.max(1)) } else { tier.clamp(1, 6) };
-        let eff_tier = if generous { (capped + 1).min(6) } else { capped };
+        // every source reads its stratum's row; generosity is the one scripted step up
+        let eff_tier = if generous { (tier.clamp(1, 6) + 1).min(6) } else { tier.clamp(1, 6) };
         let row = def.rows[tier_row(eff_tier)];
         let c = tables.prd_c(source, eff_tier);
         let notable_from = def.notable.min(4);
@@ -614,7 +612,7 @@ mod tests {
     fn s1_and_s2_lockers_top_out_at_uncommon_and_tiers_climb() {
         let (_, t, table) = setup(1, 1);
         let mut by_stratum: Vec<(f32, [u32; 5])> = Vec::new();
-        for stratum in 1..=3u8 {
+        for stratum in 1..=6u8 {
             let mut total_value = 0u64;
             let mut opens = 0u64;
             let mut tiers = [0u32; 5];

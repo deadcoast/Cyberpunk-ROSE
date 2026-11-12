@@ -1,4 +1,5 @@
-"""Authoring script for data/chunks.toml — the first 14 run chunks (S1 Sump, S2 Culverts, S3 Storm Drains).
+"""Authoring script for data/chunks.toml — the run chunks, seven a stratum (Full Design, Content scope: 42): S1 Sump,
+S2 Culverts, S3 Storm Drains (Phase B), S4 Service Tunnels, S5 the Vault, S6 Undercroft (PAC-081, the stack).
 Run once; the TOML is the source of truth. Each chunk is 32 x 24 glyphs.
 
 Glyphs
@@ -231,6 +232,165 @@ c.rect(11, 4, 14, 9); c.rect(19, 4, 22, 9)             # two ceiling pockets
 c.put(12, 5, "D"); c.put(20, 5, "L"); c.put(15, 10, "*"); c.put(6, 14, "O"); c.put(25, 14, "O")
 c.line_brick(); c.exit_w(); c.exit_e()
 add("drain_tunnel", 3, "culvert", 3, c, "a long storm tunnel: pipes overhead, a patrol walking its length")
+
+# ================================================================= S1, S2: the seventh of each (PAC-081)
+c = Canvas()
+c.rect(1, 10, 30, 14); c.rect(4, 15, 27, 19)            # silt flats under the culvert
+c.hline(19, 4, 27, "~")
+c.put(6, 18, "D"); c.put(11, 18, "D"); c.put(20, 18, "D"); c.put(25, 17, "R"); c.put(15, 11, "*"); c.put(28, 13, "S")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("sump_silt", 1, "flats", 2, c, "silt flats below the culvert: three deposits in the mud, a body half under it")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.rect(10, 4, 21, 9); c.hline(9, 10, 21, "~")
+c.rect(14, 15, 17, 22)                                  # the overflow drops south
+c.put(12, 6, "K"); c.put(19, 6, "L"); c.put(15, 5, "*"); c.put(15, 20, "D"); c.put(4, 13, "O")
+c.line_brick(); c.exit_w(); c.exit_e(); c.exit_s()
+add("culvert_weir", 2, "room", 2, c, "an overflow weir: a holding tank above the culvert, a drop below it, a scout at the door")
+
+# ================================================================= S4 SERVICE TUNNELS
+c = Canvas()
+c.rect(1, 10, 30, 14); c.hline(9, 1, 30, "P"); c.hline(15, 1, 30, "P")
+c.rect(22, 4, 28, 8); c.put(25, 9, ".")                # a fuse room over the conduit, a gap in it
+c.put(25, 7, "K"); c.put(23, 5, "*"); c.put(8, 13, "D"); c.put(14, 13, "L")
+c.line_brick(); c.exit_w(entry=True); c.exit_e()
+add("service_entry", 4, "entry", 0, c, "the Mat edge in the Service Tunnels: conduits above and below, a fuse locker")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.hline(9, 1, 30, "P"); c.hline(15, 1, 30, "P")
+c.put(6, 11, "*"); c.put(24, 11, "*"); c.put(10, 13, "O"); c.put(20, 13, "O"); c.put(15, 13, "D")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("service_run", 4, "culvert", 3, c, "a conduit run the Badges walk: lit at both ends, two scouts on its length")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.rect(14, 1, 17, 22)
+c.rect(3, 3, 11, 8); c.rect(20, 16, 28, 21)
+c.hline(6, 12, 13); c.hline(18, 18, 19)
+c.put(5, 7, "K"); c.put(9, 7, "K"); c.put(24, 20, "L"); c.put(15, 11, "*"); c.put(26, 17, "S")
+c.line_brick(); c.exit_w(); c.exit_e(); c.exit_n(); c.exit_s()
+add("service_junction", 4, "junction", 3, c, "a junction box: a supply room above, a cable vault below, four ways out")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.rect(8, 3, 23, 9)
+c.vline(11, 4, 8, "P"); c.vline(15, 4, 8, "P"); c.vline(19, 4, 8, "P")
+c.put(9, 8, "!"); c.put(22, 8, "!"); c.put(13, 5, "K"); c.put(17, 5, "D"); c.put(15, 4, "*")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("service_transformer", 4, "hazard", 2, c, "a transformer hall: leaking coolant pockets by the coils, a crate between them")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.rect(13, 1, 18, 9); c.hline(1, 13, 18, "G")
+c.put(15, 4, "*"); c.put(11, 13, "O"); c.put(21, 13, "O"); c.put(6, 13, "L"); c.put(26, 13, "K")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("service_grate", 4, "grate", 2, c, "a maintenance grate to the street: Badge patrols at the foot of it")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.rect(14, 10, 17, 14, "X"); c.rect(8, 18, 23, 21)
+c.rect(8, 15, 9, 17); c.rect(22, 15, 23, 17)             # drops either side of the rubble to the crawl
+c.put(12, 20, "D"); c.put(19, 20, "R"); c.put(15, 19, "S"); c.put(5, 11, "*")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("service_cavein", 4, "collapse", 2, c, "a cave-in across the tunnel: dig through, or drop to the crawl below it")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.rect(6, 3, 25, 8)
+c.put(8, 7, "R"); c.put(12, 7, "R"); c.put(16, 7, "S"); c.put(20, 7, "S"); c.put(23, 4, "K"); c.put(15, 9, "."); c.put(4, 13, "!")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("service_nest", 4, "nest", 1, c, "a crew room the sewerats took: bodies of the last crew, a crate they never opened")
+
+# ================================================================= S5 THE VAULT
+c = Canvas()
+c.rect(1, 9, 30, 15); c.hline(15, 1, 30, "~")
+c.rect(20, 3, 28, 8); c.put(22, 7, "K"); c.put(26, 7, "K"); c.put(24, 4, "*"); c.put(7, 14, "D")
+c.line_brick(); c.exit_w(entry=True); c.exit_e()
+add("vault_entry", 5, "entry", 0, c, "the Mat edge at the Vault: a drowned lobby, two shipping crates behind the desk")
+
+c = Canvas()
+c.rect(1, 10, 30, 14)
+for x in (4, 9, 14, 19, 24):
+    c.rect(x, 3, x + 2, 9); c.put(x + 1, 8, "L")
+c.put(15, 11, "*"); c.put(27, 13, "O")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("vault_stacks", 5, "room", 3, c, "the archive stacks: five aisles of lockers and a security scout at the end")
+
+c = Canvas()
+c.rect(1, 6, 30, 18); c.rect(1, 13, 30, 18, "~")
+c.rect(6, 7, 9, 12); c.rect(22, 7, 25, 12)
+c.put(7, 11, "K"); c.put(23, 11, "K"); c.put(15, 17, "R"); c.put(11, 17, "D"); c.put(15, 8, "*"); c.put(19, 17, "S")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("vault_servers", 5, "culvert", 3, c, "a flooded server hall: racks on two islands, a body among the cables")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.rect(20, 3, 29, 9); c.put(19, 9, "X"); c.put(20, 9, "X")
+c.put(22, 8, "K"); c.put(25, 8, "K"); c.put(28, 8, "K"); c.put(24, 4, "*"); c.put(8, 13, "O"); c.put(12, 13, "O")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("vault_door", 5, "vault", 2, c, "the strongroom: its door caved in, three crates inside, two guards outside")
+
+c = Canvas()
+c.rect(14, 1, 17, 22); c.rect(1, 10, 30, 14)
+c.rect(18, 3, 24, 7); c.hline(5, 18, 18)
+c.put(21, 6, "K"); c.put(15, 5, "*"); c.put(15, 19, "!"); c.put(6, 13, "L")
+c.line_brick(); c.exit_w(); c.exit_e(); c.exit_n(); c.exit_s()
+add("vault_lift", 5, "shaft", 2, c, "a dead elevator shaft: gas in the pit, an executive's crate on the landing")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.hline(9, 1, 30, "P")
+c.put(5, 11, "*"); c.put(26, 11, "*"); c.put(10, 13, "O"); c.put(16, 13, "O"); c.put(22, 13, "O"); c.put(14, 13, "D")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("vault_security", 5, "culvert", 2, c, "the security corridor: lit, three posts, nowhere to hide but the dark between")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.rect(8, 15, 23, 21)
+c.put(10, 20, "S"); c.put(15, 20, "S"); c.put(20, 20, "S"); c.put(12, 17, "R"); c.put(18, 17, "K"); c.put(4, 13, "!")
+c.put(15, 14, ".")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("vault_nest", 5, "nest", 1, c, "the cafeteria the sewerats live in now; one crate under the counter")
+
+# ================================================================= S6 UNDERCROFT
+c = Canvas()
+c.rect(1, 9, 30, 15); c.hline(15, 1, 30, "B")
+c.rect(13, 1, 18, 8); c.hline(1, 13, 18, "G")
+c.put(15, 4, "*"); c.put(6, 14, "L"); c.put(24, 14, "K")
+c.line_brick(); c.exit_w(entry=True); c.exit_e()
+add("under_entry", 6, "entry", 0, c, "the Mat edge in the Undercroft: a grate overhead leaks the street's neon")
+
+c = Canvas()
+c.rect(1, 8, 30, 16); c.rect(1, 14, 30, 16, "B")       # a metro platform over the track bed
+c.rect(1, 17, 30, 19); c.rect(4, 14, 5, 16); c.rect(26, 14, 27, 16)   # the track bed, steps down at each end
+c.put(5, 9, "*"); c.put(26, 9, "*"); c.put(10, 13, "L"); c.put(20, 13, "K"); c.put(15, 13, "O"); c.put(8, 18, "R"); c.put(22, 18, "D")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("under_platform", 6, "room", 3, c, "a dead metro platform: lockers on it, a body on the track bed below")
+
+c = Canvas()
+c.rect(1, 10, 30, 14)
+c.put(4, 11, "*"); c.put(28, 11, "*"); c.put(9, 13, "O"); c.put(21, 13, "O"); c.put(15, 13, "D"); c.put(15, 11, "S")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("under_tunnel", 6, "culvert", 3, c, "a metro tunnel: a patrol at each end and something in the middle")
+
+c = Canvas()
+c.rect(1, 10, 30, 14)
+c.rect(5, 2, 9, 9); c.hline(2, 5, 9, "G"); c.rect(22, 2, 26, 9); c.hline(2, 22, 26, "G")
+c.put(7, 5, "*"); c.put(24, 5, "*"); c.put(15, 13, "O"); c.put(12, 13, "L"); c.put(18, 13, "K")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("under_grates", 6, "grate", 2, c, "two grates to the street and the Oathkeepers who watch them")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.hline(9, 1, 30, "P"); c.rect(10, 15, 21, 20); c.hline(20, 10, 21, "~")
+c.put(15, 14, "."); c.put(12, 19, "D"); c.put(19, 19, "K"); c.put(15, 16, "!"); c.put(6, 11, "*")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("under_gallery", 6, "hazard", 2, c, "a utility gallery over a gassed sump; a crate where the gas is thickest")
+
+c = Canvas()
+c.rect(14, 1, 17, 22); c.rect(1, 10, 30, 14)
+c.rect(3, 15, 11, 20); c.rect(20, 3, 28, 8)
+c.hline(17, 12, 13); c.hline(6, 18, 19)
+c.put(6, 19, "L"); c.put(24, 7, "K"); c.put(15, 11, "*"); c.put(8, 16, "S")
+c.line_brick(); c.exit_w(); c.exit_e(); c.exit_n(); c.exit_s()
+add("under_station", 6, "junction", 2, c, "a station interchange: a ticket hall above, a staff room below")
+
+c = Canvas()
+c.rect(1, 10, 30, 14); c.rect(14, 10, 17, 14, "X"); c.rect(13, 4, 18, 9)
+c.put(13, 9, "."); c.put(18, 9, "."); c.put(15, 6, "K"); c.put(16, 7, "S"); c.put(6, 13, "D"); c.put(25, 13, "O")
+c.line_brick(); c.exit_w(); c.exit_e()
+add("under_collapse", 6, "collapse", 2, c, "a collapsed crossover: dig through or climb over, with a scout waiting beyond")
 
 
 def toml_str(s):

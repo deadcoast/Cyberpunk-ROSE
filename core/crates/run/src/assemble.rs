@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn assembles_requested_count_for_every_stratum() {
         let l = lib();
-        for stratum in 1..=3u8 {
+        for stratum in 1..=6u8 {
             for seed in 0..200u64 {
                 let lay = route(&l, seed, stratum).unwrap();
                 assert!((MIN_CHUNKS..=MAX_CHUNKS).contains(&lay.placed.len()), "seed {seed} s{stratum}: {} chunks", lay.placed.len());

@@ -352,7 +352,7 @@ mod tests {
     fn a_seed_replays_bit_exact_and_the_cadence_stays_in_its_guard() {
         let lib = ChunkLib::from_toml(crate::CHUNKS_TOML).unwrap();
         let t = ItemTable::from_toml(ITEMS).unwrap();
-        for stratum in 1..=3u8 {
+        for stratum in 1..=6u8 {
             let m = RouteMap::compile(&lib, &route(&lib, 3, stratum).unwrap());
             let a = play(m.clone(), t.clone(), LootTables::shipped(), CreatureFile::shipped(), 9, 1, 1, None);
             let b = play(m, t.clone(), LootTables::shipped(), CreatureFile::shipped(), 9, 1, 1, None);
@@ -361,7 +361,8 @@ mod tests {
             let r = &a.report;
             // the guard is wide on purpose: it catches a route that stops paying or a bot that stops moving, not
             // the budget, which rose cadence judges on twenty seeds
-            assert!(r.pulls >= 4, "S{stratum}: {} pulls\n{}", r.pulls, r.text());
+            // a Runner who dies early in a deep stratum is the stratum's danger, not a route that stopped paying
+            assert!(r.pulls >= 4 || r.result == "died", "S{stratum}: {} pulls\n{}", r.pulls, r.text());
             assert!(r.pull_gap_median >= 4.0 && r.pull_gap_median <= 60.0, "S{stratum}: pull gap {}\n{}", r.pull_gap_median, r.text());
             assert!(r.ticks <= 15 * 60 * TICK_HZ as u64, "S{stratum}: the bot took {}", crate::telemetry::clock(r.ticks));
         }

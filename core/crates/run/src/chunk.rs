@@ -326,13 +326,13 @@ mod tests {
     }
 
     #[test]
-    fn shipped_library_parses_with_three_strata() {
+    fn shipped_library_parses_with_six_strata_of_seven() {
         let l = lib();
-        assert!(l.chunks.len() >= 14, "{} chunks", l.chunks.len());
-        assert_eq!(l.strata(), vec![1, 2, 3]);
-        for s in 1..=3 {
+        assert_eq!(l.chunks.len(), 42, "the Content table's 42");
+        assert_eq!(l.strata(), vec![1, 2, 3, 4, 5, 6]);
+        for s in 1..=6 {
             assert!(l.entry_for(s).is_some());
-            assert!(l.pool_for(s).len() >= 4, "stratum {s} pool too small");
+            assert_eq!(l.pool_for(s).len(), 6, "stratum {s}: an entry and six more");
         }
     }
 
@@ -357,7 +357,7 @@ mod tests {
     fn every_chunk_has_light_or_is_dark_by_design() {
         // the design says dark by default with authored pools; at least the entries carry a fixture
         let l = lib();
-        for s in 1..=3 {
+        for s in 1..=6 {
             let e = l.entry_for(s).unwrap();
             assert!(e.glyphs.contains(&b'*'), "{}: entry without a light", e.id);
         }

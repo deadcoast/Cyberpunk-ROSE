@@ -1,7 +1,8 @@
 # Cyberpunk: ROSE — loot tables (research 08). Resolved D2-style: NoDrop, then category by weight, then tier from the
-# row for the source's tier (1-6 = stratum; crates are chunk stratum + 1), then an item uniformly from that category
-# and tier, stepping down a tier when none exists. Tier rows are [common, uncommon, rare, blackline, relic] weights.
-# S2 tops out at Uncommon (design): rows 1 and 2 carry no Rare. Relic appears only in `cache`.
+# row for the source's stratum (1-6), then an item uniformly from that category and tier, stepping down a tier when
+# none exists. Tier rows are [common, uncommon, rare, blackline, relic] weights. S2 tops out at Uncommon (design): rows
+# 1 and 2 carry no Rare. Blackline enters in the Storm Drains' crates (sealed corporate shipping) and S4's lockers, and
+# is the commonest tier of an Undercroft crate. Relic appears only in `cache`.
 #
 # count       [min, max] picks
 # nodrop      chance per pick that nothing drops (0-1)
@@ -20,8 +21,8 @@ rows = [
   [55, 45, 0, 0, 0],
   [50, 38, 12, 0, 0],
   [35, 40, 20, 5, 0],
-  [20, 35, 30, 15, 0],
-  [10, 30, 35, 25, 0],
+  [12, 30, 36, 22, 0],
+  [5, 22, 38, 35, 0],
 ]
 notable = 2
 
@@ -33,10 +34,10 @@ categories = { chrome = 30, part = 20, tech = 18, gear = 15, contraband = 10, cu
 rows = [
   [75, 25, 0, 0, 0],
   [45, 55, 0, 0, 0],
-  [40, 42, 18, 0, 0],
   [25, 40, 27, 8, 0],
-  [12, 33, 35, 20, 0],
-  [5, 25, 38, 32, 0],
+  [20, 38, 30, 12, 0],
+  [8, 28, 36, 28, 0],
+  [2, 12, 34, 52, 0],
 ]
 notable = 2
 
@@ -66,7 +67,7 @@ rows = [
   [55, 37, 8, 0, 0],
   [40, 40, 17, 3, 0],
   [25, 38, 27, 10, 0],
-  [15, 32, 33, 20, 0],
+  [10, 28, 35, 27, 0],
 ]
 notable = 2
 
