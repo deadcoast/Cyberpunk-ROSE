@@ -12,6 +12,8 @@ Where the truth lives
 | --- | --- | --- |
 | `docs/03/FullDesign.md` | the design, one document; every decision a stage makes is written back here; anything the user's passes do not specify is marked "this design's" | backend agent, the user |
 | `todo.PACER.csv` | the task register (spec below) | every agent |
+| `overlord.PACER.csv` | the plan for the register's open rows: stage by stage, each step mapped onto the files it touches, what it stands on, what it hands on and its check (spec below) | backend agent |
+| `changelog.PACER.csv` | one row a commit: date, commit, author, PAC, kind, scope, what changed, the evidence (spec below) | every agent |
 | `docs/03/CURRENT-STATE.md` | the latest review: the build measured, the design against the build, the weak points with IDs | backend agent |
 | `docs/03/VERIFICATION-N.md` | evidence logs, one section per PAC as it closes | backend agent |
 | `docs/03/art-bible.md` | Sewer Noir 32: grid, scales, line, value, ramps, per-module plans | the user, backend agent |
@@ -64,6 +66,34 @@ Rules:
   for the user.
 - **Quote every field that holds a comma** (PAC-063 was split across two extra columns by one unquoted DoD).
   Edit the CSV with a CSV writer, then check that every row has sixteen fields and every blocker exists.
+
+The plan and the changelog
+--------------------------
+
+`overlord.PACER.csv`, fourteen columns:
+
+| column | how this repository fills it |
+| --- | --- |
+| ID | `OVR-NNN`, in blocks by stage: S0 001–009, S1 010–019 … S10 100–109, the lanes and rules 110– |
+| PAC | the register rows the step serves |
+| Stage | `S0 Map and baseline` to `S10 Code health`, worked in order; the stage order is the plan's, the register's BlockedBy still gates `DONE` |
+| Kind | `map` (how the code connects today), `step`, `gate` (the step that closes a PAC), `rule` |
+| Title, Status | as the register: `TODO` → `DOING` → `REVIEW` → `DONE` |
+| Approach | the mechanism, with the constants and functions named |
+| Touches | the files, with lines where they matter |
+| Imports, Exports | what the step stands on; what later steps take from it |
+| BlockedBy | OVR IDs |
+| Check, Evidence | the command or test that proves the step; the verification entry that holds its numbers |
+| Origin | the CURRENT-STATE ID or design section it answers; "this plan's invention" where neither specifies it |
+
+`changelog.PACER.csv`, twelve columns: `ID` (`CHG-NNN`), `Date` (UTC, the commit's), `Commit` (short hash),
+`Author`, `PAC`, `Kind` (feature, fix, docs, structure, assets, review, plan, revert, merge, config, prototype),
+`Scope` (the crates and folders touched), `Summary` (the commit's subject), `Files`, `Delta` (+insertions
+−deletions), `Evidence`, `Notes` (what the subject leaves out). Every commit adds its row in the same commit; a row
+cannot hold its own hash, so its `Commit` reads `pending` until the next commit fills it in.
+
+A step found along the way becomes an overlord row before it becomes code. Both files are edited with a CSV writer
+and checked like the register: every row its field count, every ID unique, every blocker present.
 
 The backend lane (`@claude`)
 ----------------------------
