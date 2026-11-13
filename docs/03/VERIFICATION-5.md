@@ -15,7 +15,7 @@ the `threat` crate on the city's clock and the `run` crate on the run's; `game::
 a Cleansing comes down the first grate twice from that state:
 
 | city | the Heart | Mat cells | slimos | dead | Oathkeepers fell | Mat tiles burned | seconds |
-|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- |
 | as it stands | burned | 303 → 246 | 7 → 4 | 3 | 0 of 8 | 113 | 1657 |
 | defended | 200 HP | 303 → 288 | 7 → 6 | 1 | 8 of 8 | 15 | 247 |
 
@@ -49,7 +49,7 @@ any deep water put the bot under in S2's authored swims (S2's median run went fr
 risen water drowns. `rose cadence`, deaths by stratum S1 / S2 / S3:
 
 | raiders | runs a stratum | deaths |
-|---|---|---|
+| --- | --- | --- |
 | none | 40 | 28 / 32 / 22 % |
 | 25 / 35 / 45 % a gang | 40 | 38 / 40 / 28 % |
 | 0 / 25 / 35 % | 40 | 28 / 40 / 28 % |
@@ -90,7 +90,7 @@ orders; `game::trade` joins it all to the shift, the cords, the roster and the t
 trading steward sold 312 pieces at the Nomads' stall over grate 5, nearly all blind (no Appraisal Table in its plan):
 
 | category | sold | eddies | of base (× 0.4 blind) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | chrome | 88 | 188 | 95 % |
 | contraband | 18 | 161 | 130 % (a few eddies rounding up) |
 | curio | 69 | 134 | 79 % |

@@ -5,7 +5,7 @@ Written by `rose economy --seed 11 --shifts 30` on 2026-11-13 (Full Design v3.15
 ## The streets
 
 | grate | column | faction |
-|---|---|---|
+| --- | --- | --- |
 | 1 | 46090 | Corpo remnants |
 | 2 | 46113 | Gangs |
 | 3 | 46136 | Corpo remnants |
@@ -58,7 +58,7 @@ Written by `rose economy --seed 11 --shifts 30` on 2026-11-13 (Full Design v3.15
 ## Shift by shift, trading
 
 | shift | day | grates | sold | earned | eddies | widest walk |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | 1 | 1 | 1 | 2 | 54 | 40 | 0.06 |
 | 2 | 1 | 1 | 7 | 32 | 57 | 0.06 |
 | 3 | 1 | 1 | 10 | 32 | 74 | 0.09 |
@@ -95,7 +95,7 @@ Written by `rose economy --seed 11 --shifts 30` on 2026-11-13 (Full Design v3.15
 Realised price over base × condition (× 0.4 for an item sold blind), by the faction that bought and the category: what demand, reputation, haggling and glut made of it (over 100 % where a cheap item's few eddies round up, a stall paying at least 1 e).
 
 | faction | category | sold | blind | eddies | of base |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | Corpo remnants | curio | 3 | 3 | 9 | 153 % |
 | Corpo remnants | tech | 11 | 11 | 50 | 215 % |
 | Gangs | gear | 4 | 4 | 37 | 131 % |
@@ -108,7 +108,7 @@ Realised price over base × condition (× 0.4 for an item sold blind), by the fa
 ## Standing at the end
 
 | faction | reputation | favour | traded | tier open |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Nomads | +1 | 2 | 897 e | 3 |
 | Gangs | +0 | 0 | 37 e | 1 |
 | Corpo remnants | +0 | -2 | 59 e | 1 |
@@ -126,7 +126,7 @@ In hand at the end: none.
 ## Trading against feeding
 
 | | the nearer grate reached | shifts with no market | eddies at the end | sold | Chrome fed to the Heart |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | trading | not in 30 shifts | 0 | 204 | 348 | 0 |
 | feeding | shift 14 | 0 | 1074 | 203 | 211 |
 

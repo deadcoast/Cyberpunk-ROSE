@@ -106,7 +106,7 @@ Every item has the same eleven fields, so every item can be sold, fed, crafted o
 | Set | optional set id | Three of a set in the Stash gives a passive (see Curios) |
 | Provenance | stratum, chunk, day | Codex entry, trophy text |
 
-**Categories at launch**
+> **Categories at launch**
 
 - **Chrome (38 types)**: junk implants, street cyberware, corpo hardware, Blackline components. Feed value scales with tier; Chrome Affinity bias on anything with a Conductor tag.
 - **Parts (24)**: pipe, wire spool, lens, servo, pump, filter cloth, cell, board, bearing. The craft backbone; low sell value, high craft value, which is the first sell-or-keep lesson.
@@ -189,7 +189,7 @@ Every slimo is a full character record; a Runner is a slimo you have taken on a 
 
 The city has every system a player of the genre expects to find, and each one is bent by the fact that the ground is alive.
 
-**Feature baseline and the ROSE version of each**
+> **Feature baseline and the ROSE version of each**
 
 | Genre feature | In ROSE |
 | --- | --- |
@@ -211,7 +211,7 @@ The city has every system a player of the genre expects to find, and each one is
 | Building | Footprints on Cord/Node tiles only; ghosts snap; tweakers build at Hands speed; structures have HP, three visual tiers, upgrade in place |
 | Camera | Street / District / Stack; follow a slimo (F); bookmarks 1–9 (Ctrl sets) |
 
-**What the genre does not have**
+> **What the genre does not have**
 
 - The ground grows, starves, mutates, speciates and eats; Pits, Bait, Salt and Severing are the steering tools; organs grow themselves at gene thresholds.
 - Districts self-govern: a hub Node with three structures elects a foreman; the foreman posts jobs and cargo demand and petitions you.
@@ -290,6 +290,7 @@ The Authority column is this design's (Pass 2 gives none): a first law costs one
 **Dissolution.** A D5 (Mod-Depth 5, cannot act) can be dissolved into a Pit from its Slimo card: Street grade's nutrient (Pass 2: 0.30, today's Uncommon, which is 1.8 since v3.21) at the Heart's Pit and its name on the Memorial. Without the Rite it is the per-event Mood hit: every slimo's target −10 the shift it happens (the number is this design's); with the Rite, no hit and the standing −3.
 
 **Unrest** (Pass 2), read off a district's Mood — the average of its members':
+
 - below 30 for two shifts: **strike**, the members take no jobs until the average is back at 30;
 - below 20: **defection** — each shift each awake member below 20 leaves for good with 1 in 4 to a feral strain if one borders the district, or to the Oathkeepers if a Patrol is in its zone; both arrive in Phase D, and until then the district shows it is ready to defect; nobody asleep in a Pod during Dark defects (research 03);
 - below 10: **the foreman petitions** to repeal the law that costs the district the most Mood, or, with no law to blame, for the structure its worst need lacks; answered (the repeal or the structure), the Mood target gains 10 for three shifts; **refusing twice** dissolves the district — its hub is removed, its foreman stands down, its structures lose signal priority (the cargo serves them after every other consumer) and the Node cannot hub again for ten shifts.
@@ -508,7 +509,7 @@ One style, named **Sewer Noir 32**, applied to every pixel on screen including p
 | Neon (emits) | FF2E97 Hot Pink · 19E6FF Cyan · F6FF2E Acid Yellow · FF6A1A Muzzle Orange | Night City leaks, UI, Ivan's highlights, fire |
 | White (emits) | F2EFE4 Vestment White · D4A52A Reliquary Gold | Oathkeepers only |
 
-**Per-module plans**
+> **Per-module plans**
 
 - *Tiles*: 47-tile blob autotile per material (concrete, brick, pipe, water, grate, collapse), wet highlight 1 px in the nearest emitter's hue on every horizontal, parallax planes behind (cavern wall, distant tunnel) and in front (pipes, cables).
 - *Mat*: cords 8–12 px wide at 32 px tiles with an Ooze Dark core and an Ooze Lit edge, pulse in Ooze Glow outward from the Heart; translucency faked with a dither of the tile beneath; organs and class decorations as node overlays.
@@ -601,7 +602,8 @@ The parts every finished game has, specified so they are built with the systems 
 | Seeds and codes | Seed code and strain code visible on the pause screen and copyable |
 | Achievements | 40, tied to the collections and the endings, no grind-only entries |
 | Localisation | All strings in tables from day one; fonts cover Latin extended; right-to-left out of scope at launch |
-| Telemetry (local) | A per-run cadence log of landings, losses and decisions with clock times and a report (median gap between landings and between pulls, notables, damage, value per minute), written to `user://telemetry/`; `rose cadence` aggregates seeded bot runs against the budget (Expedition mode: The cadence budget) | Read the file; the Run's end summary quotes the two medians |
+| Telemetry (local) | A per-run cadence log of landings, losses and decisions with clock times and a report (median gap between landings and between pulls, notables, damage, value per minute), written to `user://telemetry/`; `rose cadence` aggregates seeded bot runs against the budget (Expedition mode: The cadence budget) |
+| Read the file | the Run's end summary quotes the two medians |
 
 ## UI and screens
 

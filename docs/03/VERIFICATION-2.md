@@ -8,7 +8,7 @@ Xvfb (Mesa software GL). Numbers are from this machine.
 `cargo test --release` — 26 tests across five crates, all passing.
 
 | crate | tests | what they hold |
-|---|---|---|
+| --- | --- | --- |
 | mat | 10 | determinism (same seed, same digest); nutrient bounded and finite; fed growth and reach; Runner reaches farther than default; die-back when unfed; transport conserves mass on a chain; salt blocks growth; PCG32 stream and bounds |
 | logistics | 2 | 3,000 agents deliver; packets never exceed cord capacity; city deterministic |
 | items | 6 | 164 items load with every category at its designed count; gear has gear blocks, relics unsellable, chrome has feed and bias; pricing formula (condition, glut, found-in-run, blind sale); appraisal bars by tier; feed value and condition penalty; sets complete at three |
@@ -32,7 +32,7 @@ Colony at Stack zoom.
 ## Manual, on the screenshots
 
 | check | observed |
-|---|---|
+| --- | --- |
 | one drawing system | every element on every screen is a 32-px-grid placeholder with the dashed Void border, a ramp fill and a tag; UI frames are clean nine-patches; text is the 3x5 bitmap font from the same sheet the placeholders use |
 | ooze, not green | the Mat is the Ooze ramp on every tile; green appears only on water placeholders (Bile) |
 | the Stash is real | eight items from `data/items.toml` placed by the inventory crate with their footprints; the card shows sell and feed numbers computed in Rust |

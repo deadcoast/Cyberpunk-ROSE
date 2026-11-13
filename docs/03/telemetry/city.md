@@ -7,7 +7,7 @@ Written by `rose city --seed 11 --shifts 20` on 2026-11-13 (Full Design v3.13, T
 **The landing cadence** (research 02's whole-game budget of something landing every 10–30 s, the bot's band 3.3–10.0 s at the bot factor 3, an assumption until the Phase F playtest): the run alone lands every 7.9 s (median of the shifts' medians), the run and the city merged every 6.6 s — **ok**. Landings a second apart count as one moment, as the run's report counts them. Deaths: 0 of 20 runs.
 
 | shift | day | runner | run | length | run landings | city landings | run gap | merged gap | population | Stash | in stockpiles | on the Heart's floor | e (+earned −spent) | paste meals | Mat cells | Mat nutrient | late cargo | first grate | built |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 1 | Nia 'Oathless' | extracted | 3:16 | 27 | 9 | 9.7 s | 7.6 s | 7 | 50 | 0 | 0 | 50 (+54 −4) | 2 | 256 | 425.4 | 0 | held | Hab-Pod |
 | 2 | 2 | Nia 'Oathless' | extracted | 2:44 | 24 | 15 | 8.0 s | 5.7 s | 7 | 62 | 0 | 0 | 53 (+18 −15) | 7 | 321 | 576.7 | 0 | held | Lantern Post |
 | 3 | 3 | Nia 'Oathless' | extracted | 3:32 | 31 | 13 | 7.9 s | 7.5 s | 7 | 76 | 0 | 0 | 62 (+24 −15) | 7 | 363 | 765.4 | 0 | held | Stockpile Rack |
