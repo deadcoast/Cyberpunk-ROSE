@@ -10,21 +10,24 @@ Style suffix appended to every prompt:
 anchors.toml
 ------------
 
-### anchor.tile
+anchor.tile
+---
 
 - kind anchor · one frame 64x64 · 1 frame · states single
 - anchor `(this is an anchor)` · ramp mud · status placeholder
 - prompt: a 64x64 panel of a wet brick sewer culvert wall with a rusted pipe run, top-down lit by one dim purple light from the left, hard shadows, 2-tone dither only, no outline on the bricks, one-pixel wet highlight on every horizontal edge
 - negative: smooth gradients, anti-aliasing, outlines on tiles, green light, blur, photo texture
 
-### anchor.slimo
+anchor.slimo
+---
 
 - kind anchor · one frame 32x48 · 1 frame · states single
 - anchor `(this is an anchor)` · ramp flesh · status placeholder
 - prompt: a 32x48 side-view pixel art figure of a gaunt person with chrome fragments embedded in grey-pink flesh and faint purple veins glowing under the skin, 1 px black selective outline, 3-step shading with blue shadows, dark grimy clothes, standing idle
 - negative: anime eyes, smooth shading, more than one light source, green glow, outline on every edge, bright colours on cloth
 
-### anchor.item
+anchor.item
+---
 
 - kind anchor · one frame 32x32 · 1 frame · states single
 - anchor `(this is an anchor)` · ramp industrial · status placeholder
@@ -34,14 +37,16 @@ anchors.toml
 fx.toml
 -------
 
-### vfx.spark
+vfx.spark
+---
 
 - kind vfx · one frame 16x16 · 6 frames · states single
 - anchor `anchor.item` · ramp neon · status placeholder
 - prompt: a muzzle-orange spark burst, 6 frames, 2-tone, no glow halo
 - negative: glow, blur
 
-### vfx.ooze_drip
+vfx.ooze_drip
+---
 
 - kind vfx · one frame 16x16 · 6 frames · states single
 - anchor `anchor.item` · ramp ooze · status placeholder
@@ -51,112 +56,128 @@ fx.toml
 mat.toml
 --------
 
-### mat.cord
+mat.cord
+---
 
 - kind tile · one frame 32x32 · 4 frames · states fed, lean, starving
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a thick purple ooze cord running across a sewer tile, dark violet core with a lighter violet edge, wet, translucent over the brick, 1 px highlight; state fed glows, lean is dim, starving is grey-violet
 - negative: green, fungus texture, outline, gradient
 
-### mat.tip
+mat.tip
+---
 
 - kind tile · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: the thin growing tip of a purple ooze strand, 2-3 px wide, bright violet, reaching across a dark tile, 4 frames of extension
 - negative: green, outline
 
-### mat.node
+mat.node
+---
 
 - kind tile · one frame 32x32 · 4 frames · states fed, lean, starving
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a bulbous purple ooze junction where three cords meet, pale violet glow at the centre, slow pulse over 4 frames
 - negative: green, outline
 
-### mat.necro
+mat.necro
+---
 
 - kind tile · one frame 32x32 · 2 frames · states single
 - anchor `anchor.tile` · ramp flesh · status placeholder
 - prompt: a dead ooze cord gone bruise-purple then silt-brown, cracked and dry, no glow
 - negative: bright, glow, outline
 
-### mat.organ.bulb
+mat.organ.bulb
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a Lume Bulb organ: a translucent violet sac on a cord emitting pale pink light, 4 frames of breathing
 - negative: green, outline
 
-### mat.organ.lung
+mat.organ.lung
+---
 
 - kind sprite · one frame 32x48 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a Filter Lung organ: a ribbed violet bladder on a cord above water, swelling and contracting over 4 frames, brine dripping
 - negative: green, outline
 
-### mat.organ.sphincter
+mat.organ.sphincter
+---
 
 - kind sprite · one frame 32x64 · 4 frames · states open, closed
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a Sphincter organ filling a narrow tunnel: a ring of violet muscle with chrome inclusions, open and closed states, 4 frames of motion
 - negative: green, outline
 
-### mat.organ.sac
+mat.organ.sac
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a Spore Sac organ: a dark violet pod with pink spots, twitching, something moving inside
 - negative: green, outline
 
-### mat.organ.ganglion
+mat.organ.ganglion
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a Nerve Ganglion organ: a knot of violet nerve threads around a pale node that pulses outward, the Mat's own relay, 4 frames
 - negative: green, outline
 
-### mat.organ.spur
+mat.organ.spur
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a Root Spur organ: violet roots gripping a scrap deposit, drawing it up in slow pulses, 4 frames
 - negative: green, outline
 
-### mat.organ.knot
+mat.organ.knot
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a Brood Knot organ: a hollow violet knot of cords big enough for two sleepers, warm pink inside, 4 frames
 - negative: green, outline
 
-### mat.organ.maw
+mat.organ.maw
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a Maw organ: a ring of chrome teeth in violet flesh at a junction, opening and snapping, 4 frames
 - negative: green, outline
 
-### mat.organ.gland
+mat.organ.gland
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a Venom Gland organ: a swollen violet gland with an acid-yellow bead at its tip, spitting, 4 frames
 - negative: green, outline
 
-### mat.organ.cyst
+mat.organ.cyst
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a Chrome Cyst organ: a hard violet nodule plated with grown chrome scales, 4 frames
 - negative: green, outline
 
-### mat.organ.graft
+mat.organ.graft
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
 - prompt: a Graft Bud organ: a pale violet bud with thin seeking threads reaching toward bruised feral tissue, 4 frames
 - negative: green, outline
 
-### mat.organ.bellows
+mat.organ.bellows
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp ooze · status placeholder
@@ -166,532 +187,608 @@ mat.toml
 panels.toml
 -----------
 
-### panel.ch1.open.1
+panel.ch1.open.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 1 Seepage, opening panel 1: Ivan Ooze in the black water of the Sump, arms open, chrome flecks catching purple light, a grate far above, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch1.open.2
+panel.ch1.open.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 1 Seepage, opening panel 2: a white-robed lunar priest with a syringe gun over a crowd, vaccine posters, a chromed arm melting into flesh, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch1.open.3
+panel.ch1.open.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 1 Seepage, opening panel 3: bodies sliding down a storm drain chute into darkness, one hand still reaching, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch1.open.4
+panel.ch1.open.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 1 Seepage, opening panel 4: the Heart: a pulsing purple ooze mass with a scrap Pit beside it, cords spreading into culverts, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch1.close.1
+panel.ch1.close.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 1 Seepage, closing panel 1: eight slimos of different depths asleep in scrap Hab-Pods, ooze light on their faces, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch1.close.2
+panel.ch1.close.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 1 Seepage, closing panel 2: a newcomer waking on wet concrete, a slimo offering a hand, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch1.close.3
+panel.ch1.close.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 1 Seepage, closing panel 3: a slimo painting a tag on brick by the Heart's glow, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch1.close.4
+panel.ch1.close.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 1 Seepage, closing panel 4: Ivan grinning in close-up, scrap piled behind him, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch2.open.1
+panel.ch2.open.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 2 Tweakers, opening panel 1: a D3 tweaker with welding goggles at a scrap Forge, sparks in Muzzle orange, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch2.open.2
+panel.ch2.open.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 2 Tweakers, opening panel 2: a hand passing a chrome part up through a grate to a gloved hand, neon street above, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch2.open.3
+panel.ch2.open.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 2 Tweakers, opening panel 3: a slimo holding chrome over a Pit with a market stall lit behind, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch2.open.4
+panel.ch2.open.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 2 Tweakers, opening panel 4: the Mat's cords thickening around a Pit, a shadow of a city above, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch2.close.1
+panel.ch2.close.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 2 Tweakers, closing panel 1: a tin cash box with a few chips, ooze fingerprints on it, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch2.close.2
+panel.ch2.close.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 2 Tweakers, closing panel 2: the Forge glowing beside a Seep Market stall under a grate, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch2.close.3
+panel.ch2.close.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 2 Tweakers, closing panel 3: Ivan in shadow with a finger to his lips, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch2.close.4
+panel.ch2.close.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 2 Tweakers, closing panel 4: a white light glint at the far end of a culvert, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch3.open.1
+panel.ch3.open.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 3 The Hand, opening panel 1: an Oathkeeper envoy in vestment white with a lamp, standing still at a grate, slimos hiding, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch3.open.2
+panel.ch3.open.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 3 The Hand, opening panel 2: the envoy's helmeted face, a cross of lamps on the visor, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch3.open.3
+panel.ch3.open.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 3 The Hand, opening panel 3: a crate of junk chrome being hauled up through a grate on a rope, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch3.open.4
+panel.ch3.open.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 3 The Hand, opening panel 4: Ivan between the envoy's lamp and the Heart's glow, choosing, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch3.close.1
+panel.ch3.close.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 3 The Hand, closing panel 1: lamp carriers and flamers pouring down a grate, bleach in the water, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch3.close.2
+panel.ch3.close.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 3 The Hand, closing panel 2: a map on an Oathkeeper data slate with the Heart circled, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch3.close.3
+panel.ch3.close.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 3 The Hand, closing panel 3: slimos carrying a burned body past a smoking Pod, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch3.close.4
+panel.ch3.close.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 3 The Hand, closing panel 4: the grate empty, a broken lamp on the floor, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch4.open.1
+panel.ch4.open.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 4 Sewerats, opening panel 1: a sickly green-purple growth spreading across a wide storm drain, water rushing, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch4.open.2
+panel.ch4.open.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 4 Sewerats, opening panel 2: Pond Scum tissue choking a drain pipe, eyes in the dark, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch4.open.3
+panel.ch4.open.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 4 Sewerats, opening panel 3: sewerats crawling, one with a human face half-dissolved, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch4.open.4
+panel.ch4.open.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 4 Sewerats, opening panel 4: a slimo's tag on a wall, half eaten by feral growth, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch4.close.1
+panel.ch4.close.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 4 Sewerats, closing panel 1: dead feral tissue grey and collapsing in the drain, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch4.close.2
+panel.ch4.close.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 4 Sewerats, closing panel 2: tamed sewerats curled in a wire Pen, a Tend slimo watching, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch4.close.3
+panel.ch4.close.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 4 Sewerats, closing panel 3: a memorial wall of scratched names lit by ooze, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch4.close.4
+panel.ch4.close.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 4 Sewerats, closing panel 4: an Oathkeeper tally board with marks, seen through a grate, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch5.open.1
+panel.ch5.open.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 5 Warchest, opening panel 1: a drowned corporate archive, server racks half under black water, emergency lights, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch5.open.2
+panel.ch5.open.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 5 Warchest, opening panel 2: a sealed corporate crate cracked open, chrome gleaming inside, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch5.open.3
+panel.ch5.open.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 5 Warchest, opening panel 3: a Runner with a lantern wading into the archive, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch5.open.4
+panel.ch5.open.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 5 Warchest, opening panel 4: a Downer Still bubbling, copper coils and ooze, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch5.close.1
+panel.ch5.close.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 5 Warchest, closing panel 1: a slimo in a torn corporate jacket at a dead elevator panel, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch5.close.2
+panel.ch5.close.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 5 Warchest, closing panel 2: rows of corporate weapons crates in the dark, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch5.close.3
+panel.ch5.close.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 5 Warchest, closing panel 3: slimos hauling crates along a Mat cord, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch5.close.4
+panel.ch5.close.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 5 Warchest, closing panel 4: drums of Downer stacked by the Still, steam rising, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch6.open.1
+panel.ch6.open.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 6 Common Ground, opening panel 1: an occupied neon street, white lamps on every corner, people hiding, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch6.open.2
+panel.ch6.open.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 6 Common Ground, opening panel 2: an empty food stall shutter, a queue of hungry faces, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch6.open.3
+panel.ch6.open.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 6 Common Ground, opening panel 3: gang members, nomads and suits climbing down a grate, cautious, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch6.open.4
+panel.ch6.open.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 6 Common Ground, opening panel 4: Ivan at the head of a scrap table, envoys on both sides, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch6.close.1
+panel.ch6.close.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 6 Common Ground, closing panel 1: a handshake between a slimo and a human under a metro platform, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch6.close.2
+panel.ch6.close.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 6 Common Ground, closing panel 2: humans and slimos side by side in the dark, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch6.close.3
+panel.ch6.close.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 6 Common Ground, closing panel 3: a grate with neon above and ooze below, light meeting light, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch6.close.4
+panel.ch6.close.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 6 Common Ground, closing panel 4: slimos and allies loading weapons by the Heart, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch7.open.1
+panel.ch7.open.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 7 Rise, opening panel 1: the night sky over the city full of descending lunar ships with white lamps, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch7.open.2
+panel.ch7.open.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 7 Rise, opening panel 2: white light pouring down three grates at once, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch7.open.3
+panel.ch7.open.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 7 Rise, opening panel 3: the whole city on the Stack view, cords glowing, a countdown, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch7.open.4
+panel.ch7.open.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 7 Rise, opening panel 4: Ivan at the Heart, arms crossed, the Mat rising behind him, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch7.close.1
+panel.ch7.close.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 7 Rise, closing panel 1: broken lamps in bleached water, silence, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch7.close.2
+panel.ch7.close.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 7 Rise, closing panel 2: the Heart pulsing in the dark, slimos gathering, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch7.close.3
+panel.ch7.close.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 7 Rise, closing panel 3: Ivan's face in close-up, tired, grinning, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.ch7.close.4
+panel.ch7.close.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: chapter 7 Rise, closing panel 4: the camera pulling back from the Heart into darkness, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.garden.1
+panel.end.garden.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Garden ending, panel 1: the cross-section city glowing purple and cyan under neon streets, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.garden.2
+panel.end.garden.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Garden ending, panel 2: slimos handing up bottled water and glowing bulbs through grates, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.garden.3
+panel.end.garden.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Garden ending, panel 3: an open grate with humans and slimos trading in the light, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.garden.4
+panel.end.garden.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Garden ending, panel 4: a neon sign made of ooze reading nothing, glowing in a culvert, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.hive.1
+panel.end.hive.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Hive ending, panel 1: chrome-armoured cords crossing a tunnel like rebar, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.hive.2
+panel.end.hive.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Hive ending, panel 2: a cross-section of the city with a metal-grey Mat under every street, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.hive.3
+panel.end.hive.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Hive ending, panel 3: Oathkeeper boots on a street, the Mat's armour beneath, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.hive.4
+panel.end.hive.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Hive ending, panel 4: a chrome-plated grate, sealed, with a single purple light behind it, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.world_eater.1
+panel.end.world_eater.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the World-Eater ending, panel 1: the Mat bursting through a street, cars sinking into ooze, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.world_eater.2
+panel.end.world_eater.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the World-Eater ending, panel 2: lamps swallowed by tissue, neon signs sinking, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.world_eater.3
+panel.end.world_eater.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the World-Eater ending, panel 3: an empty city half-dissolved under a purple sky, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.world_eater.4
+panel.end.world_eater.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the World-Eater ending, panel 4: Ivan alone on a heap of ooze and wreckage, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.accord.1
+panel.end.accord.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Accord ending, panel 1: Oathkeepers retreating from a toxic glowing Mat, masks cracked, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.accord.2
+panel.end.accord.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Accord ending, panel 2: an Oathkeeper hand signing a treaty on a scrap table, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.accord.3
+panel.end.accord.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Accord ending, panel 3: a painted line across a tunnel, slimos on one side, humans on the other, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.accord.4
+panel.end.accord.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Accord ending, panel 4: the treaty sheet stained with purple ooze, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.scattered.1
+panel.end.scattered.1
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Scattered ending, panel 1: the burned Heart, black and cracked, flames dying, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.scattered.2
+panel.end.scattered.2
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Scattered ending, panel 2: feral tissue and bleached cords in the dark, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.scattered.3
+panel.end.scattered.3
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: the Scattered ending, panel 3: Ivan crawling into a new, darker sump, graphic-novel still, hard ink outlines, high contrast chiaroscuro, SEEPAGE palette, purple ooze light, neon only as light, text box space along the bottom
 - negative: soft shading, photoreal, bright daylight, green tint, readable text, logos
 
-### panel.end.scattered.4
+panel.end.scattered.4
+---
 
 - kind panel · one frame 1280x720 · 1 frame · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
@@ -701,189 +798,216 @@ panels.toml
 people.toml
 -----------
 
-### slimo.d1.idle
+slimo.d1.idle
+---
 
 - kind sprite · one frame 32x48 · 4 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; skin-deep: looks human, faint purple veins at the temples, a coat; idle breathing, 4 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### slimo.d1.walk
+slimo.d1.walk
+---
 
 - kind sprite · one frame 32x48 · 8 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; skin-deep: looks human, faint purple veins at the temples, a coat; walk cycle, 8 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### slimo.d2.idle
+slimo.d2.idle
+---
 
 - kind sprite · one frame 32x48 · 4 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; limbed: chrome arms re-organified into grey muscle with metal flecks, a scavenger's harness; idle breathing, 4 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### slimo.d2.walk
+slimo.d2.walk
+---
 
 - kind sprite · one frame 32x48 · 8 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; limbed: chrome arms re-organified into grey muscle with metal flecks, a scavenger's harness; walk cycle, 8 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### slimo.d3.idle
+slimo.d3.idle
+---
 
 - kind sprite · one frame 32x48 · 4 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; core-modded: torso half translucent violet ooze with chrome ribs showing, tool belt; idle breathing, 4 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### slimo.d3.walk
+slimo.d3.walk
+---
 
 - kind sprite · one frame 32x48 · 8 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; core-modded: torso half translucent violet ooze with chrome ribs showing, tool belt; walk cycle, 8 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### slimo.d4.idle
+slimo.d4.idle
+---
 
 - kind sprite · one frame 32x48 · 4 frames · states single
 - anchor `anchor.slimo` · ramp ooze · status placeholder
 - prompt: side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; deep: a translucent purple ooze body with chrome inclusions drifting inside, no clothes, barely a face; idle breathing, 4 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### slimo.d4.walk
+slimo.d4.walk
+---
 
 - kind sprite · one frame 32x48 · 8 frames · states single
 - anchor `anchor.slimo` · ramp ooze · status placeholder
 - prompt: side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; deep: a translucent purple ooze body with chrome inclusions drifting inside, no clothes, barely a face; walk cycle, 8 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### slimo.d5.pile
+slimo.d5.pile
+---
 
 - kind sprite · one frame 32x32 · 2 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: a dissolved slimo: a pile of pink-grey flesh with purple veins and a few chrome pieces, breathing slightly, 2 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### slimo.carry
+slimo.carry
+---
 
 - kind sprite · one frame 32x48 · 6 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: side-view pixel art slimo (a person whose cyberware turned to purple-veined flesh), 1 px black selective outline, blue-shifted shadows, dark grimy clothes; a D2 carrying a wrapped body over the shoulder, slow walk, 6 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### ivan.idle
+ivan.idle
+---
 
 - kind sprite · one frame 48x64 · 4 frames · states a1, a2, a3, a4
 - anchor `anchor.slimo` · ramp ooze · status placeholder
 - prompt: Ivan Ooze: a tall D4 slimo of saturated purple ooze with chrome fragments at the shoulders, hot pink rim light, bald ridged head, theatrical stance; four Authority states from plain ooze to robed and chrome-shouldered; idle 4 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### ivan.walk
+ivan.walk
+---
 
 - kind sprite · one frame 48x64 · 8 frames · states a1, a2, a3, a4
 - anchor `anchor.slimo` · ramp ooze · status placeholder
 - prompt: Ivan Ooze walking along an ooze cord, 8 frames, purple ooze body, pink rim light
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### ivan.portrait
+ivan.portrait
+---
 
 - kind panel · one frame 64x64 · 1 frame · states a1, a2, a3, a4
 - anchor `anchor.slimo` · ramp ooze · status placeholder
 - prompt: portrait of Ivan Ooze for the bark box: purple ooze face, chrome flecks, a grin, hot pink highlights, black background
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### oath.scout
+oath.scout
+---
 
 - kind sprite · one frame 48x64 · 6 frames · states single
 - anchor `anchor.slimo` · ramp white · status placeholder
 - prompt: Oathkeeper in vestment-white ballistic robes with reliquary-gold trim and bulky Y2K military hardware, 1 px black selective outline, the only pure white in the game; a scout with a handheld white lamp, walk 6 frames
 - negative: purple, pink, grey robes, outline on light
 
-### oath.lamp
+oath.lamp
+---
 
 - kind sprite · one frame 48x64 · 6 frames · states single
 - anchor `anchor.slimo` · ramp white · status placeholder
 - prompt: Oathkeeper in vestment-white ballistic robes with reliquary-gold trim and bulky Y2K military hardware, 1 px black selective outline, the only pure white in the game; a lamp carrier with a tall pole lamp emitting hard white light, walk 6 frames
 - negative: purple, pink, grey robes
 
-### oath.flamer
+oath.flamer
+---
 
 - kind sprite · one frame 48x64 · 6 frames · states single
 - anchor `anchor.slimo` · ramp white · status placeholder
 - prompt: Oathkeeper in vestment-white ballistic robes with reliquary-gold trim and bulky Y2K military hardware, 1 px black selective outline, the only pure white in the game; a sanitation trooper with a flamer and bleach tank, walk 6 frames
 - negative: purple, pink, grey robes
 
-### oath.sprayer
+oath.sprayer
+---
 
 - kind sprite · one frame 48x64 · 6 frames · states single
 - anchor `anchor.slimo` · ramp white · status placeholder
 - prompt: Oathkeeper in vestment-white ballistic robes with reliquary-gold trim and bulky Y2K military hardware, 1 px black selective outline, the only pure white in the game; a Sweep's bleach sprayer with a back tank and a wand dripping pale bleach, walk 6 frames
 - negative: purple, pink, grey robes
 
-### raider.gang
+raider.gang
+---
 
 - kind sprite · one frame 48x64 · 6 frames · states single
 - anchor `anchor.slimo` · ramp mud · status placeholder
 - prompt: a topside gang raider come down a drain: patched rust-brown street leathers, scavenged plate, a sputtering hand torch and a scrap pistol, a sack over one shoulder, 1 px black selective outline, walk 6 frames
 - negative: white robes, purple ooze, clean chrome, anime proportions
 
-### rat.crawler
+rat.crawler
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.slimo` · ramp ooze · status placeholder
 - prompt: a feral sewerat: a lost symbiote collapsed into a purple-grey ooze animal with chrome teeth, 1 px black selective outline; low crawler, four stubby limbs, crawl 4 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### rat.burster
+rat.burster
+---
 
 - kind sprite · one frame 32x32 · 4 frames · states single
 - anchor `anchor.slimo` · ramp ooze · status placeholder
 - prompt: a feral sewerat: a lost symbiote collapsed into a purple-grey ooze animal with chrome teeth, 1 px black selective outline; a bloated burster, swollen violet sac, waddle 4 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### rat.maw
+rat.maw
+---
 
 - kind sprite · one frame 64x48 · 4 frames · states single
 - anchor `anchor.slimo` · ramp ooze · status placeholder
 - prompt: a feral sewerat: a lost symbiote collapsed into a purple-grey ooze animal with chrome teeth, 1 px black selective outline; a Maw that fills a corridor, a wide ooze mouth with rows of chrome teeth, breathing 4 frames
 - negative: green glow, smooth shading, outline on every edge, anime proportions
 
-### slimo.d1.crawl
+slimo.d1.crawl
+---
 
 - kind sprite · one frame 48x32 · 8 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle
 - negative: upright pose, green glow, outline on every edge
 
-### slimo.d2.crawl
+slimo.d2.crawl
+---
 
 - kind sprite · one frame 48x32 · 8 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle
 - negative: upright pose, green glow, outline on every edge
 
-### slimo.d3.crawl
+slimo.d3.crawl
+---
 
 - kind sprite · one frame 48x32 · 8 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle
 - negative: upright pose, green glow, outline on every edge
 
-### slimo.d4.crawl
+slimo.d4.crawl
+---
 
 - kind sprite · one frame 48x32 · 8 frames · states single
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: side-view pixel art slimo clinging to the tunnel's back wall and crawling on all fours, body stretched low and long, purple vein glow along the spine, 1 px black selective outline, 8-frame crawl cycle
 - negative: upright pose, green glow, outline on every edge
 
-### oath.envoy
+oath.envoy
+---
 
 - kind sprite · one frame 48x64 · 2 frames · states single
 - anchor `anchor.slimo` · ramp white · status placeholder
 - prompt: an Oathkeeper envoy in vestment-white robes with reliquary-gold trim, a lowered pole lamp unlit, one gloved hand open, standing still, 1 px black selective outline, idle 2 frames
 - negative: purple, pink, grey robes, weapon raised
 
-### faction.militia
+faction.militia
+---
 
 - kind sprite · one frame 32x48 · 4 frames · states single
 - anchor `anchor.slimo` · ramp industrial · status placeholder
@@ -893,56 +1017,64 @@ people.toml
 props.toml
 ----------
 
-### prop.locker
+prop.locker
+---
 
 - kind prop · one frame 32x32 · 1 frame · states closed, open, empty
 - anchor `anchor.item` · ramp industrial · status placeholder
 - prompt: a dented steel utility locker against a sewer wall, side view, one door, rust streaks, 1 px Void selective outline; closed / door ajar with a purple glint inside / door open and empty
 - negative: gradient, text, clean paint
 
-### prop.crate
+prop.crate
+---
 
 - kind prop · one frame 32x32 · 1 frame · states closed, open, empty
 - anchor `anchor.item` · ramp mud · status placeholder
 - prompt: a corporate shipping crate dumped in a sewer, side view, stencilled corner marks, pink-cyan reflective tape strip, 1 px Void selective outline; sealed / lid pried / emptied
 - negative: gradient, readable text, wood
 
-### prop.corpse
+prop.corpse
+---
 
 - kind prop · one frame 32x32 · 1 frame · states fresh, picked
 - anchor `anchor.slimo` · ramp flesh · status placeholder
 - prompt: a body lying face down on a sewer floor, side view, dark coat, one hand in the water, a faint purple vein glow on the skin; fresh / picked over with the coat open
 - negative: gore, blood pool, outline on every edge
 
-### prop.lamp
+prop.lamp
+---
 
 - kind prop · one frame 32x32 · 2 frames · states lit, dark
 - anchor `anchor.tile` · ramp neon · status placeholder
 - prompt: a broken caged work light hanging from a sewer ceiling, side view, acid-yellow emitter pixel and a short cone, 2-frame flicker; lit / dark and swinging
 - negative: soft glow gradient, lens flare, white light
 
-### prop.gas
+prop.gas
+---
 
 - kind prop · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp bile · status placeholder
 - prompt: a drifting pocket of sewer gas, side view, sickly yellow-green haze in 2-tone dither, 4-frame slow drift, transparent background
 - negative: solid fill, smoke plume, outline
 
-### prop.burrow
+prop.burrow
+---
 
 - kind prop · one frame 32x32 · 1 frame · states quiet, stirring
 - anchor `anchor.tile` · ramp mud · status placeholder
 - prompt: a sewerat burrow: a ragged hole chewed through sewer brick, side view, dark inside with two flesh-pink eye pixels; quiet / stirring with claws at the lip
 - negative: cartoon mouse hole, outline, gradient
 
-### prop.patrol_mark
+prop.patrol_mark
+---
 
 - kind prop · one frame 32x32 · 1 frame · states single
 - anchor `anchor.tile` · ramp white · status placeholder
 - prompt: an Oathkeeper waymark chalked on a sewer wall: a small white circle with a bar through it, vestment-white chalk on dark brick, worn
 - negative: cross, religious symbol, outline, glow
 
-### prop.pile
+prop.pile
+---
 
 - kind prop · one frame 32x32 · 1 frame · states full, picked
 - anchor `anchor.item` · ramp industrial · status placeholder
@@ -952,175 +1084,200 @@ props.toml
 structures.toml
 ---------------
 
-### struct.heart
+struct.heart
+---
 
 - kind sprite · one frame 96x128 · 1 frame · states t1, t2, t3, t4
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; the Heart: the first ooze node grown into a chamber; t1 a bulb in a culvert, t2 a bulb with scrap walls, t3 ooze arches with hung lamps, t4 a cathedral of cords with a chrome-ringed vault
 - negative: green, outline on every edge, gradient
 
-### struct.pit
+struct.pit
+---
 
 - kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Feeding Pit: a scrap-lined trough on a cord with chrome scrap in it
 - negative: green, outline on every edge, gradient
 
-### struct.pod
+struct.pod
+---
 
 - kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Hab-Pod: a sleeping capsule of plate and tarp with a round hatch
 - negative: green, outline on every edge, gradient
 
-### struct.bench
+struct.bench
+---
 
 - kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Tweaker Bench: a workbench of pipe and plate with hanging tools and a lamp
 - negative: green, outline on every edge, gradient
 
-### struct.market
+struct.market
+---
 
 - kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Seep Market: a stall under a grate with a canopy, crates, a counter
 - negative: green, outline on every edge, gradient
 
-### struct.gate
+struct.gate
+---
 
 - kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Sphincter Gate housing: a steel frame around an ooze ring in a narrow tunnel
 - negative: green, outline on every edge, gradient
 
-### struct.still
+struct.still
+---
 
 - kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Downer Still: copper coils, glass, a dripping spout, purple fluid
 - negative: green, outline on every edge, gradient
 
-### struct.relay
+struct.relay
+---
 
 - kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Relay: a pole of chrome with an ooze bulb at the top, a built nerve
 - negative: green, outline on every edge, gradient
 
-### struct.shrine
+struct.shrine
+---
 
 - kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Relay Shrine: chrome plates scratched with the Nerve's rules hung around a Relay's pole, a small ooze bulb lit above them
 - negative: green, outline on every edge, gradient
 
-### struct.bunkhouse
+struct.bunkhouse
+---
 
 - kind sprite · one frame 96x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Bunkhouse: six bunks under one tarp between two cords, blankets of sacking, a hung lamp
 - negative: green, outline on every edge, gradient
 
-### struct.forge
+struct.forge
+---
 
 - kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Scrap Forge: anvil, torch, a pile of plate, sparks
 - negative: green, outline on every edge, gradient
 
-### struct.lume_farm
+struct.lume_farm
+---
 
 - kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Lume Farm: glowing bulbs grown on a node in a wire trellis, purple light
 - negative: green, outline on every edge, gradient
 
-### struct.lung
+struct.lung
+---
 
 - kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Lung Housing: a breathing organ in a scrap housing with brine pipes and a cot beside it
 - negative: green, outline on every edge, gradient
 
-### struct.pen
+struct.pen
+---
 
 - kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Sewerat Pen: wire and tarp, a water dish, rat eyes in the dark
 - negative: green, outline on every edge, gradient
 
-### struct.vault
+struct.vault
+---
 
 - kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Reliquary Vault: a sealed ooze chamber with a chrome hatch
 - negative: green, outline on every edge, gradient
 
-### struct.rack
+struct.rack
+---
 
 - kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Stockpile Rack: scrap shelving on a cord with crates and sacks
 - negative: green, outline on every edge, gradient
 
-### struct.cold_store
+struct.cold_store
+---
 
 - kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Cold Store: a chilled housing with frost on the door and a dim bulb
 - negative: green, outline on every edge, gradient
 
-### struct.turret
+struct.turret
+---
 
 - kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Scrap Turret: a mounted scrap gun on a tripod with a seat
 - negative: green, outline on every edge, gradient
 
-### struct.watch_post
+struct.watch_post
+---
 
 - kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Watch Post: a ladder to a lamp hook with a tin shade
 - negative: green, outline on every edge, gradient
 
-### struct.memorial
+struct.memorial
+---
 
 - kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Memorial: names cut into a plate propped on the cord, a candle
 - negative: green, outline on every edge, gradient
 
-### struct.charter_board
+struct.charter_board
+---
 
 - kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Charter Board: a plank board with pinned paper and a lantern
 - negative: green, outline on every edge, gradient
 
-### struct.appraisal
+struct.appraisal
+---
 
 - kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; an Appraisal Table: a table with a loupe, a scale and a lamp
 - negative: green, outline on every edge, gradient
 
-### struct.route_board
+struct.route_board
+---
 
 - kind sprite · one frame 64x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Route Board: pinned route cards and a string map under a lamp
 - negative: green, outline on every edge, gradient
 
-### struct.lantern
+struct.lantern
+---
 
 - kind sprite · one frame 32x64 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a slimo-built structure in a sewer, side view, 1 px black selective outline, purple ooze housing where it meets the Mat, dim purple light; a Lantern Post: an oil lantern on a pipe post, warm light
 - negative: green, outline on every edge, gradient
 
-### struct.salt_works
+struct.salt_works
+---
 
 - kind sprite · one frame 64x96 · 1 frame · states t1, t2, t3
 - anchor `anchor.tile` · ramp industrial · status placeholder
@@ -1130,91 +1287,104 @@ structures.toml
 tiles.toml
 ----------
 
-### tile.concrete
+tile.concrete
+---
 
 - kind tile · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: wet concrete sewer wall tile, cracked, one dim purple light from the left, hard shadow, 2-tone dither, no outline
 - negative: gradient, outline, green, text
 
-### tile.brick
+tile.brick
+---
 
 - kind tile · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp mud · status placeholder
 - prompt: old sewer brick arch tile, mortar dark, bricks rust brown with one-pixel wet highlights, seamless
 - negative: gradient, outline, text
 
-### tile.pipe
+tile.pipe
+---
 
 - kind tile · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: horizontal rusted steel pipe run tile with a flange, grey steel with rust, one specular pixel line on top, seamless left to right
 - negative: gradient, outline, text
 
-### tile.water
+tile.water
+---
 
 - kind tile · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp drain · status placeholder
 - prompt: dark sewer water tile, deep blue with one line of flood-light highlight, 4-frame slow ripple, seamless
 - negative: white foam, bright blue, outline
 
-### tile.grate
+tile.grate
+---
 
 - kind tile · one frame 32x32 · 2 frames · states single
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: street grate seen from below, steel bars with a thin pink-and-cyan neon leak between them, frame 2 brighter
 - negative: full daylight, white light, outline on bars
 
-### tile.slab
+tile.slab
+---
 
 - kind tile · one frame 32x32 · 2 frames · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: a poured concrete slab sealing a vertical sewer shaft between two levels, rebar ends, a stencilled number, cold and heavy, 2-tone dither, no outline
 - negative: gradient, outline, green, text
 
-### tile.collapse
+tile.collapse
+---
 
 - kind tile · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp mud · status placeholder
 - prompt: collapsed rubble and rebar tile blocking a tunnel, brown rock, grey rebar ends, dust
 - negative: outline, gradient
 
-### tile.deposit
+tile.deposit
+---
 
 - kind tile · one frame 32x32 · 4 frames · states single
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: a pile of scrap chrome and cables half buried in sewer muck, grey metal with a few purple flecks, diggable
 - negative: outline, gradient, clean metal
 
-### tile.salt
+tile.salt
+---
 
 - kind tile · one frame 32x32 · 2 frames · states single
 - anchor `anchor.tile` · ramp white · status placeholder
 - prompt: a thin line of coarse road salt poured across a sewer floor tile, chalk white grains on dark ground
 - negative: snow, glow, outline
 
-### tile.bg.wall
+tile.bg.wall
+---
 
 - kind tile · one frame 64x64 · 2 frames · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: distant cavern wall for a parallax background, very dark concrete and rock, almost black, faint purple ambient from below
 - negative: detail, outline, bright
 
-### tile.bg.tunnel
+tile.bg.tunnel
+---
 
 - kind tile · one frame 64x64 · 2 frames · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
 - prompt: a distant tunnel mouth for a parallax background, black opening in dark concrete, one faint pink neon point far inside
 - negative: detail, outline, bright
 
-### tile.fg.pipes
+tile.fg.pipes
+---
 
 - kind tile · one frame 64x32 · 2 frames · states single
 - anchor `anchor.tile` · ramp industrial · status placeholder
 - prompt: foreground pipe run silhouette for parallax, nearly black steel with one specular line, drips
 - negative: detail, bright, outline
 
-### tile.fg.cables
+tile.fg.cables
+---
 
 - kind tile · one frame 64x32 · 2 frames · states single
 - anchor `anchor.tile` · ramp noir · status placeholder
@@ -1224,49 +1394,56 @@ tiles.toml
 ui.toml
 -------
 
-### ui.frame
+ui.frame
+---
 
 - kind ui · one frame 48x48 · 1 frame · states single
 - anchor `anchor.item` · ramp noir · status placeholder
 - prompt: a 9-slice UI frame: 1 px Void outer line, 1 px Rebar inner line, Sump fill, hard corners, no glow
 - negative: rounded corners, gradient, glow, bevel
 
-### ui.button
+ui.button
+---
 
 - kind ui · one frame 64x16 · 1 frame · states idle, hover, down
 - anchor `anchor.item` · ramp noir · status placeholder
 - prompt: a 9-slice button: Void line, Culvert fill, hover brightens the line to Cyan, down fills Culvert darker
 - negative: rounded, gradient
 
-### ui.gauge.attention
+ui.gauge.attention
+---
 
 - kind ui · one frame 96x8 · 1 frame · states single
 - anchor `anchor.item` · ramp white · status placeholder
 - prompt: a thin horizontal gauge, Void track, fills Vestment White, three tick marks for Patrol Sweep Cleansing
 - negative: gradient
 
-### ui.gauge.ooze
+ui.gauge.ooze
+---
 
 - kind ui · one frame 96x8 · 1 frame · states single
 - anchor `anchor.item` · ramp ooze · status placeholder
 - prompt: a thin horizontal gauge, Void track, fills purple ooze with a pink highlight pixel line
 - negative: gradient
 
-### ui.cursor
+ui.cursor
+---
 
 - kind ui · one frame 16x16 · 1 frame · states point, grab, dig, sever
 - anchor `anchor.item` · ramp neon · status placeholder
 - prompt: a 16 px pixel cursor: Acid Yellow arrow with Void outline; grab hand; dig claw; a Hot Pink sever blade
 - negative: anti-aliasing, drop shadow
 
-### ui.font.mono
+ui.font.mono
+---
 
 - kind ui · one frame 4x6 · 96 frames · states single
 - anchor `anchor.item` · ramp industrial · status placeholder
 - prompt: placeholder is the built-in 3x5 glyph sheet; the shipped font is a 5x7 pixel monospace designed in Phase F
 - negative: -
 
-### icon.item
+icon.item
+---
 
 - kind icon · one frame 32x32 · 1 frame · states single
 - anchor `anchor.item` · ramp industrial · status placeholder
