@@ -32,6 +32,9 @@ pub const TERM_SHIFTS: u8 = 10;
 pub const PETITION_SHIFTS: u8 = 5;
 /// Shifts of a need under 30 before the foreman petitions.
 pub const PETITION_AFTER: u8 = 2;
+/// A shift of desk work in minutes (Full Design v3.21, this design's): a researcher's points and an Appraisal Table's
+/// names come a tenth of a shift's each work cycle, a player's shift being about ten minutes.
+pub const MINUTES_A_SHIFT: f32 = 10.0;
 /// Nutrient a cell needs for a meal, and what the meal takes.
 /// A meal from the Mat: the signalled tissue at and about the home must hold it between them, and it is taken from
 /// them, the richest tile first (v3.12: `rose city` measured the tissue round a fed Heart at 0.13–0.19, so the 0.2
@@ -779,6 +782,9 @@ pub struct Colony {
     /// slimo -> structure: worked the next shift over its priorities, spent with the shift (v3.12)
     #[serde(default)]
     pub orders: HashMap<u32, u32>,
+    /// the desk work's fractions carried between work cycles: research points, appraisals (Full Design v3.21)
+    #[serde(default)]
+    pub desk: [f32; 2],
     /// the tree, the strain's classes and Strainbook, the collections (Full Design v3.18, Progression; save v14)
     #[serde(default)]
     pub progress: progress::Progress,
@@ -860,6 +866,7 @@ impl Colony {
             cuts: Vec::new(),
             salt_left: 0,
             orders: HashMap::new(),
+            desk: [0.0; 2],
             progress: progress::Progress::default(),
             nerves: Vec::new(),
             nerve: NerveState::default(),
@@ -2057,7 +2064,60 @@ impl Colony {
         let mut out = ShiftOutcome::default();
         let (builders, cutters) = self.crews(defs, roster, jobs);
         self.raise(defs, mat, builders, cutters, pay, &mut out);
+        self.desk_work(defs, roster, jobs, &mut out);
         out
+    }
+
+    /// The minute's desk work (Full Design v3.21, The living city): the Tweakers' Bench slots, the researchers'
+    /// points and the appraisers' names, from the plan's jobs on powered structures — research and appraisal a tenth
+    /// of a shift's a minute (a player's shift is about ten), the fraction carried to the next.
+    fn desk_work(&mut self, defs: &StructureFile, roster: &Roster, jobs: &[(u32, Job, u32)], out: &mut ShiftOutcome) {
+        let (mut research, mut identify) = (0.0f32, 0.0f32);
+        for &(slimo, job, sid) in jobs {
+            let (Some(r), Some(s)) = (roster.get(slimo), self.get(sid)) else { continue };
+            if s.dark {
+                continue;
+            }
+            match job {
+                Job::Tweak => out.bench_slots += 1,
+                Job::Research => research += r.skill(people::Skill::Tweak) as f32,
+                Job::Appraise => identify += defs.structure[s.def].value_at("identify", s.tier).max(0) as f32,
+                _ => {}
+            }
+        }
+        self.desk[0] += research / MINUTES_A_SHIFT;
+        self.desk[1] += identify / MINUTES_A_SHIFT;
+        let (points, names) = (self.desk[0].floor(), self.desk[1].floor());
+        self.desk[0] -= points;
+        self.desk[1] -= names;
+        out.identifies = names as u32;
+        out.research_points = points as u32;
+        if out.research_points > 0 {
+            self.research(defs, out);
+        }
+    }
+
+    /// Research points into the project (Full Design v3.18, Research): a node done sets its flags' effects at once.
+    fn research(&mut self, defs: &StructureFile, out: &mut ShiftOutcome) {
+        let Some(done) = self.progress.tech.work(out.research_points, self.shift) else { return };
+        // a node that raises HP raises what stands at once (Full Design v3.18, Research)
+        if let progress::Done::Node(id) = &done {
+            let flags = progress::TechFile::shipped().get(id).map(|n| n.flags.clone()).unwrap_or_default();
+            for s in self.structures.iter_mut() {
+                let home = matches!(defs.structure[s.def].id.as_str(), "pod" | "bunkhouse");
+                if flags.iter().any(|f| f == "homes_hp_x2") && home {
+                    s.hp *= 2;
+                }
+                if flags.iter().any(|f| f == "hp_x1_5") {
+                    s.hp = s.hp * 3 / 2;
+                }
+            }
+        }
+        out.lines.push(match &done {
+            progress::Done::Node(id) => format!("researched: {}", progress::TechFile::shipped().get(id).map_or(id.as_str(), |n| n.name.as_str())),
+            progress::Done::Opened(b, t) => format!("{} tier {t} is open", progress::tech::BRANCH_NAMES[*b]),
+        });
+        out.research_done = Some(done);
     }
 
     /// The builders' work (Full Design v3.21, The living city), first asked first: a ghost is paid by its first Build
@@ -2221,18 +2281,10 @@ impl Colony {
             let d = &defs.structure[s.def];
             match job {
                 Job::Build => {}
-                Job::Tweak => {
-                    out.bench_slots += 1;
-                    out.work.crafts_by.push(slimo);
-                }
-                Job::Research => {
-                    out.research_points += r.skill(people::Skill::Tweak) as u32;
-                    out.work.research_by.push(slimo);
-                }
-                Job::Appraise => {
-                    out.identifies += d.value_at("identify", s.tier).max(0) as u32;
-                    out.work.identified_by.push(slimo);
-                }
+                // the desk work is the minute's (work_cycle); the shift trains whoever did it
+                Job::Tweak => out.work.crafts_by.push(slimo),
+                Job::Research => out.work.research_by.push(slimo),
+                Job::Appraise => out.work.identified_by.push(slimo),
                 Job::Haul => {
                     if d.id == "market" {
                         out.sellers.push(slimo);
@@ -2259,29 +2311,6 @@ impl Colony {
             }
             if d.id == "lung" {
                 out.brine += d.value_at("brine", s.tier).max(0) as u32;
-            }
-        }
-        // Research: the points go to the project standing (Full Design v3.18)
-        if out.research_points > 0 {
-            if let Some(done) = self.progress.tech.work(out.research_points, self.shift) {
-                // a node that raises HP raises what stands at once (Full Design v3.18, Research)
-                if let progress::Done::Node(id) = &done {
-                    let flags = progress::TechFile::shipped().get(id).map(|n| n.flags.clone()).unwrap_or_default();
-                    for s in self.structures.iter_mut() {
-                        let home = matches!(defs.structure[s.def].id.as_str(), "pod" | "bunkhouse");
-                        if flags.iter().any(|f| f == "homes_hp_x2") && home {
-                            s.hp *= 2;
-                        }
-                        if flags.iter().any(|f| f == "hp_x1_5") {
-                            s.hp = s.hp * 3 / 2;
-                        }
-                    }
-                }
-                out.lines.push(match &done {
-                    progress::Done::Node(id) => format!("researched: {}", progress::TechFile::shipped().get(id).map_or(id.as_str(), |n| n.name.as_str())),
-                    progress::Done::Opened(b, t) => format!("{} tier {t} is open", progress::tech::BRANCH_NAMES[*b]),
-                });
-                out.research_done = Some(done);
             }
         }
         // the Medic slots treat: each treats one patient, the most injured member first
@@ -3223,8 +3252,10 @@ mod tests {
                 assert!(other.utility(&t, Job::Tweak).unwrap_or(-1.0) <= u + 1e-6, "an idle slimo wanted the Bench more");
             }
         }
-        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
+        // the minute works the Bench's slot (v3.21); the shift's end trains whoever worked it
+        let o = c.work_cycle(&defs, &mut mat, &r, &jobs, &mut |_| true);
         assert_eq!(o.bench_slots, 1);
+        let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
         assert_eq!(o.work.crafts_by.len(), 1);
         // signal is power: the cord under the Bench dies, and the shift's end finds it dark — no work, no slot
         let bench = c.structures.iter().find(|s| defs.structure[s.def].id == "bench").map(|s| (s.id, s.y as usize * mat.w + s.x as usize)).unwrap();

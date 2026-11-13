@@ -2,8 +2,8 @@ extends ScreenBase
 ## The Tweaker Bench (Full Design v3.5): recipes by craft tag from data/recipes.toml through RoseStash. Recipe list
 ## by tier left (tier 1 open, 2-4 locked until blueprints); the chosen recipe's slots centre with a picker of
 ## Stash items that carry the slot's tag; outcome preview right with every stat against the base, condition and
-## provenance; the queue below with shifts left. CRAFT takes the parts out of the Stash; CANCEL returns them; jobs
-## finish when the shift ends. Craft on a Stash card arrives with that item pre-slotted (Sim.bench_slot).
+## provenance; the queue below with the minutes left. CRAFT takes the parts out of the Stash; CANCEL returns them; a
+## Tweaker in a Bench slot works a job a minute at a time (Full Design v3.21), a recipe's shift ten minutes. Craft on a Stash card arrives with that item pre-slotted (Sim.bench_slot).
 ## RESEARCH (Full Design v3.18, Research): the tree as three columns of four tiers, a node a tile — researched lit,
 ## open with its points and cost, locked under its blueprint; the project standing, the picked node's card with
 ## RESEARCH; the blueprints in the Stash with STUDY. Every rule is the progress crate's (RoseSim.tech).
@@ -279,8 +279,8 @@ func _draw_slots() -> void:
 	if r.is_empty():
 		make_label(slots_frame, "pick a recipe", Vector2(6, 4), UiTheme.DUST)
 		return
-	var shifts := int(r.shifts)
-	make_label(slots_frame, "%s   tier %d   %d shift%s" % [String(r.name).to_upper(), int(r.tier), shifts, "" if shifts == 1 else "s"], Vector2(6, 4), UiTheme.CYAN)
+	var minutes := int(r.shifts) * 10
+	make_label(slots_frame, "%s   tier %d   %d min of a Tweaker" % [String(r.name).to_upper(), int(r.tier), minutes], Vector2(6, 4), UiTheme.CYAN)
 	make_label(slots_frame, "makes " + String(r.product_name) + (("  x%d" % int(r.count)) if int(r.count) > 1 else ""), Vector2(6, 16), UiTheme.DUST)
 	var slots: Array = r.slots
 	for i in slots.size():
@@ -405,9 +405,9 @@ func _draw_queue() -> void:
 			make_label(queue_frame, "+%d more" % (jobs.size() - 7), Vector2(6, y), UiTheme.DUST)
 			break
 		var idx := int(j.index)
-		var left := int(j.shifts_left)
+		var left := int(j.get("minutes_left", int(j.shifts_left) * 10))
 		var parts: PackedStringArray = j.parts
-		make_label(queue_frame, "%s   %d shift%s left" % [String(j.name).to_upper(), left, "" if left == 1 else "s"], Vector2(6, y), UiTheme.CHALK)
+		make_label(queue_frame, "%s   %d min left" % [String(j.name).to_upper(), left], Vector2(6, y), UiTheme.CHALK)
 		make_label(queue_frame, "from " + ", ".join(parts), Vector2(160, y), UiTheme.DUST)
 		make_button(queue_frame, "CANCEL", Vector2(416, y - 3), func():
 			stash.cancel_job(idx)
@@ -419,4 +419,4 @@ func _draw_queue() -> void:
 		y += 12
 	if jobs.is_empty():
 		make_label(queue_frame, "nothing on the Bench", Vector2(6, y), UiTheme.DUST)
-	make_label(queue_frame, "jobs finish when the shift ends, after a run", Vector2(6, 128), UiTheme.DUST)
+	make_label(queue_frame, "a Tweaker in a Bench slot works the first jobs, a minute at a time", Vector2(6, 128), UiTheme.DUST)

@@ -27,6 +27,10 @@ var buildings: Node2D  # the colony's structures and ghosts, drawn from RoseSim.
 var threat_fx: Node2D  # bleach, Bloom tissue and the white light, under the structures
 var threat_bodies: Node2D  # Oathkeepers, crawlers and tamed crawlers, over the crowd
 var flooded := {}      # tile -> true: what the Flood has under water now (repainted when it changes)
+var fresh_fx: Node2D   # new Mat tissue glows for a moment, so a feed's growth shows
+var fresh := {}        # tile -> msec it grew
+var hy_seen: PackedByteArray  # the hyphae as last painted, to tell new tissue from changed
+const FRESH_MS := 3000
 var gauges: Node2D     # Attention at each reached grate, in every view (Full Design: the Stack view keeps them)
 var districts: Node2D  # hub rings and names, District view
 var show_districts := false
@@ -64,6 +68,9 @@ func _ready() -> void:
 	threat_fx = Node2D.new()
 	threat_fx.draw.connect(_draw_threat_fx)
 	add_child(threat_fx)
+	fresh_fx = Node2D.new()
+	fresh_fx.draw.connect(_draw_fresh)
+	add_child(fresh_fx)
 	buildings = Node2D.new()
 	buildings.draw.connect(_draw_buildings)
 	add_child(buildings)
@@ -172,6 +179,8 @@ func full_paint() -> void:
 	var sub: PackedByteArray = sim.substrate()
 	var hy: PackedByteArray = sim.hyphae()
 	var sig: PackedFloat32Array = sim.signal()
+	hy_seen = hy.duplicate()
+	fresh = {}
 	substrate.clear()
 	matlayer.clear()
 	for y in range(top_row, h):
@@ -206,7 +215,12 @@ func _on_tick() -> void:
 		var hy: PackedByteArray = sim.hyphae()
 		var sig: PackedFloat32Array = sim.signal()
 		var sub: PackedByteArray = sim.substrate()
+		var now := Time.get_ticks_msec()
 		for i in changed:
+			if i < hy_seen.size():
+				if hy_seen[i] == 0 and hy[i] != 0:
+					fresh[i] = now
+				hy_seen[i] = hy[i]
 			if i / w < top_row:
 				continue
 			# a breach opens a slab: its tiles change substrate
@@ -259,7 +273,7 @@ func set_view_level(i: int) -> void:
 	view_level = i
 	var stack := i == 2
 	traffic_sprite.visible = stack
-	for layer in [substrate, matlayer, props, threat_fx, buildings, cargo, crowd, threat_bodies]:
+	for layer in [substrate, matlayer, props, threat_fx, fresh_fx, buildings, cargo, crowd, threat_bodies]:
 		layer.visible = not stack
 	if stack:
 		paint_traffic()
@@ -522,6 +536,24 @@ func _repaint_flood(sim: RoseSim) -> void:
 
 ## The Flood's risen water, bleach on the Mat as a pale stain, a Bloom's tissue in Pond Scum, and the white light:
 ## each lamp's disc of tiles (the rule the threats crate burns by) in hard Vestment White.
+func _process(_delta: float) -> void:
+	if not fresh.is_empty():
+		fresh_fx.queue_redraw()
+
+## New Mat tissue: an acid outline that fades over FRESH_MS, so a feed's growth reads at a glance (Full Design v3.21,
+## Translocation; the ooze pink of the first try vanished on the Mat's own purple).
+func _draw_fresh() -> void:
+	var now := Time.get_ticks_msec()
+	for i in fresh.keys():
+		var age: int = now - int(fresh[i])
+		if age >= FRESH_MS:
+			fresh.erase(i)
+			continue
+		var a := 1.0 - float(age) / FRESH_MS
+		var r := Rect2(Vector2(int(i) % w, int(i) / w) * TILE, Vector2(TILE, TILE))
+		fresh_fx.draw_rect(r, Color(UiTheme.ACID, 0.3 * a))
+		fresh_fx.draw_rect(r.grow(-1), Color(UiTheme.ACID, a), false, 2.0)
+
 func _draw_threat_fx() -> void:
 	if not bind_sim or view_level == 2:
 		return

@@ -7,6 +7,14 @@ use mat::sim::hy;
 
 use crate::{Level, World};
 
+/// A player's shift: ten minutes of the city's clock (the desk work is the minute's, v3.21), then its end.
+fn play_shift(w: &mut World) {
+    for _ in 0..(colony::MINUTES_A_SHIFT as u64 * crate::shift::WORK_TICKS) {
+        w.tick();
+    }
+    w.end_shift();
+}
+
 fn world() -> World {
     World::found(11, ItemTable::from_toml(ITEMS_TOML).unwrap())
 }
@@ -441,7 +449,7 @@ fn a_blueprint_studied_opens_its_tier_and_the_node_researched_lets_its_structure
     assert!(!w.stash.all_items().any(|it| it.def == bp), "the blueprint is spent");
     let mut shifts = 0;
     while w.colony.progress.tech.open[0] < 2 && shifts < 10 {
-        w.end_shift();
+        play_shift(&mut w);
         shifts += 1;
     }
     assert_eq!(w.colony.progress.tech.open[0], 2, "Chrome tier 2 is open");
@@ -459,7 +467,7 @@ fn a_blueprint_studied_opens_its_tier_and_the_node_researched_lets_its_structure
     }
     crate::grow::pick_project(&mut w.colony, &mut w.stash, &mut w.ledger, &w.table, progress::Project::Node("c2_gate".into())).unwrap();
     while !w.colony.progress.tech.has("c2_gate") && shifts < 40 {
-        w.end_shift();
+        play_shift(&mut w);
         shifts += 1;
     }
     assert!(w.colony.progress.tech.has("c2_gate"));

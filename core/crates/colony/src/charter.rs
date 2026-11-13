@@ -32,8 +32,8 @@ pub fn wave_speed(mat: &MatSim) -> u32 {
     (16.0 + 32.0 * mat.genome.0[mat::genome::CONDUCTANCE]).round() as u32
 }
 
-/// D5 dissolved: nutrient at the Heart's Pit (Pass 2: 0.30 of Street grade) and the per-event hit without the Rite.
-pub const DISSOLUTION_NUTRIENT: f32 = 0.30;
+/// D5 dissolved: nutrient at the Heart's Pit (Pass 2: "0.30 of Street grade", today's Uncommon Chrome, whose feed is 1.8 since v3.21) and the per-event hit without the Rite.
+pub const DISSOLUTION_NUTRIENT: f32 = 1.8;
 pub const DISSOLUTION_HIT: i32 = -10;
 
 #[derive(Clone, Debug, Deserialize)]

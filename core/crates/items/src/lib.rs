@@ -480,12 +480,12 @@ mod tests {
         let def = t.get("chr_cortex_shunt").unwrap();
         let mut inst = ItemInstance::new(t.id_of("chr_cortex_shunt").unwrap());
         let (n, v, drift) = feed_value(def, &inst);
-        assert!((n - 0.45).abs() < 1e-6);
+        assert!((n - 2.7).abs() < 1e-6);
         assert!((v[8] - 0.7).abs() < 1e-6); // conductance
         assert!((drift - 0.07).abs() < 1e-6);
         wear(&mut inst, 85);
         assert_eq!(inst.condition, 15);
-        assert!((feed_value(def, &inst).0 - 0.225).abs() < 1e-6);
+        assert!((feed_value(def, &inst).0 - 1.35).abs() < 1e-6);
     }
 
     #[test]

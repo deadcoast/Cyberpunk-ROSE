@@ -283,8 +283,8 @@ func _draw_card() -> void:
 		make_label(card, "SELL   %d e at %s%s" % [quote, Sim.market_name(market), "  (blind 40%)" if not bool(it.identified) else ""], Vector2(6, y), UiTheme.ACID)
 	var feed := float(it.feed)
 	if feed > 0.0:
-		var cells_ := feed * float(Sim.ensure().cells_per_nutrient())
-		make_label(card, "FEED   %.2f nutrient  %d cells of Mat  at %s" % [feed, int(round(cells_)), Sim.pit_name(pit)], Vector2(6, y + 12), UiTheme.OOZE_GLOW)
+		var tiles := int(Sim.ensure().feed_growth(feed))
+		make_label(card, "FEED   %.2f nutrient  %d tiles as it lands  at %s" % [feed, tiles, Sim.pit_name(pit)], Vector2(6, y + 12), UiTheme.OOZE_GLOW)
 	else:
 		make_label(card, "FEED   the Mat does not eat this", Vector2(6, y + 12), UiTheme.DUST)
 	var tags: PackedStringArray = it.get("tags", PackedStringArray())

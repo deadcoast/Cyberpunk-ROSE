@@ -325,7 +325,8 @@ pub const LOOK_TICKS: u64 = 4;
 /// the builders' work paid from the Stash, and the homes handed out again when a bed went up or someone joined.
 /// Returns the plan the movers now walk.
 #[allow(clippy::too_many_arguments)]
-pub fn work_cycle(city: &mut City, colony: &mut Colony, defs: &StructureFile, folk: Folk, stash: &mut Stash, ledger: &mut Ledger, table: &ItemTable, flush_mult: f32, day: u32, log: &mut CityLog) -> Vec<(u32, people::Job, u32)> {
+pub fn work_cycle(city: &mut City, colony: &mut Colony, defs: &StructureFile, folk: Folk, store: Store, flush_mult: f32, day: u32, log: &mut CityLog) -> Vec<(u32, people::Job, u32)> {
+    let Store { stash, ledger, bench, table, recipes } = store;
     if city.synthetic() {
         return Vec::new();
     }
@@ -342,6 +343,32 @@ pub fn work_cycle(city: &mut City, colony: &mut Colony, defs: &StructureFile, fo
     let tick = city.tick;
     for line in &out.lines {
         log.push(tick, Class::Landing, line.clone());
+    }
+    // the desk work, the minute's (Full Design v3.21): the Appraisal Table names, the Bench's slots work their jobs
+    if out.identifies > 0 {
+        let named = store::identify_n(stash, out.identifies as usize);
+        let best = named.iter().map(|&d| table.def(d).tier).max();
+        if best.is_some_and(|t| t >= items::Tier::Blackline) {
+            log.bark("blackline", &[]);
+        } else if best == Some(items::Tier::Rare) {
+            log.bark("rare", &[]);
+        }
+        if !named.is_empty() {
+            let names: Vec<String> = named.iter().map(|&d| table.def(d).name.clone()).collect();
+            log.push(tick, Class::Landing, format!("the Appraisal Table named {}", self::named(&names)));
+        }
+    }
+    let bench_tier = colony.structures.iter().filter(|s| s.built && defs.structure[s.def].id == "bench").map(|s| s.tier).max().unwrap_or(0);
+    bench.tier_open = colony.progress.tech.recipe_tier(bench_tier);
+    for product in bench.work_minute(table, recipes, out.bench_slots as usize) {
+        let name = table.def(product.def).name.clone();
+        match stash.grid.auto_place(table.def(product.def), product.clone()) {
+            Ok(_) => {
+                log.push(tick, Class::Landing, format!("the Bench made {name}"));
+                bench.made.push(name);
+            }
+            Err(_) => bench.waiting.push(product),
+        }
     }
     // the Stash's orders ride now, not at the run's end: a Feed reaches its Pit and a Sell its stall within the minute
     for line in cargo::dispatch_orders(city, colony, defs, stash, ledger, table) {
@@ -363,13 +390,18 @@ fn newcomers(city: &mut City, colony: &Colony, defs: &StructureFile, roster: &mu
     let mut rng = mat::rng::Pcg32::new(0xF1A5_0000 ^ ((cycle as u64) << 16) ^ roster.next_id as u64);
     roster.census = colony.progress.tech.flag("census");
     roster.d4_runs = colony.progress.tech.flag("d4_runs");
-    let mut came = roster.flush(traits, names, &mut rng, cycle, day, flush_mult);
-    let further: Vec<(u16, u8)> = city.markets.iter().zip(city.market_cells.iter()).skip(1).filter(|(_, c)| c.is_some()).map(|(g, _)| (*g as u16, city.sim.stratum_at(*g))).collect();
-    came += roster.flush_grates(traits, names, &mut rng, cycle, day, &further, flush_mult);
-    if came > 0 {
-        log.push(tick, Class::Landing, format!("{came} newcomer{} came down a grate", if came == 1 { "" } else { "s" }));
-    }
+    // the city's first grate always (its bodies wait there until the Mat reaches it), and every further grate reached
+    let grates: Vec<(u16, u8)> = city.markets.iter().zip(city.market_cells.iter()).enumerate().filter(|(k, (_, c))| *k == 0 || c.is_some()).map(|(_, (g, _))| (*g as u16, city.sim.stratum_at(*g))).collect();
+    let tier = colony::Colony::city_tier(roster.sleepers());
+    // the drain sends the beds standing free past those already waiting, and a body a batch more (Recruitment)
     let (beds, taken) = colony.bed_count(defs);
+    let waiting = roster.waiting.iter().filter(|(r, _)| r.depth != people::Depth::D5).count();
+    let room = ((beds - taken).max(0) as usize).saturating_sub(waiting);
+    let (came, at) = roster.flush(traits, names, &mut rng, cycle, day, &grates, tier, flush_mult, room);
+    if came > 0 {
+        let turned = if roster.turned > 0 { format!("; {} more turned back, no beds", roster.turned) } else { String::new() };
+        log.push(tick, Class::Landing, format!("{came} newcomer{} came down {}{turned}", if came == 1 { "" } else { "s" }, if at == 1 { "a grate".to_string() } else { format!("{at} grates") }));
+    }
     let reached = city.market_cells.iter().any(|m| m.is_some());
     let (joined, feral, piles) = roster.shelter((beds - taken).max(0) as usize, reached);
     // the flesh piles feed the Mat where they came down: the first reached grate's cell, as a Dissolution's worth

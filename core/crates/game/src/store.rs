@@ -220,12 +220,14 @@ pub struct Closed {
     pub waiting: usize,
 }
 
-/// Shift end on the Stash's side, after the cargo left: the Bench's Tweak slots finish (a slot finishes one job a
-/// shift) into the grid (or the Heart's held cargo) and the ledger closes the shift, each market's glut recovering
-/// faster by `faster` (its Seep Market's bonus).
+/// Shift end on the Stash's side, after the cargo left: what the Bench made in the shift's minutes and what waited for
+/// room come into the grid (or wait on), `bench_slots` jobs lose a shift, and the ledger closes the shift, each
+/// market's glut recovering faster by `faster` (its Seep Market's bonus).
 pub fn close(stash: &mut Stash, ledger: &mut Ledger, bench: &mut BenchQueue, table: &ItemTable, recipes: &RecipeFile, bench_slots: usize, faster: &[f32]) -> Closed {
     let products = bench.end_shift_slots(table, recipes, bench_slots);
-    let mut c = Closed::default();
+    // what the minutes made and placed is the shift's too (Full Design v3.21, The living city)
+    let mut c = Closed { crafted: std::mem::take(&mut bench.made), ..Default::default() };
+    c.placed = c.crafted.len() as u32;
     for p in products {
         c.crafted.push(table.def(p.def).name.clone());
         match stash.grid.auto_place(table.def(p.def), p.clone()) {

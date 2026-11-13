@@ -216,7 +216,8 @@ impl World {
         if self.city.tick.is_multiple_of(shift::WORK_TICKS) {
             let (flush_mult, _) = crate::campaign::mults(&self.campaign, &self.city.sim);
             let folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
-            self.plan = shift::work_cycle(&mut self.city, &mut self.colony, &self.defs, folk, &mut self.stash, &mut self.ledger, &self.table, flush_mult, self.day, &mut self.log);
+            let store = Store { stash: &mut self.stash, ledger: &mut self.ledger, bench: &mut self.bench, table: &self.table, recipes: &self.recipes };
+            self.plan = shift::work_cycle(&mut self.city, &mut self.colony, &self.defs, folk, store, flush_mult, self.day, &mut self.log);
         }
         if self.city.tick.is_multiple_of(shift::LOOK_TICKS) {
             crate::campaign::onboard(&mut self.campaign, &self.city, &self.colony, &self.defs, &self.roster, &self.ledger, &self.economy, &self.threats);

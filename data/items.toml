@@ -10,7 +10,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { lume = 0.3 }
 tags = ["optic"]
 codex = "a fused cheap eye; the lens survived, the brain did not"
@@ -23,7 +23,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { thrift = 0.2 }
 tags = ["housing"]
 codex = "street dental chrome, molars still in it"
@@ -36,7 +36,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { branching = 0.3 }
 tags = ["servo"]
 codex = "five of them, one still twitching"
@@ -49,7 +49,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { conductance = 0.2 }
 tags = ["conductor"]
 codex = "the port that took the vaccine first"
@@ -62,7 +62,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { thrift = 0.3 }
 tags = ["housing"]
 codex = "a single vertebral anchor, re-organified around the thread"
@@ -75,7 +75,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { chrome = 0.2 }
 tags = ["weave"]
 codex = "a hand's worth of armour weave gone soft"
@@ -88,7 +88,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { lume = 0.2 }
 tags = ["conductor"]
 codex = "a voice modulator stuck on one tone"
@@ -101,7 +101,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { vigor = 0.3 }
 tags = ["servo"]
 codex = "runner's chrome; the gel inside has gone purple"
@@ -114,7 +114,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { branching = 0.2 }
 tags = ["conductor"]
 codex = "audio implant, cheap, still warm"
@@ -127,7 +127,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { conductance = 0.3 }
 tags = ["conductor"]
 codex = "a power pass-through for cheap arm mods"
@@ -140,7 +140,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { conductance = 0.2 }
 tags = ["conductor"]
 codex = "a metre of under-skin cable"
@@ -153,7 +153,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { appetite = 0.3 }
 tags = ["board"]
 codex = "the chip that let a chromehead keep going"
@@ -166,7 +166,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { thrift = 0.4 }
 tags = ["filter"]
 codex = "a filter organ with a corporate logo on it"
@@ -179,7 +179,7 @@ tier = "common"
 size = [1, 1]
 weight = 0.6
 value = 4
-feed = 0.18
+feed = 1.08
 bias = { vigor = 0.2 }
 tags = ["blade"]
 codex = "climbing chrome, blunted"
@@ -192,7 +192,7 @@ tier = "uncommon"
 size = [1, 1]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { lume = 0.5 }
 tags = ["optic"]
 codex = "working low-light optic, scratched"
@@ -205,7 +205,7 @@ tier = "uncommon"
 size = [1, 2]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { vigor = 0.4, chrome = 0.2 }
 tags = ["housing", "servo"]
 codex = "a forearm chassis, intact"
@@ -218,7 +218,7 @@ tier = "uncommon"
 size = [1, 1]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { vigor = 0.5 }
 tags = ["board"]
 codex = "clocked for bar fights"
@@ -231,7 +231,7 @@ tier = "uncommon"
 size = [1, 1]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { thrift = 0.5 }
 tags = ["filter"]
 codex = "a sewer-diver's lung mod"
@@ -244,7 +244,7 @@ tier = "uncommon"
 size = [1, 1]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { conductance = 0.5 }
 tags = ["conductor", "board"]
 codex = "a clean interface port"
@@ -257,7 +257,7 @@ tier = "uncommon"
 size = [1, 2]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { thrift = 0.3, chrome = 0.3 }
 tags = ["housing"]
 codex = "a rib replaced with a radiator"
@@ -270,7 +270,7 @@ tier = "uncommon"
 size = [1, 1]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { lume = 0.4, conductance = 0.2 }
 tags = ["cell"]
 codex = "an implant battery, half charge"
@@ -283,7 +283,7 @@ tier = "uncommon"
 size = [1, 1]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { lume = 0.6 }
 tags = ["optic", "cell"]
 codex = "an optic that throws light"
@@ -296,7 +296,7 @@ tier = "uncommon"
 size = [1, 1]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { chrome = 0.4 }
 tags = ["servo"]
 codex = "a loader's hand, magnetic"
@@ -309,7 +309,7 @@ tier = "uncommon"
 size = [1, 1]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { branching = 0.5 }
 tags = ["servo", "board"]
 codex = "inner-ear chrome, still spinning"
@@ -322,7 +322,7 @@ tier = "uncommon"
 size = [1, 1]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { appetite = 0.5 }
 tags = ["pump"]
 codex = "a secondary heart for stims"
@@ -335,7 +335,7 @@ tier = "uncommon"
 size = [1, 1]
 weight = 1.2
 value = 15
-feed = 0.3
+feed = 1.8
 bias = { toxicity = 0.4 }
 tags = ["conductor", "cell"]
 codex = "a defensive wrist discharge"
@@ -348,7 +348,7 @@ tier = "rare"
 size = [1, 2]
 weight = 2.4
 value = 60
-feed = 0.45
+feed = 2.7
 bias = { lume = 0.5, conductance = 0.4 }
 tags = ["optic", "board"]
 codex = "Arasaka-grade optic with the serial filed"
@@ -361,7 +361,7 @@ tier = "rare"
 size = [2, 2]
 weight = 2.4
 value = 60
-feed = 0.45
+feed = 2.7
 bias = { chrome = 0.6, conductance = 0.3 }
 tags = ["housing", "conductor"]
 codex = "full spinal replacement, titanium lattice"
@@ -374,7 +374,7 @@ tier = "rare"
 size = [1, 2]
 weight = 2.4
 value = 60
-feed = 0.45
+feed = 2.7
 bias = { conductance = 0.7 }
 tags = ["board", "conductor"]
 codex = "the thing that made an executive fast"
@@ -387,7 +387,7 @@ tier = "rare"
 size = [1, 2]
 weight = 2.4
 value = 60
-feed = 0.45
+feed = 2.7
 bias = { thrift = 0.6, toxicity = 0.3 }
 tags = ["filter", "pump"]
 codex = "a filter organ built for toxic floors"
@@ -400,7 +400,7 @@ tier = "rare"
 size = [1, 2]
 weight = 2.4
 value = 60
-feed = 0.45
+feed = 2.7
 bias = { vigor = 0.7 }
 tags = ["servo", "blade"]
 codex = "monowire tendon set, a full leg"
@@ -413,7 +413,7 @@ tier = "rare"
 size = [2, 2]
 weight = 2.4
 value = 60
-feed = 0.45
+feed = 2.7
 bias = { chrome = 0.7 }
 tags = ["weave", "housing"]
 codex = "a torso of woven plate under skin"
@@ -426,7 +426,7 @@ tier = "rare"
 size = [1, 2]
 weight = 2.4
 value = 60
-feed = 0.45
+feed = 2.7
 bias = { conductance = 0.4, plasticity = 0.3 }
 tags = ["board"]
 codex = "an access implant keyed to a dead building"
@@ -439,7 +439,7 @@ tier = "blackline"
 size = [2, 2]
 weight = 3.0
 value = 220
-feed = 0.6
+feed = 3.6
 bias = { toxicity = 0.5, lume = 0.4 }
 tags = ["cell", "optic"]
 codex = "the white-light emitter from a carrier's pole"
@@ -452,7 +452,7 @@ tier = "blackline"
 size = [2, 2]
 weight = 3.0
 value = 220
-feed = 0.6
+feed = 3.6
 bias = { appetite = 0.6, chrome = 0.3 }
 tags = ["servo", "housing"]
 codex = "a flamer's trigger hand, mil-tech servos"
@@ -465,7 +465,7 @@ tier = "blackline"
 size = [2, 2]
 weight = 3.0
 value = 220
-feed = 0.6
+feed = 3.6
 bias = { conductance = 0.6, feral = 0.3 }
 tags = ["board", "conductor"]
 codex = "lunar-fab control board; the traces are gold"
@@ -478,7 +478,7 @@ tier = "blackline"
 size = [2, 2]
 weight = 3.0
 value = 220
-feed = 0.6
+feed = 3.6
 bias = { toxicity = 0.7 }
 tags = ["pump"]
 codex = "the sprayer's heart"
@@ -491,7 +491,7 @@ tier = "blackline"
 size = [2, 2]
 weight = 3.0
 value = 220
-feed = 0.6
+feed = 3.6
 bias = { feral = 0.5, chrome = 0.4 }
 tags = ["weave"]
 codex = "ballistic cloth with a prayer printed in the fibre"
@@ -1926,7 +1926,7 @@ tier = "relic"
 size = [2, 2]
 weight = 3.0
 value = 0
-feed = 1.0
+feed = 6.0
 bias = { plasticity = 1.0, conductance = 0.6 }
 codex = "helium-3 vessel wall; the Mat trembles near it"
 
@@ -1938,7 +1938,7 @@ tier = "relic"
 size = [2, 2]
 weight = 3.0
 value = 0
-feed = 1.0
+feed = 6.0
 bias = { plasticity = 1.0, chrome = 0.6 }
 codex = "lunar stone from under the basilica"
 
@@ -1950,7 +1950,7 @@ tier = "relic"
 size = [2, 2]
 weight = 3.0
 value = 0
-feed = 1.0
+feed = 6.0
 bias = { plasticity = 1.0, lume = 0.7 }
 codex = "a chaplain's chrome that never went soft"
 
@@ -1962,7 +1962,7 @@ tier = "relic"
 size = [2, 2]
 weight = 3.0
 value = 0
-feed = 1.0
+feed = 6.0
 bias = { plasticity = 1.0, feral = 0.7 }
 codex = "the ampoule that started Slimecity"
 
@@ -1974,6 +1974,6 @@ tier = "relic"
 size = [2, 2]
 weight = 3.0
 value = 0
-feed = 1.0
+feed = 6.0
 bias = { plasticity = 1.0, chrome = 1.0, conductance = 0.8 }
 codex = "a Relic that grows chrome; the Hive ending's key"

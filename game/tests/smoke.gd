@@ -361,6 +361,9 @@ func _verify_current() -> void:
 			_check(st.craft("shiv", PackedInt32Array([blade2, housing2]), "Sable", sim.day), "bench: second craft failed")
 			scr._redraw()
 			_check(scr.queue_frame.get_child_count() >= 4, "bench: queue not drawn")
+			# the Tweaker works the job a minute at a time (v3.21): a one-shift recipe is ten work cycles
+			for i in 10 * 120 + 1:
+				sim.step()
 			sim.end_shift()
 			var made := {}
 			for it in st.items():

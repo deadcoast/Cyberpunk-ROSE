@@ -940,12 +940,15 @@ pub struct Roster {
     /// (Full Design v3.18, City tiers)
     #[serde(default)]
     pub grate_flush: Vec<(u16, u32)>,
-    /// the census (Flesh tier 4): the flush every 6-10 shifts, a newcomer waits 4 shifts at its grate
+    /// the census (Flesh tier 4): the flush every 6-10 cycles, a newcomer waits 20 cycles at its grate
     #[serde(default)]
     pub census: bool,
     /// Mod-Depth medicine (Flesh tier 2): a D4 can go on a run
     #[serde(default)]
     pub d4_runs: bool,
+    /// the sleepers the last flush turned back for want of beds (Recruitment): the drain's draw past the city's room
+    #[serde(default)]
+    pub turned: u32,
 }
 
 /// The flush (Full Design v3.21, Recruitment): a batch of 1–6 every 9–15 work cycles (minutes of the city's clock:
@@ -970,6 +973,15 @@ pub const FERAL_AFTER: u8 = 10;
 /// The census's (Full Design v3.18, Research: Flesh tier 4), in work cycles.
 pub const CENSUS_EVERY: (u32, u32) = (6, 10);
 pub const CENSUS_WAIT: u8 = 20;
+/// The batches a flush brings, by the city's tier (Hamlet, Quarter, City, Empire; Full Design v3.21, this design's): a
+/// city's draw grows with its tier, not with every grate it touches — at a clock a grate, forty reached grates sent
+/// four thousand bodies an hour and nineteen in twenty went feral; at 2 / 4 / 6 / 8 grates the Hamlet drew 9–28 an
+/// hour from its one grate and the Quarter came two hours late.
+pub const FLUSH_GRATES: [usize; 4] = [3, 5, 7, 8];
+/// Sleepers a batch brings past the city's free beds (Full Design v3.21, Recruitment; this design's): the drain sends
+/// the beds' worth and a body a batch more, so an unhoused newcomer is a nudge to build and not a flood — at the tier's
+/// batches alone a City's Bunkhouses filled and nineteen in twenty of four hundred an hour went feral.
+pub const FLUSH_OVER: usize = 1;
 /// The first batch comes down at the fourth cycle (Pass 2: "4:00, first newcomer batch drops at the grate").
 pub const FIRST_FLUSH: u32 = 4;
 
@@ -1016,7 +1028,7 @@ impl Default for Roster {
 impl Roster {
     /// Empty; ids start at 100 so a record id never reads as a count or an index.
     pub fn new() -> Self {
-        Roster { records: Vec::new(), next_id: 100, memorial: Vec::new(), waiting: Vec::new(), next_flush: 0, grate_flush: Vec::new(), census: false, d4_runs: false }
+        Roster { records: Vec::new(), next_id: 100, memorial: Vec::new(), waiting: Vec::new(), next_flush: 0, grate_flush: Vec::new(), census: false, d4_runs: false, turned: 0 }
     }
 
     pub fn get(&self, id: u32) -> Option<&Record> {
@@ -1026,16 +1038,37 @@ impl Roster {
         self.records.iter_mut().find(|r| r.id == id)
     }
 
-    /// A flush comes down at work cycle `cycle` when its time has come: the batch joins the waiting list (`day` is
-    /// the shift their records are born on). Returns how many came.
-    pub fn flush(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, cycle: u32, day: u32, mult: f32) -> usize {
-        if cycle < self.next_flush.max(FIRST_FLUSH) {
-            return 0;
+    /// The flush (Full Design v3.21, Recruitment): one clock for the city, every 9–15 work cycles (6–10 with the
+    /// census) from the fourth; each time the city's tier's batches (FLUSH_GRATES) come down round `grates` (the
+    /// city's first grate and every further grate the Mat reaches, with their strata), those longest without one first,
+    /// each 1–6 bodies for each stratum of its grate times `mult`; of the sleepers among them, as many as `room` (the
+    /// beds standing free past those already waiting) and a body a batch more come down (FLUSH_OVER). Returns (bodies,
+    /// grates).
+    #[allow(clippy::too_many_arguments)]
+    pub fn flush(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, cycle: u32, day: u32, grates: &[(u16, u8)], tier: u8, mult: f32, room: usize) -> (usize, usize) {
+        if grates.is_empty() || cycle < self.next_flush.max(FIRST_FLUSH) {
+            return (0, 0);
         }
-        let n = flush_size(rng, 1, mult);
-        self.batch(traits, names, rng, day, n);
+        // the tier's batches, round the reached grates longest without one first: a city with fewer grates than
+        // batches takes the rest down the grates it has
+        let k = FLUSH_GRATES[(tier.clamp(1, 4) - 1) as usize];
+        let last = |g: u16| self.grate_flush.iter().find(|c| c.0 == g).map_or(0, |c| c.1);
+        let mut order: Vec<usize> = (0..grates.len()).collect();
+        order.sort_by_key(|&i| (last(grates[i].0), i));
+        let mut came = 0;
+        let mut left = room + k * FLUSH_OVER;
+        self.turned = 0;
+        for &i in order.iter().cycle().take(k) {
+            let (g, stratum) = grates[i];
+            let n = flush_size(rng, stratum, mult);
+            came += self.batch(traits, names, rng, day, n, &mut left);
+            match self.grate_flush.iter_mut().find(|c| c.0 == g) {
+                Some(c) => c.1 = cycle,
+                None => self.grate_flush.push((g, cycle)),
+            }
+        }
         self.next_flush = cycle + self.flush_gap(rng);
-        n as usize
+        (came, k.min(grates.len()))
     }
 
     fn flush_gap(&self, rng: &mut Pcg32) -> u32 {
@@ -1043,37 +1076,26 @@ impl Roster {
         lo + rng.below(hi - lo + 1)
     }
 
-    /// The further grates the Mat reaches (all but the first, whose clock is `next_flush`): each keeps its own clock
-    /// from the cycle it is first reached (Full Design v3.18, City tiers), Returns how many came.
-    #[allow(clippy::too_many_arguments)]
-    pub fn flush_grates(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, cycle: u32, day: u32, grates: &[(u16, u8)], mult: f32) -> usize {
+    /// `n` bodies rolled; the sleepers among them come down while `left` lasts (a D5 is a flesh pile and always
+    /// does) and the rest are turned back. Returns how many came.
+    fn batch(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, n: u32, left: &mut usize) -> usize {
         let mut came = 0;
-        for &(g, stratum) in grates {
-            match self.grate_flush.iter().position(|c| c.0 == g) {
-                None => {
-                    let next = cycle + self.flush_gap(rng);
-                    self.grate_flush.push((g, next));
-                }
-                Some(k) if cycle >= self.grate_flush[k].1 => {
-                    let n = flush_size(rng, stratum, mult);
-                    self.batch(traits, names, rng, day, n);
-                    came += n as usize;
-                    self.grate_flush[k].1 = cycle + self.flush_gap(rng);
-                }
-                _ => {}
-            }
-        }
-        came
-    }
-
-    fn batch(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32, n: u32) {
         for _ in 0..n {
             let id = self.create(traits, names, rng, day, false);
             if let Some(k) = self.records.iter().position(|r| r.id == id) {
                 let r = self.records.remove(k);
+                if r.depth != Depth::D5 {
+                    if *left == 0 {
+                        self.turned += 1;
+                        continue;
+                    }
+                    *left -= 1;
+                }
                 self.waiting.push((r, 0));
+                came += 1;
             }
         }
+        came
     }
 
     /// A newcomer of a faction's Past (Full Design v3.15, Economy: a hire or a host) joins the waiting list at a grate,
@@ -1099,8 +1121,8 @@ impl Roster {
     /// A clinic day topside (Economy): a flush now, twice the size, whenever the next one is due. Returns how many came.
     pub fn clinic_flush(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32) -> usize {
         let n = 2 * (FLUSH_SIZE.0 + rng.below(FLUSH_SIZE.1 - FLUSH_SIZE.0 + 1));
-        self.batch(traits, names, rng, day, n);
-        n as usize
+        let mut left = usize::MAX;
+        self.batch(traits, names, rng, day, n, &mut left)
     }
 
     /// Shelter the waiting while beds are free (`beds` of them) and the Mat reaches a grate; the rest wait a cycle
@@ -1466,6 +1488,21 @@ mod tests {
         let mut r = Roster::new();
         r.found(&t, &n, seed, 1);
         (r, t, n)
+    }
+
+    #[test]
+    fn a_flush_brings_the_free_beds_and_a_body_a_batch() {
+        let (mut r, t, n) = roster(11);
+        let sleepers = |r: &Roster| r.waiting.iter().filter(|(w, _)| w.depth != Depth::D5).count();
+        // five deep grates' batches roll dozens; with no bed free a body a batch comes down
+        let grates = [(1, 5), (2, 5), (3, 5), (4, 5), (5, 5)];
+        r.flush(&t, &n, &mut Pcg32::new(7), FIRST_FLUSH, 1, &grates, 2, 1.0, 0);
+        assert_eq!(sleepers(&r), 5 * FLUSH_OVER);
+        assert!(r.turned >= 10, "the draw past the beds is told: {}", r.turned);
+        // twelve beds free: twelve and the five
+        let mut s = Roster::new();
+        s.flush(&t, &n, &mut Pcg32::new(7), FIRST_FLUSH, 1, &grates, 2, 1.0, 12);
+        assert_eq!(sleepers(&s), 12 + 5 * FLUSH_OVER);
     }
 
     #[test]

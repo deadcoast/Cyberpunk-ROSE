@@ -1,6 +1,6 @@
 # The economy, thirty shifts
 
-Written by `rose economy --seed 11 --shifts 30` on 2026-11-12 (Full Design v3.15, Economy — The proof; the Build plan's Phase D). The steward of `rose city` plays the seed trading — the surplus, its Chrome too, to whichever stall in reach pays most, five of a category a stall a shift, the three-link deliver and host contracts it can fill taken, protection bought when a Patrol is due at a Gang grate — then plays it again feeding, as `rose city` does: the same, but the Heart keeping 2.0 nutrient on the haul's Common and Uncommon Chrome. (A district's foreman keeps the Heart fed on the members' meals either way.) **Result: every demand's walk stayed inside its band every day** (widest walk 0.16, band 0.30).
+Written by `rose economy --seed 11 --shifts 30` on 2026-11-13 (Full Design v3.15, Economy — The proof; the Build plan's Phase D). The steward of `rose city` plays the seed trading — the surplus, its Chrome too, to whichever stall in reach pays most, five of a category a stall a shift, the three-link deliver and host contracts it can fill taken, protection bought when a Patrol is due at a Gang grate — then plays it again feeding, as `rose city` does: the same, but the Heart keeping 2.0 nutrient on the haul's Common and Uncommon Chrome. (A district's foreman keeps the Heart fed on the members' meals either way.) **Result: every demand's walk stayed inside its band every day** (widest walk 0.16, band 0.30).
 
 ## The streets
 
@@ -59,36 +59,36 @@ Written by `rose economy --seed 11 --shifts 30` on 2026-11-12 (Full Design v3.15
 
 | shift | day | grates | sold | earned | eddies | widest walk |
 |---|---|---|---|---|---|---|
-| 1 | 1 | 1 | 2 | 54 | 54 | 0.06 |
-| 2 | 1 | 1 | 5 | 18 | 67 | 0.06 |
-| 3 | 1 | 1 | 6 | 24 | 88 | 0.09 |
-| 4 | 2 | 1 | 10 | 17 | 88 | 0.09 |
-| 5 | 2 | 1 | 10 | 24 | 83 | 0.09 |
-| 6 | 2 | 1 | 12 | 25 | 79 | 0.13 |
-| 7 | 3 | 1 | 12 | 36 | 86 | 0.13 |
-| 8 | 3 | 1 | 10 | 29 | 86 | 0.13 |
-| 9 | 3 | 1 | 13 | 15 | 72 | 0.13 |
-| 10 | 4 | 1 | 13 | 47 | 90 | 0.13 |
-| 11 | 4 | 1 | 12 | 30 | 91 | 0.13 |
-| 12 | 4 | 1 | 10 | 26 | 88 | 0.14 |
-| 13 | 5 | 1 | 13 | 20 | 78 | 0.14 |
-| 14 | 5 | 1 | 11 | 24 | 72 | 0.14 |
-| 15 | 5 | 1 | 7 | 10 | 51 | 0.16 |
-| 16 | 6 | 1 | 14 | 39 | 59 | 0.16 |
-| 17 | 6 | 1 | 13 | 43 | 70 | 0.16 |
-| 18 | 6 | 1 | 12 | 32 | 70 | 0.12 |
-| 19 | 7 | 1 | 12 | 19 | 56 | 0.12 |
-| 20 | 7 | 1 | 12 | 34 | 57 | 0.12 |
-| 21 | 7 | 1 | 15 | 31 | 54 | 0.13 |
-| 22 | 8 | 1 | 10 | 20 | 40 | 0.13 |
-| 23 | 8 | 1 | 10 | 16 | 21 | 0.13 |
-| 24 | 8 | 1 | 15 | 70 | 56 | 0.10 |
-| 25 | 9 | 1 | 10 | 18 | 38 | 0.10 |
-| 26 | 9 | 1 | 14 | 47 | 49 | 0.10 |
-| 27 | 9 | 1 | 13 | 33 | 46 | 0.10 |
-| 28 | 10 | 1 | 12 | 52 | 82 | 0.10 |
-| 29 | 10 | 1 | 15 | 46 | 92 | 0.10 |
-| 30 | 10 | 1 | 10 | 17 | 73 | 0.12 |
+| 1 | 1 | 1 | 2 | 54 | 40 | 0.06 |
+| 2 | 1 | 1 | 7 | 32 | 57 | 0.06 |
+| 3 | 1 | 1 | 10 | 32 | 74 | 0.09 |
+| 4 | 2 | 1 | 13 | 20 | 77 | 0.09 |
+| 5 | 2 | 1 | 11 | 25 | 79 | 0.09 |
+| 6 | 2 | 1 | 12 | 25 | 75 | 0.13 |
+| 7 | 3 | 1 | 12 | 35 | 81 | 0.13 |
+| 8 | 3 | 1 | 10 | 29 | 81 | 0.13 |
+| 9 | 3 | 1 | 13 | 15 | 67 | 0.13 |
+| 10 | 4 | 1 | 14 | 53 | 91 | 0.13 |
+| 11 | 4 | 1 | 12 | 30 | 92 | 0.13 |
+| 12 | 4 | 1 | 10 | 26 | 89 | 0.14 |
+| 13 | 5 | 1 | 13 | 20 | 80 | 0.14 |
+| 14 | 5 | 1 | 12 | 32 | 83 | 0.14 |
+| 15 | 5 | 1 | 9 | 29 | 83 | 0.16 |
+| 16 | 6 | 1 | 13 | 33 | 87 | 0.16 |
+| 17 | 6 | 1 | 13 | 42 | 100 | 0.16 |
+| 18 | 6 | 1 | 13 | 40 | 111 | 0.12 |
+| 19 | 7 | 1 | 12 | 19 | 101 | 0.12 |
+| 20 | 7 | 1 | 12 | 34 | 106 | 0.12 |
+| 21 | 7 | 1 | 15 | 31 | 108 | 0.13 |
+| 22 | 8 | 1 | 10 | 25 | 104 | 0.13 |
+| 23 | 8 | 1 | 10 | 19 | 94 | 0.13 |
+| 24 | 8 | 1 | 15 | 64 | 129 | 0.10 |
+| 25 | 9 | 1 | 10 | 18 | 118 | 0.10 |
+| 26 | 9 | 1 | 14 | 47 | 136 | 0.10 |
+| 27 | 9 | 1 | 13 | 33 | 140 | 0.10 |
+| 28 | 10 | 1 | 12 | 52 | 183 | 0.10 |
+| 29 | 10 | 1 | 15 | 61 | 215 | 0.10 |
+| 30 | 10 | 1 | 11 | 18 | 204 | 0.12 |
 
 ## What sold, against its base
 
@@ -96,22 +96,22 @@ Realised price over base × condition (× 0.4 for an item sold blind), by the fa
 
 | faction | category | sold | blind | eddies | of base |
 |---|---|---|---|---|---|
-| Corpo remnants | curio | 3 | 3 | 8 | 155 % |
-| Corpo remnants | tech | 10 | 10 | 35 | 210 % |
+| Corpo remnants | curio | 3 | 3 | 9 | 153 % |
+| Corpo remnants | tech | 11 | 11 | 50 | 215 % |
 | Gangs | gear | 4 | 4 | 37 | 131 % |
-| Nomads | chrome | 131 | 131 | 152 | 93 % |
+| Nomads | chrome | 141 | 140 | 176 | 92 % |
 | Nomads | contraband | 17 | 17 | 183 | 149 % |
-| Nomads | curio | 66 | 65 | 180 | 109 % |
+| Nomads | curio | 66 | 65 | 179 | 108 % |
 | Nomads | gear | 45 | 44 | 161 | 107 % |
-| Nomads | tech | 57 | 56 | 160 | 85 % |
+| Nomads | tech | 61 | 60 | 198 | 86 % |
 
 ## Standing at the end
 
 | faction | reputation | favour | traded | tier open |
 |---|---|---|---|---|
-| Nomads | +1 | 2 | 836 e | 3 |
+| Nomads | +1 | 2 | 897 e | 3 |
 | Gangs | +0 | 0 | 37 e | 1 |
-| Corpo remnants | +0 | -2 | 43 e | 1 |
+| Corpo remnants | +0 | -2 | 59 e | 1 |
 | Badges | +0 | 0 | 0 e | 1 |
 | Oathkeepers | +0 | 0 | 0 e | 1 |
 
@@ -127,14 +127,14 @@ In hand at the end: none.
 
 | | the nearer grate reached | shifts with no market | eddies at the end | sold | Chrome fed to the Heart |
 |---|---|---|---|---|---|
-| trading | not in 30 shifts | 0 | 73 | 333 | 20 |
-| feeding | shift 30 | 0 | 404 | 202 | 215 |
+| trading | not in 30 shifts | 0 | 204 | 348 | 0 |
+| feeding | shift 14 | 0 | 1074 | 203 | 211 |
 
 ## Services
 
-Trading: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 3, hire 0 (0 hired).
+Trading: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 4, hire 0 (0 hired).
 
-Feeding: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 2, hire 0 (0 hired).
+Feeding: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 0, hire 0 (0 hired).
 
 ## Topside
 

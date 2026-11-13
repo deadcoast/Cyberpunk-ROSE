@@ -220,7 +220,15 @@ pub struct Job {
     pub shifts_left: u8,
     pub by: String,
     pub day: u32,
+    /// minutes of a slot's work into the shift of time it is on (Full Design v3.21: a job's shift is MINUTES_A_SHIFT
+    /// minutes of a Tweaker's slot)
+    #[serde(default)]
+    pub minutes: u8,
 }
+
+/// A recipe's shift of work, in minutes of a slot (Full Design v3.21, this design's: the ten minutes of a player's
+/// shift, so the Bench works while the player watches and a one-shift job is ten minutes).
+pub const MINUTES_A_SHIFT: u8 = 10;
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct BenchQueue {
@@ -229,11 +237,14 @@ pub struct BenchQueue {
     pub waiting: Vec<ItemInstance>,
     /// highest recipe tier open (1 at launch; Phase E's blueprints raise it)
     pub tier_open: u8,
+    /// the products the minutes placed in the Stash since the shift closed, by name (the shift's report and its XP)
+    #[serde(default)]
+    pub made: Vec<String>,
 }
 
 impl BenchQueue {
     pub fn new() -> Self {
-        BenchQueue { jobs: Vec::new(), waiting: Vec::new(), tier_open: 1 }
+        BenchQueue { jobs: Vec::new(), waiting: Vec::new(), tier_open: 1, made: Vec::new() }
     }
 
     pub fn is_open(&self, recipe: &Recipe) -> bool {
@@ -242,7 +253,7 @@ impl BenchQueue {
 
     /// Queue a job whose outcome has been checked; the caller has already taken the parts out of the Stash.
     pub fn queue(&mut self, file: &RecipeFile, recipe: &Recipe, parts: Vec<ItemInstance>, by: &str, day: u32) {
-        self.jobs.push(Job { recipe: recipe.id.clone(), parts, shifts_left: file.shifts(recipe), by: by.to_string(), day });
+        self.jobs.push(Job { recipe: recipe.id.clone(), parts, shifts_left: file.shifts(recipe), by: by.to_string(), day, minutes: 0 });
     }
 
     /// Cancel a job: its parts come back.
@@ -259,8 +270,39 @@ impl BenchQueue {
         self.end_shift_slots(table, file, usize::MAX)
     }
 
-    /// Shift end with the Bench's slots (Full Design, The 24 structures: a Tweak slot finishes one job a shift):
-    /// the oldest `slots` jobs lose a shift, the rest wait.
+    /// A minute of the Bench (Full Design v3.21, The living city): the first `slots` jobs each take a minute of
+    /// work, a shift of time done every MINUTES_A_SHIFT; a job with no time left finishes. Returns the products.
+    pub fn work_minute(&mut self, table: &ItemTable, file: &RecipeFile, slots: usize) -> Vec<ItemInstance> {
+        for job in self.jobs.iter_mut().take(slots) {
+            job.minutes += 1;
+            if job.minutes >= MINUTES_A_SHIFT {
+                job.minutes = 0;
+                job.shifts_left = job.shifts_left.saturating_sub(1);
+            }
+        }
+        let mut out = Vec::new();
+        let mut keep = Vec::new();
+        for job in std::mem::take(&mut self.jobs) {
+            if job.shifts_left > 0 {
+                keep.push(job);
+                continue;
+            }
+            let Some(recipe) = file.get(&job.recipe) else { out.extend(job.parts); continue };
+            match outcome(table, file, recipe, &job.parts, &job.by, job.day) {
+                Ok(o) => {
+                    for _ in 0..o.count {
+                        out.push(o.product.clone());
+                    }
+                }
+                Err(_) => out.extend(job.parts),
+            }
+        }
+        self.jobs = keep;
+        out
+    }
+
+    /// Shift end with `slots` of the Bench's slots: the oldest `slots` jobs lose a shift and the rest wait; what
+    /// waited for room comes out with the finished (the city's shift passes 0: its minutes did the work).
     pub fn end_shift_slots(&mut self, table: &ItemTable, file: &RecipeFile, slots: usize) -> Vec<ItemInstance> {
         let mut out: Vec<ItemInstance> = std::mem::take(&mut self.waiting);
         let mut keep = Vec::new();
@@ -380,5 +422,25 @@ mod tests {
         let back = q.cancel(0);
         assert_eq!(back.len(), 3);
         assert!(q.end_shift(&t, &f).is_empty());
+    }
+
+    #[test]
+    fn a_slot_works_the_first_job_a_minute_at_a_time() {
+        let t = table();
+        let f = RecipeFile::shipped();
+        let mut q = BenchQueue::new();
+        let salt = f.get("salt_bags").unwrap();
+        q.queue(&f, salt, vec![inst(&t, "org_brine", 100), inst(&t, "prt_cloth", 100)], "x", 1);
+        q.queue(&f, salt, vec![inst(&t, "org_brine", 100), inst(&t, "prt_cloth", 100)], "x", 1);
+        // no Tweaker in a slot: nothing moves
+        assert!(q.work_minute(&t, &f, 0).is_empty());
+        assert_eq!(q.jobs[0].minutes, 0);
+        // one slot: the first job takes its shift's ten minutes, the second waits
+        for minute in 1..MINUTES_A_SHIFT {
+            assert!(q.work_minute(&t, &f, 1).is_empty(), "minute {minute}");
+        }
+        assert_eq!(q.jobs[1].minutes, 0);
+        assert_eq!(q.work_minute(&t, &f, 1).len(), 3, "salt bags come in threes at the tenth minute");
+        assert_eq!(q.jobs.len(), 1);
     }
 }

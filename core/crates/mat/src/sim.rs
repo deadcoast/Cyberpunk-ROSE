@@ -28,6 +28,13 @@ pub mod sub {
 }
 
 // ---------------------------------------------------------------- hyphal states
+/// The strand ends a Pit's surplus reaches in one Mat step (translocation; this design's).
+pub const TRANSLOCATE_ENDS: usize = 24;
+/// The share of a feed that rides to the frontier as it lands; the rest is the Pit's stock and feeds the tissue round
+/// it (with half of the Pit's standing stock riding every step, the Mat outgrew its food: a world_eater city of five
+/// thousand cells starved its climb in the Service Tunnels and never left them).
+pub const TRANSLOCATE_SHARE: f32 = 0.75;
+
 pub mod hy {
     pub const EMPTY: u8 = 0;
     pub const TIP: u8 = 1;
@@ -115,6 +122,8 @@ pub struct MatSim {
     pub heart_lost: bool,
     pub relays: Vec<(usize, usize)>,
     pub pits: HashMap<(usize, usize), f32>,
+    /// what a Pit was fed that has not yet ridden to the frontier (translocation)
+    pub fresh: HashMap<(usize, usize), f32>,
     /// a tended Pit releases x (1 + Shepherd / 10), x (1 + Shepherd / 5) with Shepherd training: by its cell, set
     /// from the shift's plan (Full Design: The 25 structures, the Pit)
     pub pit_boost: HashMap<(usize, usize), f32>,
@@ -191,6 +200,7 @@ impl MatSim {
             heart_lost: false,
             relays: Vec::new(),
             pits: HashMap::new(),
+            fresh: HashMap::new(),
             pit_boost: HashMap::new(),
             organs: Vec::new(),
             kinds: crate::organ::Kinds::default(),
@@ -488,9 +498,17 @@ impl MatSim {
         }
     }
 
-    /// Drop scrap into a Pit. It sits there as stock; the Mat draws it down at its own intake rate.
+    /// Drop scrap into a Pit. TRANSLOCATE_SHARE of it rides to the frontier at the next Mat step; the rest sits there
+    /// as stock, and the Mat draws it down at its own intake rate.
     pub fn feed(&mut self, x: usize, y: usize, amount: f32) {
         *self.pits.entry((x, y)).or_insert(0.0) += amount;
+        *self.fresh.entry((x, y)).or_insert(0.0) += amount * TRANSLOCATE_SHARE;
+    }
+
+    /// Tiles a feed of `amount` grows as it lands (the Stash's "feed now"): the share that rides, a tile for each
+    /// grow_cost + tip_starter.
+    pub fn feed_growth(&self, amount: f32) -> usize {
+        (amount * TRANSLOCATE_SHARE * self.cells_per_nutrient() + 1e-3).floor() as usize
     }
 
     /// Fed Chrome drifts the genome: each gene moves by the delivered bias × tier drift and reflects at 0 and 1
@@ -642,8 +660,23 @@ impl MatSim {
         let mut keys: Vec<(usize, usize)> = self.pits.keys().copied().collect();
         keys.sort_unstable();
         for (x, y) in keys {
-            let stock = self.pits[&(x, y)];
+            let mut stock = self.pits[&(x, y)];
             if stock <= 0.0 {
+                self.fresh.remove(&(x, y));
+                continue;
+            }
+            // a fresh feed's share rides the cords to the frontier (translocation), the stock fills the 3 x 3: the Mat
+            // grows where it was fed and its tissue still holds the surplus the city eats (Homes, meals); what the
+            // step's ends could not take rides the next, until a step grows nothing
+            if let Some(ride) = self.fresh.remove(&(x, y)).map(|f| f.min(stock)) {
+                let left = self.translocate(x, y, ride);
+                stock -= ride - left;
+                if left < ride && left >= self.grow_cost + self.tip_starter {
+                    self.fresh.insert((x, y), left);
+                }
+            }
+            if stock <= 1e-4 {
+                self.pits.insert((x, y), stock.max(0.0));
                 continue;
             }
             // footprint 3x3; each cell wants min(pit_rate, 1 - N)
@@ -666,6 +699,7 @@ impl MatSim {
                 }
             }
             if want <= 0.0 {
+                self.pits.insert((x, y), stock);
                 continue;
             }
             let scale = (stock / want).min(1.0);
@@ -674,6 +708,93 @@ impl MatSim {
             }
             self.pits.insert((x, y), stock - want * scale);
         }
+    }
+
+    /// Translocation (Full Design v3.21, this design's: the Mat is the conveyor): a fresh feed's share rides the
+    /// network and grows its frontier — the strain's Tips first, then its strand ends, then any edge of the Mat, within
+    /// each the nearest the Pit first, so a feed grows the Mat where it was fed — each a tile a Mat step into its
+    /// richest open neighbour, the new tile a Tip holding the starter, paid grow_cost + tip_starter.
+    /// A feed grows the Mat as it lands instead of soaking into the tissue round the Pit (Pass 1's 3 x 3 alone grew
+    /// the founded Mat by about two tiles an Uncommon Chrome). It pushes the Mat outward only: the ground it takes
+    /// touches no strand but the one it grows from, so it never closes a loop or bridges a Sever's gap. Conductance
+    /// sets how many grow a step. Returns what is left of `stock`.
+    fn translocate(&mut self, x: usize, y: usize, mut stock: f32) -> f32 {
+        let cost = self.grow_cost + self.tip_starter;
+        if stock < cost {
+            return stock;
+        }
+        // the network from the Pit's 3 x 3 outward, in the order it is reached — the city's own strain: a feed never
+        // rides into a Bloom or a cut-off strain gone wild (with the Pits beside it feeding chapter 4's Bloom, Garden's
+        // chapter 5 opened at shift 107; kept out of it, at 82)
+        let bloom = self.blooms();
+        let ours = |s: &Self, i: usize| is_hyphal(s.hy[i]) && !s.wild[i] && !s.bloom_at(i, bloom);
+        let mut order: Vec<usize> = Vec::new();
+        let mut queue: VecDeque<usize> = VecDeque::new();
+        let mut seen = vec![false; self.hy.len()];
+        for dy in -1i32..=1 {
+            for dx in -1i32..=1 {
+                let (xx, yy) = (x as i32 + dx, y as i32 + dy);
+                if xx < 0 || yy < 0 || xx as usize >= self.w || yy as usize >= self.h {
+                    continue;
+                }
+                let i = yy as usize * self.w + xx as usize;
+                if ours(self, i) {
+                    seen[i] = true;
+                    queue.push_back(i);
+                }
+            }
+        }
+        while let Some(i) = queue.pop_front() {
+            order.push(i);
+            for d in 0..4 {
+                if let Some(j) = self.nb(i, d) {
+                    if !seen[j] && ours(self, j) {
+                        seen[j] = true;
+                        queue.push_back(j);
+                    }
+                }
+            }
+        }
+        let open = |s: &Self, i: usize| -> Option<usize> {
+            (0..4)
+                .filter_map(|d| s.nb(i, d))
+                .filter(|&e| s.hy[e] == hy::EMPTY && !s.salt[e] && sub::GROWABLE[s.sub[e] as usize] && s.hyphal_neighbours(e) == 1)
+                .max_by(|&a, &b| s.n[a].total_cmp(&s.n[b]).then(b.cmp(&a)))
+        };
+        // the frontier's kinds: 0 a Tip, 1 a strand's end, 2 the Mat's edge (a strand, not a junction)
+        let kind = |s: &Self, i: usize| -> Option<u8> {
+            let nb = s.hyphal_neighbours(i);
+            match s.hy[i] {
+                hy::TIP => Some(0),
+                hy::CORD if nb <= 1 => Some(1),
+                hy::CORD if nb == 2 => Some(2),
+                _ => None,
+            }
+        };
+        // within each kind the nearest the Pit first: a feed grows the Mat where it was fed (a frontier Pit its climb)
+        let mut front: Vec<(u8, usize, usize)> = order.iter().enumerate().filter_map(|(k, &i)| kind(self, i).map(|t| (t, k, i))).collect();
+        front.sort_unstable();
+        let ends = (TRANSLOCATE_ENDS as f32 * (0.5 + self.genome.0[crate::genome::CONDUCTANCE])).round() as usize;
+        let mut grown = 0;
+        for (_, _, i) in front {
+            if stock < cost || grown >= ends {
+                break;
+            }
+            let Some(e) = open(self, i) else { continue };
+            stock -= cost;
+            self.set_hy(e, hy::TIP);
+            self.age[e] = 0;
+            self.stall[e] = 0;
+            self.ferality[e] = self.ferality[i];
+            self.wild[e] = self.wild[i];
+            self.n[e] = (self.n[e] + self.tip_starter).min(1.0);
+            if self.hy[i] == hy::TIP {
+                self.set_hy(i, hy::CORD);
+                self.age[i] = 0;
+            }
+            grown += 1;
+        }
+        stock
     }
 
     fn step_nutrient(&mut self) {
@@ -1308,9 +1429,42 @@ mod tests {
     }
 
     #[test]
+    fn a_feed_grows_the_frontier_within_the_minute() {
+        // an Uncommon Chrome's feed (1.8) at the Heart: eight tiles of Mat or more within ten Mat steps (a minute of the
+        // city's clock) over the same Mat unfed, and they stand ten minutes on (translocation, v3.21)
+        let grown = |feed: f32| {
+            let mut sim = fed_run(11, Genome::default(), 60);
+            let before = sim.hyphal_count();
+            sim.feed(96, 25, feed);
+            for _ in 0..10 {
+                sim.step();
+            }
+            let minute = sim.hyphal_count() as i64 - before as i64;
+            for _ in 0..90 {
+                sim.step();
+            }
+            (minute, sim.hyphal_count() as i64 - before as i64)
+        };
+        let (fed, unfed) = (grown(1.8), grown(0.0));
+        assert!(fed.0 - unfed.0 >= 8, "fed {fed:?} unfed {unfed:?}");
+        assert!(fed.1 - unfed.1 >= 8, "fed {fed:?} unfed {unfed:?}");
+    }
+
+    #[test]
     fn runner_reaches_farther_than_default() {
         let base = fed_run(11, Genome::default(), 350).stats().reach;
-        let runner = fed_run(11, Genome::default().with(VIGOR, 0.9).with(CONDUCTANCE, 0.9), 350).stats().reach;
+        // the Runner class as the game holds it (its genes and its mod: a tip extends two tiles a step); on seed 11
+        // the default strain stops at a wall 61 tiles out by the 200th step and the Runner is past it by the 350th
+        let runner = {
+            let mut sim = MatSim::new(192, 48, 11, Genome::default().with(VIGOR, 0.9).with(CONDUCTANCE, 0.9));
+            sim.mods.runner = true;
+            sim.seed_heart(96, 25);
+            for _ in 0..350 {
+                sim.feed(96, 25, 0.6);
+                sim.step();
+            }
+            sim.stats().reach
+        };
         assert!(runner > base, "runner {} base {}", runner, base);
     }
 

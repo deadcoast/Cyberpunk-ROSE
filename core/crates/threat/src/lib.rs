@@ -2064,7 +2064,8 @@ mod tests {
             for y in gy..=ty + 1 {
                 for x in [gx, gx + 1] {
                     let i = y as usize * w + x as usize;
-                    if mat::sim::sub::GROWABLE[c.sim.sub[i] as usize] && !c.sim.is_hyphal_at(i) {
+                    // a Tip the founding left in the shaft is laid as Cord too: a Gate anchors on Cord or Node
+                    if mat::sim::sub::GROWABLE[c.sim.sub[i] as usize] && (!c.sim.is_hyphal_at(i) || c.sim.hy[i] == hy::TIP) {
                         c.sim.hy[i] = hy::CORD;
                         c.sim.n[i] = 0.5;
                     }

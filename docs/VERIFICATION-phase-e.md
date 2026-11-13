@@ -160,9 +160,11 @@ seconds times its pace factor 3:
 | Accord | Accord | 84 | 0.8 h | 4.9 h | 6.8 h | 10.8 h | 11.9 h |
 | Scattered | Scattered | 11 | — | — | — | — | — |
 
-Pass 2's tiers ask for the Hamlet in the first hour, the Quarter at three to four, the City at about eight and the
-Empire at about fourteen, a campaign of 12–18 hours; before this the same scripts ended at 184–257 shifts, 25–37 hours.
-The Quarter comes an hour late. The newcomers still outrun the beds from the City on: about 4,000 an hour come down
+Progression's table asks for the Hamlet in the first hour, the Quarter at the fifth, the City at the twelfth and the
+Empire at the eighteenth, a first run of 12–18 hours (Pass 2); before this the same scripts ended at 184–257 shifts,
+25–37 hours. (Corrected at PAC-083: this entry first gave the targets as three to four, eight and fourteen hours, which
+no design document says, and called the Quarter an hour late; against the table it was on time in three scripts and
+eighteen minutes late in World-Eater, and the City came two to five hours early.) The newcomers still outrun the beds from the City on: about 4,000 an hour come down
 and nineteen in twenty go feral (one line of the log a cycle).
 
 **In play** (the live game under xvfb, driven by input): a Bunkhouse placed on the Build tool's dots stood at the
@@ -175,3 +177,76 @@ departed; after a run the city line read "fed by the Mat".
 where it sat near nothing on paste); `rose cleansing` PASS; `rose economy` PASS; the headless smoke PASS. **Tests**: 188
 pass (the onboarding beats in order and the notices in any order; meals from tissue far from the home; the warren's
 cost).
+
+## PAC-083 — the drain's draw by the beds, feeds that land, the desk on the minute (2026-11-12)
+
+Full Design v3.21 (Recruitment; The living city; The city's clock: Translocation; Stash: Feed; the Cleansing proof).
+Found from the PAC-082 report and the logs of `rose campaign`: from the City on about 4,000 newcomers an hour came down
+and nineteen in twenty went feral (one line of the log a cycle); research, appraisal and the Bench moved only when a
+run ended; a Chrome fed early grew the Mat by about two tiles (Pass 1's 0.3 for an Uncommon soaked into the tissue
+round the Pit); and PAC-082 gave the tier targets wrongly (corrected there).
+
+**What changed**:
+- **The flush.** One clock for the city, every 9–15 work cycles; each time the tier's batches (3 / 5 / 7 / 8) come
+  down round the city's grates, those longest without one first. Of the sleepers a batch rolls, as many come down as
+  there are beds free past those already waiting, and one a batch more; the rest turn back, and the log line says how
+  many ("3 newcomers came down a grate; 9 more turned back, no beds"). A D5 flesh pile always comes down and feeds the
+  Mat 1.8 at the grate.
+- **The desk on the minute.** Each work cycle a researcher adds a tenth of its Tweak to the project and an Appraisal
+  Table a tenth of its names, the fraction carried; a Tweaker in a Bench slot works the first job a minute, a recipe's
+  shift being ten minutes. The Bench screen reads "10 min of a Tweaker" and "9 min left"; what the minutes make counts
+  in the shift's report and the Tweakers' XP.
+- **Feeds.** Six times Pass 1's nutrient (Common 1.08, Uncommon 1.8, Rare 2.7, Blackline 3.6, a Relic 6). Three
+  quarters of a feed ride the cords as it lands and grow the frontier nearest the Pit, a tile each for 0.16, along the
+  city's own tissue only; the rest is the Pit's stock as before. The Stash card names the tiles ("1.80 nutrient 8 tiles as it lands"); each new tile is
+  outlined in acid for three seconds in the Street view. (A first version moved half of every Pit's standing stock each
+  step; the Mat outgrew its food and World-Eater's climb starved in the Service Tunnels. Riding into chapter 4's Bloom,
+  feeds from the Pits beside it held Garden's chapter 5 back to shift 107; kept out of it, 82.)
+- **The campaign's steward.** It builds beds for the newcomers turned back as it did for the waiting, buys Parts from
+  every stall in reach cheapest first instead of one stall a shift, goes for chapter 4's Bloom even at the top of the
+  stack (Garden reached the Reservoir inside chapter 4 and never went for it), places crossing Gates only where they cut
+  the grate from the Heart, faces its Turret toward the way the squads actually walk in, and keeps Ivan at the Heart
+  in chapter 6 while a Sweep or a Cleansing is due or down (Hive's Ivan walked to the grate a Cleansing came down, fell
+  to its light, and the run scored Scattered).
+
+**In play** (the live game under xvfb, driven by input, new campaign):
+- A Street Eye's card read "FEED 1.80 nutrient 8 tiles as it lands at HEART". Fed at 0:07, it left at the minute and
+  the Mat went from 120 to 129 tiles at 1:06 (one of them its own growth).
+- A Lamp Core (3.6, the card's 16) sent with FEED ALL at 1:46: 158 to 174 tiles at 2:06, the new tiles outlined
+  (`docs/shots/feed_growth.png`).
+- A Pipe Club queued at 2:54 read "10 min left", "9 min left" at 3:06, and the log read "the Bench made Lead Pipe" at
+  12:00 with the queue empty.
+- At 4:00 the log read "3 newcomers came down a grate; 9 more turned back, no beds". With no Bunkhouse built, the
+  three went feral at 14:00.
+
+**The proof**: `rose campaign --seed 11` — every script reached its own ending. The city's hours are the bot's run
+seconds times its pace factor 3, against Progression's table (Hamlet 1, Quarter 5, City 12, Empire 18, a first run of
+12–18 hours):
+
+| script | ending | shifts | Hamlet (20) | Quarter (100) | City (500) | Empire (2,000) | the end | came down | went feral |
+|---|---|---|---|---|---|---|---|---|---|
+| Garden | Garden | 180 | 0.6 h | 6.1 h | 10.5 h | 25.6 h | 26.7 h | 3,793 | 179 |
+| Hive | Hive | 134 | 0.6 h | 4.5 h | 7.8 h | 18.2 h | 19.1 h | 2,556 | 111 |
+| World-Eater | World-Eater | 124 | 0.6 h | 6.1 h | 9.7 h | 15.6 h | 16.9 h | 2,455 | 158 |
+| Accord | Accord | 175 | 0.6 h | 5.3 h | 9.5 h | 24.5 h | 25.5 h | 3,511 | 231 |
+| Scattered | Scattered | 11 | 0.6 h | — | — | — | 1.7 h | — | — |
+
+Four to seven in a hundred of those who came down went feral, against nineteen in twenty before; the drain turned back
+2,574–10,390 more over a run, told on the log a few at a time.
+
+**The other proofs**: `rose city` PASS (fourteen sleepers fed by the Mat, no paste; the Mat 1,333 cells and the ledger
+433 e at the twentieth shift); `rose cleansing` PASS (defended, the Heart at 200 HP, eight of eight fell; it failed
+before the Turret faced the squads' way: the founded Mat is 751 cells now, not 197, and the squads walked round to the
+Heart's west side); `rose economy` PASS; the headless smoke PASS (the Bench's job now worked through ten minutes of
+ticks). **Tests**: 191 pass (a flush brings the free beds and a body a batch; a Bench slot works the first job a minute
+at a time; a feed grows eight tiles within the minute; the Runner past the default strain's wall).
+
+**Still open**: the Quarter. In the scripts it is food that holds a Hamlet near sixty sleepers for ten shifts: the
+larder is half of what signalled tissue holds past what it would grow with, and a growing Mat keeps little past that
+line (World-Eater's larder was 1.4–3 nutrient at shifts 18–30, 27–60 meals for 56–80 sleepers). Tried and not kept:
+building beds while one sleeper in five eats paste (World-Eater's Quarter unchanged), feeding the Heart while the city
+eats paste (40 minutes later), and the larder eating all of the surplus (World-Eater's an hour earlier, Garden's half an
+hour later). The late game is slower too: at PAC-082 the scripts' Empire came at 10.8–14.8 hours and their end at 11.9–16.3; now
+15.6–25.6 and 16.9–26.7. Garden and Accord spend about a hundred shifts from the City to the Empire (World-Eater fifty,
+Hive seventy-five); in a traced Garden run the beds waited on Parts from the 120th shift, 14–53 in the Stash against a
+want of hundreds. A first run should end within 12–18 hours: two of the four do not.

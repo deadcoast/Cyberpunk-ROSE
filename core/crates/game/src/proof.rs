@@ -351,7 +351,8 @@ impl CampaignSteward {
         let sleepers = w.roster.sleepers() as u32;
         let paste = w.last.as_ref().map_or(0, |o| o.paste_meals);
         let eats = paste * PASTE_SHARE <= sleepers.max(PASTE_SHARE) || w.ledger.eddies >= PASTE_HELD * colony::PASTE_EDDIES * sleepers;
-        let want = if eats { (sleepers as usize + w.roster.waiting.len()) as i32 + SPARE_BEDS } else { (sleepers as i32).max(MOUTHS_LEAST) };
+        // the waiting and those the last flush turned back for want of beds (Recruitment: the drain's draw)
+        let want = if eats { (sleepers as usize + w.roster.waiting.len() + w.roster.turned as usize) as i32 + SPARE_BEDS } else { (sleepers as i32).max(MOUTHS_LEAST) };
         // beds on the way: ghosts' first tier, and an upgrade's step (the warren)
         let ghost_beds = |w: &World| -> i32 {
             w.colony
@@ -525,9 +526,6 @@ impl CampaignSteward {
     /// six and a Pit fed by quota there when the frontier has stood a shift; a held grate key opens the slab at once.
     fn climb(&mut self, w: &mut World, out: &mut Vec<String>) {
         let s = w.threats.stratum;
-        if s >= w.city.sim.strata {
-            return;
-        }
         let sw = w.city.sim.w;
         let joined = logistics::joined_to_heart(&w.city.sim);
         // the climb cut from the Heart (a Sweep's bleach, a Cleansing's light): the city's tissue its Relays keep alive
@@ -554,6 +552,11 @@ impl CampaignSteward {
                 self.grow_frontier(w, out, &joined, &way, d, "the chapter's Bloom");
                 return;
             }
+        }
+        // at the top of the stack there is nothing more to climb (the cut climb and the Bloom above still count: a
+        // city that reached the Reservoir inside chapter 4 never went for its Bloom)
+        if s >= w.city.sim.strata {
+            return;
         }
         // the crossing nearest the Mat along the ground, by the floor under its slab: nearest the tissue strong enough
         // to carry a Relay first (thin tissue under one slab is no nearer than a strong cord under the next), then any
@@ -643,40 +646,48 @@ impl CampaignSteward {
         }
     }
 
-    /// Chrome and Parts bought with the eddies past a reserve, the cheapest a unit at any stall in reach, while the Stash
+    /// Chrome and Parts bought with the eddies past a reserve, the cheapest a unit first at the stalls in reach, while the Stash
     /// holds less than a research node's and a Relay's Chrome, or a Bunkhouse's and a node's Parts (the beds a big flush
     /// asks for would otherwise take every Part research waits on).
     fn buy(&mut self, w: &mut World, out: &mut Vec<String>) {
         // never Chrome the steering would keep off the Pits
         let hold = self.aim.map(|a| held(w, a)).unwrap_or_default();
-        // and a Bunkhouse's Parts for every six waiting at a grate: the beds the city's food allows (Homes, meals)
-        let beds_wanted = w.roster.waiting.iter().filter(|(r, _)| r.depth != people::Depth::D5).count().div_ceil(6) * 10;
+        // and a Bunkhouse's Parts for every six waiting at a grate or turned back: the beds the city's food allows
+        let beds_wanted = (w.roster.waiting.iter().filter(|(r, _)| r.depth != people::Depth::D5).count() + w.roster.turned as usize).div_ceil(6) * 10;
         for (cat, want, what) in [(Category::Chrome, CHROME_WANTED, "Chrome"), (Category::Part, PARTS_WANTED + beds_wanted, "Parts")] {
             let have = w.stash.handles().iter().filter(|(_, _, it)| !it.pinned && w.table.def(it.def).category == cat).count();
             let riding: u16 = w.ledger.orders.iter().filter(|o| w.economy.stock_item(o.faction, o.entry).is_some_and(|i| w.table.def(i).category == cat)).map(|o| o.units).sum();
             if have + riding as usize >= want || w.ledger.eddies < EDDY_RESERVE {
                 continue;
             }
-            let mut best: Option<(u32, u8, u8, u16, u16)> = None;
+            // the cheapest a unit first, stall after stall, as a player shops the grates in reach
+            let mut offers: Vec<(u32, u8, u8, u16, u16)> = Vec::new();
             for m in crate::city::Steward::in_reach(w) {
                 let g = w.city.markets[m];
                 let Some(f) = w.economy.faction_at(g) else { continue };
                 for (entry, units, each) in w.economy.stock(f, &w.table, 0, false, false) {
                     let is = w.economy.stock_item(f, entry).is_some_and(|i| w.table.def(i).category == cat && !hold.iter().any(|&k| w.table.def(i).bias_vector()[k] > 0.0));
-                    if is && units > 0 && best.is_none_or(|b| each < b.0) {
-                        best = Some((each, m as u8, f, entry, units));
+                    if is && units > 0 {
+                        offers.push((each, m as u8, f, entry, units));
                     }
                 }
             }
-            let Some((each, m, f, entry, units)) = best else { continue };
-            let afford = ((w.ledger.eddies - EDDY_RESERVE) / each.max(1)) as u16;
-            let n = units.min(afford).min((want - have) as u16);
-            if n == 0 {
-                continue;
-            }
-            let plan = w.plan.clone();
-            if crate::trade::order(&mut w.economy, &mut w.ledger, &w.table, &w.city, &w.colony, &w.defs, &w.roster, &plan, m, f, entry, n).is_ok() {
-                out.push(format!("{n} {what} ordered from the {} at {each} e each", w.economy.name(f)));
+            offers.sort_unstable();
+            // an order is paid at the shift's end: the eddies past the reserve and what is already ordered
+            let owed: u32 = w.ledger.orders.iter().map(|o| o.each * o.units as u32).sum();
+            let mut budget = w.ledger.eddies.saturating_sub(EDDY_RESERVE + owed);
+            let mut short = (want - have - riding as usize) as u16;
+            for (each, m, f, entry, units) in offers {
+                let n = units.min((budget / each.max(1)).min(u16::MAX as u32) as u16).min(short);
+                if n == 0 {
+                    break;
+                }
+                let plan = w.plan.clone();
+                if crate::trade::order(&mut w.economy, &mut w.ledger, &w.table, &w.city, &w.colony, &w.defs, &w.roster, &plan, m, f, entry, n).is_ok() {
+                    out.push(format!("{n} {what} ordered from the {} at {each} e each", w.economy.name(f)));
+                    short -= n;
+                    budget -= each * n as u32;
+                }
             }
         }
     }
@@ -825,11 +836,19 @@ impl CampaignSteward {
         }
     }
 
-    /// Ivan: in chapter 6 to the market of the faction he can ally, to Parley; otherwise at the Heart, feeding by hand
-    /// the item that pulls hardest toward the aim.
+    /// Ivan: in chapter 6 to the market of the faction he can ally, to Parley, unless a Sweep or a Cleansing is down
+    /// or due (he waits it out at the Heart: walking to the grate a Cleansing came down, he fell to its light and the
+    /// city lost its ending); otherwise at the Heart, feeding by hand the item that pulls hardest toward the aim.
     fn ivan(&mut self, w: &mut World, out: &mut Vec<String>) {
         let day = w.day;
         if w.campaign.ivan.fell {
+            return;
+        }
+        let heavy = |st: usize| w.threats.rules.stage[st].id != "patrol";
+        let light = w.threats.due.iter().any(|d| heavy(d.stage)) || w.threats.events.iter().any(|e| e.phase != threat::Phase::Done && heavy(e.stage));
+        if w.campaign.chapter == 6 && w.economy.s.ally.is_none() && light {
+            let (hx, hy) = heart_xy(w);
+            let _ = crate::ivan::order(&mut w.campaign, &w.city.sim, hx, hy);
             return;
         }
         if w.campaign.chapter == 6 && w.economy.s.ally.is_none() {

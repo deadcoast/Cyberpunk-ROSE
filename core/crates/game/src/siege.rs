@@ -81,6 +81,35 @@ fn heart_field(w: &World, gates_closed: bool) -> Vec<u16> {
     d
 }
 
+/// Steps out from the Heart the Turret faces the squads' way.
+const APPROACH: u16 = 4;
+
+/// Whether `blocked` tiles cut the grate `gx` off from the Heart over the ground bodies walk.
+fn cuts(w: &World, blocked: &[usize], gx: usize) -> bool {
+    let sim = &w.city.sim;
+    let Some((hx, hy)) = sim.heart else { return false };
+    let mut seen = vec![false; sim.w * sim.h];
+    let start = hy * sim.w + hx;
+    seen[start] = true;
+    let mut q = VecDeque::from([start]);
+    while let Some(i) = q.pop_front() {
+        if i == gx {
+            return false;
+        }
+        let (x, y) = (i % sim.w, i / sim.w);
+        for (nx, ny) in [(x.wrapping_sub(1), y), (x + 1, y), (x, y.wrapping_sub(1)), (x, y + 1)] {
+            if nx < sim.w && ny < sim.h {
+                let j = ny * sim.w + nx;
+                if !seen[j] && (threat::walkable(sim, j) || j == gx) && !blocked.contains(&j) {
+                    seen[j] = true;
+                    q.push_back(j);
+                }
+            }
+        }
+    }
+    true
+}
+
 /// Does the grate `g` reach the Heart only through a built Gate?
 pub fn gated(w: &World, g: usize) -> bool {
     heart_field(w, true)[g] == u16::MAX
@@ -97,12 +126,21 @@ pub fn defend(w: &mut World, gx: usize) -> Vec<String> {
 }
 
 /// A Turret's spot by the Heart, the flamers' end of every way (Full Design v3.20, Bodies and defence): within three
-/// of its middle, so its six tiles reach round the 3 x 3, on the side of the grate `g` the squads come down — the spot
-/// its signal allows nearest the grate.
+/// of its middle, so its six tiles reach round the 3 x 3, on the side the squads come in from the grate `g` — the way
+/// they walk round the built Gates, four steps out from the Heart, else the grate — the spot its signal allows nearest
+/// it (a Turret on the grate's side faced away from squads that walked round the Gates to the Heart's far side).
 pub fn turret_spot(w: &World, g: usize) -> Option<(u16, u16)> {
     let sim = &w.city.sim;
     let (hx, hy) = sim.heart.map(|(x, y)| (x as i32, y as i32))?;
-    let (gx, gy) = ((g % sim.w) as i32, (g / sim.w) as i32);
+    let f = heart_field(w, true);
+    let mut at = g;
+    while f[at] != u16::MAX && f[at] > APPROACH {
+        let (x, y) = (at % sim.w, at / sim.w);
+        let next = [(x.wrapping_sub(1), y), (x + 1, y), (x, y.wrapping_sub(1)), (x, y + 1)].into_iter().filter(|&(nx, ny)| nx < sim.w && ny < sim.h).map(|(nx, ny)| ny * sim.w + nx).filter(|&j| f[j] < f[at]).min_by_key(|&j| (f[j], j));
+        let Some(n) = next else { break };
+        at = n;
+    }
+    let (gx, gy) = ((at % sim.w) as i32, (at / sim.w) as i32);
     (hy - 3..=hy + 3)
         .flat_map(|y| (hx - 3..=hx + 3).map(move |x| (x, y)))
         .filter(|&(x, y)| x >= 0 && y >= 0 && w.colony.can_place(&w.defs, sim, "turret", x as u16, y as u16).is_ok())
@@ -171,10 +209,16 @@ fn defend_with(w: &mut World, gx: usize, now: bool) -> Vec<String> {
         runs.into_iter().map(|(_, r)| r).collect()
     };
     // a Gate spans two tiles (anchored on a cord, turned for a shaft); the first crossing down from the grate that
-    // two Gates at most can close, every Gate's anchor on the Mat
+    // two Gates at most can close and that cuts the grate from the Heart (a crossing the squads walk round only
+    // turns them onto a side the Turret does not face), every Gate's anchor on the Mat
     let mut gates: Vec<u32> = Vec::new();
+    let mut shut: Vec<usize> = Vec::new();
     'find: for (k, &i) in way.iter().enumerate().skip(1) {
         for run in crossing(i) {
+            let blocked: Vec<usize> = shut.iter().chain(run.iter()).copied().collect();
+            if !cuts(w, &blocked, gx) {
+                continue;
+            }
             let turned = run[0] / sw != run[run.len() - 1] / sw;
             let step = if turned { sw } else { 1 };
             let anchors: Vec<usize> = run.iter().step_by(2).copied().collect();
@@ -208,6 +252,7 @@ fn defend_with(w: &mut World, gx: usize, now: bool) -> Vec<String> {
                 }
             }
             gates.extend(ids);
+            shut.extend(run.iter().copied());
             if gates.len() >= 2 {
                 break 'find;
             }

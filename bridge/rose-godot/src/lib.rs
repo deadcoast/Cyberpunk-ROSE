@@ -283,10 +283,10 @@ impl RoseSim {
                             let p = &mut *p;
                             if work {
                                 let (traits, names) = (p.traits.clone().unwrap(), p.names.clone().unwrap());
-                                let (stash, table) = (st.stash.as_mut().unwrap(), st.table.as_ref().unwrap());
                                 let (flush_mult, _) = game::campaign::mults(&self.campaign, &c.sim);
                                 let folk = game::Folk { roster: &mut p.roster, traits: &traits, names: &names, died: &mut p.died_this_shift };
-                                self.plan = game::shift::work_cycle(c, &mut self.colony, &defs, folk, stash, &mut st.ledger, table, flush_mult, self.work_day, &mut self.log);
+                                let store = game::Store { stash: st.stash.as_mut().unwrap(), ledger: &mut st.ledger, bench: &mut st.bench, table: st.table.as_ref().unwrap(), recipes: st.recipes.as_ref().unwrap() };
+                                self.plan = game::shift::work_cycle(c, &mut self.colony, &defs, folk, store, flush_mult, self.work_day, &mut self.log);
                                 self.posts = threat::Posts::from_plan(&self.plan, &p.roster);
                             }
                             if let (Some(e), Some(t)) = (self.economy.as_ref(), self.threats.as_ref()) {
@@ -723,6 +723,12 @@ impl RoseSim {
     #[func]
     fn cells_per_nutrient(&self) -> f64 {
         self.city.as_ref().map_or(4.0, |c| c.sim.cells_per_nutrient() as f64)
+    }
+
+    /// Tiles of Mat a feed of `nutrient` grows as it lands (translocation; the rest is the Pit's stock).
+    #[func]
+    fn feed_growth(&self, nutrient: f64) -> i64 {
+        self.city.as_ref().map_or(0, |c| c.sim.feed_growth(nutrient as f32) as i64)
     }
 
     #[func]
@@ -1611,7 +1617,8 @@ impl RoseStash {
         true
     }
 
-    /// The Bench queue: [{index, recipe, name, shifts_left, parts: [names]}], then whatever waits for Stash room.
+    /// The Bench queue: [{index, recipe, name, shifts_left, minutes_left, parts: [names]}], then whatever waits for
+    /// Stash room.
     #[func]
     fn bench_jobs(&mut self) -> VarArray {
         self.ensure();
@@ -1624,6 +1631,8 @@ impl RoseStash {
             d.set("recipe", j.recipe.as_str());
             d.set("name", f.get(&j.recipe).map(|r| r.name.as_str()).unwrap_or("?"));
             d.set("shifts_left", j.shifts_left as i64);
+            // the minutes of a Tweaker's slot it still asks (Full Design v3.21: a shift of its time is ten minutes)
+            d.set("minutes_left", (j.shifts_left as i64 * bench::MINUTES_A_SHIFT as i64 - j.minutes as i64).max(0));
             d.set("parts", &PackedStringArray::from(j.parts.iter().map(|p| GString::from(t.def(p.def).name.as_str())).collect::<Vec<_>>().as_slice()));
             out.push(&d.to_variant());
         }
