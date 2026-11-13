@@ -82,7 +82,7 @@ that is drawn as rectangles has no way to receive art (CURRENT-STATE ART-01, PAC
     ./run.sh /path/to/godot                                                       all of it
 
 Commit to `main` with a message that names the PAC and what changed; rebase on `origin/main` before pushing. Before
-every commit check that no secret is staged: `git diff --cached | grep -c "pixl_"` must print 0 (the PixelLab token
+every commit check that no secret is staged: `git diff --cached | grep -cE "pixl_[0-9a-f]{8}"` must print 0 (the PixelLab token
 belongs in the agent's MCP configuration, never in the repository).
 
 The art lane (`@pixel-lab-agent`)
