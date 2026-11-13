@@ -5,7 +5,7 @@ Written by `rose cadence --runs 20 --strata 1,2,3 --seed 1` on 2026-11-12. The b
 ## Aggregate
 
 | stratum | runs | deaths | run length (median) | pull gap median | landing gap median | pulls / run | notables / run | kills / run | damage / run | longest quiet (median) | blind e / min | verdict |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | S1 | 20 | 3 (15 %) | 4:19 | 10 s | 10 s | 15.2 | 0.00 | 0.8 | 40 | 46 s | 9.5 | pull fast · loss lapses · death ok |
 | S2 | 20 | 4 (20 %) | 3:44 | 14 s | 12 s | 12.7 | 0.00 | 1.1 | 43 | 8 s | 30.3 | pull fast · loss ok · death ok |
 | S3 | 20 | 5 (25 %) | 3:49 | 12 s | 11 s | 12.6 | 2.80 | 1.6 | 49 | 62 s | 28.7 | pull fast · loss lapses · death ok |
@@ -13,7 +13,7 @@ Written by `rose cadence --runs 20 --strata 1,2,3 --seed 1` on 2026-11-12. The b
 ## Every run
 
 | stratum | seed | result | length | pulls | landings | notables | kills | damage | pull gap med | landing gap med | quiet max | blind e |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | S1 | 1 | extracted | 04:17.2 | 16 | 36 | 0 | 3 | 30 | 11 s | 8 s | 39 s | 37 |
 | S1 | 2 | extracted | 04:38.8 | 15 | 31 | 0 | 0 | 18 | 10 s | 11 s | 37 s | 57 |
 | S1 | 3 | extracted | 04:39.3 | 16 | 32 | 0 | 0 | 12 | 11 s | 11 s | 0 s | 52 |

@@ -23,7 +23,7 @@ row except on 23 and 24, where the 0.5 strain reaches the first grate more slowl
 and shift 6 (plans 2/7 and 4/7; they held the cord before). Seed 11 replays bit-exact.
 
 | what | seeds 11–26, twenty shifts | the design's target |
-|---|---|---|
+| --- | --- | --- |
 | first organ | on 11 of 16, shifts 7–19 | hour 2, shift 10 |
 | a tier 2 open | on 7 of 16, shifts 5–20 (by shift 15 on 6) | tier 2 by shift 15 |
 | a node researched | none | — |
@@ -54,7 +54,7 @@ Acid and the rest BLUEPRINT in Dust, the project bar with its points and its NEE
 genome, the twelve organs three by four with their lines and counts, the feed plan, the classes with HELD and the
 lineage; the Codex's five tabs. What the frames changed: node names ran past their tiles — three lines, the tile 64
 by 40; a node's tile gave no reason it could not be picked — the blueprint line says what opens it; the Build list
-showed a locked structure as placeable — "RESEARCH <node>" and no PLACE; an organ's text ran off the card — two
+showed a locked structure as placeable — `RESEARCH <node>` and no PLACE; an organ's text ran off the card — two
 lines; after a pick the Bench drew the old plan — it replans; the proposal said "1 TILES"; a Bulb dimmed by a Nerve
 rule drew lit.
 
@@ -78,7 +78,7 @@ Endless, and the Mat's climb (4b); `rose campaign` and the rules it found wantin
 every tenth shift of each there and every decision in `out/campaign_<ending>_11.log`):
 
 | script | the accord | ending | warchest | shifts | chapters 2–7 opened at shift | strata 2–6 reached at shift |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | Garden (Lume, Thrift) | accepted | Garden | 29,410 | 114 | 12 · 14 · 19 · 81 · 83 · 107 | 2 · 38 · 80 · 89 · 107 |
 | Hive (Chrome Affinity, Conductance) | accepted | Hive | 26,865 | 85 | 13 · 17 · 21 · 56 · 59 · 73 | 2 · 29 · 57 · 66 · 73 |
 | World-Eater (Appetite, Feral Drive) | accepted | World-Eater | 35,030 | 136 | 13 · 17 · 22 · 110 · 112 · 126 | 2 · 46 · 111 · 121 · 126 |
@@ -153,7 +153,7 @@ script whose rival the alliance favours holds that rival's genes from the foundi
 seconds times its pace factor 3:
 
 | script | ending | shifts | Hamlet (20) | Quarter (100) | City (500) | Empire (2,000) | the end |
-|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- |
 | Garden | Garden | 122 | 0.8 h | 4.8 h | 7.1 h | 14.8 h | 16.0 h |
 | Hive | Hive | 110 | 0.8 h | 3.8 h | 6.8 h | 12.0 h | 12.8 h |
 | World-Eater | World-Eater | 112 | 0.8 h | 5.3 h | 10.1 h | 14.3 h | 16.3 h |
@@ -187,6 +187,7 @@ run ended; a Chrome fed early grew the Mat by about two tiles (Pass 1's 0.3 for 
 round the Pit); and PAC-082 gave the tier targets wrongly (corrected there).
 
 **What changed**:
+
 - **The flush.** One clock for the city, every 9–15 work cycles; each time the tier's batches (3 / 5 / 7 / 8) come
   down round the city's grates, those longest without one first. Of the sleepers a batch rolls, as many come down as
   there are beds free past those already waiting, and one a batch more; the rest turn back, and the log line says how
@@ -210,6 +211,7 @@ round the Pit); and PAC-082 gave the tier targets wrongly (corrected there).
   to its light, and the run scored Scattered).
 
 **In play** (the live game under xvfb, driven by input, new campaign):
+
 - A Street Eye's card read "FEED 1.80 nutrient 8 tiles as it lands at HEART". Fed at 0:07, it left at the minute and
   the Mat went from 120 to 129 tiles at 1:06 (one of them its own growth).
 - A Lamp Core (3.6, the card's 16) sent with FEED ALL at 1:46: 158 to 174 tiles at 2:06, the new tiles outlined
@@ -224,7 +226,7 @@ seconds times its pace factor 3, against Progression's table (Hamlet 1, Quarter 
 12–18 hours):
 
 | script | ending | shifts | Hamlet (20) | Quarter (100) | City (500) | Empire (2,000) | the end | came down | went feral |
-|---|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Garden | Garden | 180 | 0.6 h | 6.1 h | 10.5 h | 25.6 h | 26.7 h | 3,793 | 179 |
 | Hive | Hive | 134 | 0.6 h | 4.5 h | 7.8 h | 18.2 h | 19.1 h | 2,556 | 111 |
 | World-Eater | World-Eater | 124 | 0.6 h | 6.1 h | 9.7 h | 15.6 h | 16.9 h | 2,455 | 158 |

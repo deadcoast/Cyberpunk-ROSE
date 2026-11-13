@@ -3,7 +3,7 @@
 Written by `rose cleansing --seed 11 --shifts 10` on 2026-11-13 (Full Design v3.14, Colony mode: Pressure — The proof; the Build plan's Phase D). The steward of `rose city` plays 10 shifts; then a Cleansing comes down the first grate — the sluice's bleach flood, four lamp carriers advancing a tile a Mat step, four flamers for the Pits and the Heart once the carriers are halfway — twice from the same state: as the city stands, and with two Sphincter Gates and a Scrap Turret on the squads' way from the grate, a Guard ordered to each. The designed spread: as it stands the Heart falls; defended, the Heart stands and most of the Mat with it. **Result: the spread holds.**
 
 | city | the Heart | Mat cells | structures | slimos | dead | bleeding | Oathkeepers fell | Mat tiles burned | structures ruined | seconds | Blackline |
-|---|---|---|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | as it stands | burned | 751 → 819 | 11 → 10 | 14 → 12 | 2 | 0 | 0 of 8 | 215 | 1 | 1657 | 0 |
 | defended | 200 HP | 751 → 607 | 11 → 14 | 14 → 12 | 2 | 4 | 8 of 8 | 76 | 0 | 558 | 14 |
 
@@ -13,9 +13,9 @@ Written by `rose cleansing --seed 11 --shifts 10` on 2026-11-13 (Full Design v3.
 
 **After, defended** (HP short across the standing structures at the Cleansing's shift end and the next three, the builders mending from the shift after): 0 → 0 → 0 → 0.
 
-**The Cleansing, as it stands**
+> **The Cleansing, as it stands**
 
-```
+```bash
    0.0 s  loss  a Cleansing came down grate 5
    0.0 s  loss  the Oathkeepers opened the sluice at grate 5: bleach in the water for 20 Mat steps
  102.0 s  landing  3 newcomers came down a grate; 8 more turned back, no beds
@@ -39,9 +39,9 @@ Written by `rose cleansing --seed 11 --shifts 10` on 2026-11-13 (Full Design v3.
 1657.0 s  loss  Flood shift: the water rises 3 tiles
 ```
 
-**The Cleansing, defended**
+> **The Cleansing, defended**
 
-```
+```bash
    0.0 s  loss  a Cleansing came down grate 5
    0.0 s  loss  the Oathkeepers opened the sluice at grate 5: bleach in the water for 20 Mat steps
  102.0 s  landing  3 newcomers came down a grate; 8 more turned back, no beds
@@ -77,4 +77,3 @@ Written by `rose cleansing --seed 11 --shifts 10` on 2026-11-13 (Full Design v3.
  557.5 s  landing  a Filter Lung grew at 83,277
  557.5 s  landing  Flood shift: the water holds
 ```
-

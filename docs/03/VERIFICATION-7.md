@@ -18,7 +18,7 @@ a same-size, same-sample, different-content decoy never reported; `-q`
 reporting it as LIKELY; `milk -n` touching nothing and writing no journal;
 `milk .` then `find .` reporting no duplicates; `--undo` restoring the
 exact file list and pruning `_milked`; name collision inside `_milked`
-getting ` (2)`; `purge -n` verifying bytes and changing nothing; `img`
+getting `(2)`; `purge -n` verifying bytes and changing nothing; `img`
 filter excluding videos; every error path exiting 1 with the help hint;
 help and doctor pages.
 
@@ -30,7 +30,7 @@ byte 5 (sample-different), two empty files, and a path 150 characters
 deep.
 
 | run | observed |
-|---|---|
+| --- | --- |
 | `find .` | 15 candidates (2 empty skipped) → 13 share a size → 12 share a sample → 10 confirmed; 4 groups, 6 duplicates, 2.99 MB reclaimable; bytes hashed 5.76 MB (the four 300 KB copies, the two 2 MB videos, and the sample-equal pair) |
 | `find` (no `.`) | 1 group: the two notes files in the root |
 | `find . -q` | 5 LIKELY groups; the sample-equal decoy pair included and labelled |
@@ -62,7 +62,7 @@ command.
 same-size decoys differing in one middle byte.
 
 | run | wall | result |
-|---|---|---|
+| --- | --- | --- |
 | `find .` | 0.38 s (first), 0.14 s (repeat) | 435 groups, 518 duplicates, 130 MB reclaimable; 353 MB hashed |
 | `find . -q` | ~0.1 s | 613 groups, 800 "duplicates" — the 300 decoys counted, as the LIKELY label warns |
 
@@ -80,13 +80,13 @@ Peak resident memory 13 MB.
 
 ---
 
-# VERIFICATION — Phase 2, run on 2026-11-05
+## VERIFICATION — Phase 2, run on 2026-11-05
 
 Same environment (Linux, 2 vCPUs, Rust 1.97, release). Windows
 type-checked again (`cargo check --target x86_64-pc-windows-msvc`), not
 executed.
 
-## Automated
+### Phase 2 - Automated
 
 `cargo test --release` — 48 unit tests + 12 end-to-end tests, all passing.
 New unit coverage: DCT-II against the naive double sum; dihedral group
@@ -109,7 +109,7 @@ tint; 640×480 to 900×1200) × 21 perturbations = 3,300 signatures. 22.5 ms
 per perturbed image including the transform itself.
 
 | perturbation | d max | d p95 | p max | p p95 | recall |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | scale 50 % | 1 | 0 | 2 | 0 | 100 % |
 | scale 25 % | 2 | 1 | 2 | 0 | 100 % |
 | upscale 150 % | 1 | 0 | 2 | 0 | 100 % |
@@ -140,7 +140,7 @@ Threshold sweep — recall over the perturbations a block hash can be
 expected to survive (all but rotate 2°/5° and crop 60 %) | false positives:
 
 | d \ p | ≤10 | ≤12 | ≤14 | ≤16 | ≤18 | ≤20 |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | ≤6 | 81.7 % \| 0 | 83.4 % \| 0 | 85.7 % \| 0 | 87.2 % \| 0 | 87.7 % \| 0 | 88.1 % \| 0 |
 | ≤8 | 83.2 % \| 0 | 85.5 % \| 0 | 88.3 % \| 0 | 90.0 % \| 0 | 90.8 % \| 0 | 91.3 % \| 0 |
 | **≤10** | 83.7 % \| 0 | 86.5 % \| 0 | **89.5 % \| 0** | 91.4 % \| 1 | 92.4 % \| 1 | 93.0 % \| 1 |
@@ -156,7 +156,7 @@ identical 25,299 pairs.
 Random codes with planted copies, 2 vCPUs:
 
 | signatures | linear | MIH |
-|---|---|---|
+| --- | --- | --- |
 | 2,200 | 0.024 s | 0.032 s |
 | 5,500 | 0.154 s | 0.120 s |
 | 11,000 | 0.599 s | 0.364 s |
@@ -177,7 +177,7 @@ exactly the planted structure**; 0 false merges; one member displayed over
 threshold relative to its keeper (linked through the mirror), shown in the
 warning colour as designed.
 
-## Not verified here
+## Phase 2 - Not verified here
 
 - Execution on Windows (type-checked only).
 - Real photographs: the corpus is procedural. Rates above are the
@@ -189,7 +189,7 @@ warning colour as designed.
 
 ---
 
-# VERIFICATION — Phase 2b (PDQ), run on 2026-11-07
+## VERIFICATION — Phase 2b (PDQ), run on 2026-11-07
 
 Same environment. Windows type-checked, not executed. `cargo test
 --release`: 56 unit + 12 end-to-end tests passing; `cargo clippy
@@ -216,7 +216,7 @@ Same 150 × 21 corpus. `q` is the PDQ distance on the orientation the
 64-bit pair chose; `q*` the best over all orientations.
 
 | perturbation | q max | q p95 | q* max | recall q≤31 | d∧p∧q | d∧p only |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | scale 50 % | 8 | 8 | 8 | 100 % | 100 % | 100 % |
 | scale 25 % | 14 | 10 | 14 | 100 % | 100 % | 100 % |
 | upscale 150 % | 12 | 8 | 12 | 100 % | 100 % | 100 % |
@@ -239,7 +239,7 @@ Same 150 × 21 corpus. `q` is the PDQ distance on the orientation the
 | letterbox | 142 | 122 | 124 | 0 % | 0 % | 62.0 % |
 | squeeze 75 % | 10 | 4 | 10 | 100 % | 100 % | 100 % |
 
-Negatives, 480,525 pairs: min q* **74**, 0.1st percentile 94, 1st
+Negatives, 480,525 pairs: min q***74**, 0.1st percentile 94, 1st
 percentile 102, median 116, mean 115.5. False positives at q* ≤ T for
 T ∈ {24, 28, 31, 36, 40, 48, 56, 64}: **0 at every T**. PDQ-alone recall
 over the survivable perturbations: 77.6 % at T = 24, 77.7 % at 31, 80.4 %
@@ -253,7 +253,7 @@ negatives never came within 74 bits.
 ### Small-input upscale floor (`MIN_SIDE`)
 
 | MIN_SIDE | scale 25 % q max / p95 | scale 50 % q max | bright −20 % q max | gamma recall |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | none | 32 / 26 (99.3 %) | 12 | 4 | 98.7 % |
 | 256 | 16 / 10 | 12 | 4 | 98.7 % |
 | **384** | **14 / 10** | **8** | **4** | **98.7 %** |
@@ -264,7 +264,7 @@ Negatives identical for all four. Shipped: 384.
 ## Manual, photo fixture (8 files)
 
 | run | observed |
-|---|---|
+| --- | --- |
 | `find . img` | GROUP 001 (export + byte copy); NEAR 002: keeper `beach.png`, mirror q 8, export q 2, 5 % crop d 10 p 6 **q 32** lit in warning colour, small q 4 |
 | `purge . -n` | 1 `would` + 3 `would~` (q 8, 2, 4); `kept~ beach_crop.jpg  PDQ q 32 over 31`; footer names `dedupe milk .` |
 | `purge .` | 4 binned through the OS trash; crop stays |
@@ -282,7 +282,7 @@ groups as before; **all 123 near members PDQ-confirmed, max q 6**; `purge
 Per-image profile (1600×1200 JPEG, single thread): decode 5.8 ms,
 prefilter 3.9 ms, Lanczos grid 7.0 ms, PDQ 3.2 ms, dHash+pHash×8 1.2 ms.
 
-## Not verified here
+## Phase 2b - Not verified here
 
 - Bit-identity with the reference PDQ tool (its Python wrapper could not
   be installed in this environment; the departures are documented in
@@ -291,3 +291,105 @@ prefilter 3.9 ms, Lanczos grid 7.0 ms, PDQ 3.2 ms, dHash+pHash×8 1.2 ms.
 - Real photographs: PDQ quality will sit higher than on this corpus; the
   recall figures for crop/rotate/letterbox are the mechanism's and will
   transfer.
+
+---
+
+## VERIFICATION — Phase 3 (video), run on 2026-11-07
+
+Same environment; ffmpeg 6.1.1 with libx264. Windows type-checked, not
+executed. `cargo test --release`: 63 unit + 15 end-to-end tests passing
+(the three video end-to-end tests generate their clips with ffmpeg and
+skip when it is absent); `cargo clippy --all-targets` clean.
+
+### Phase 3 - Unit coverage added
+
+Position indices inside the frame range and increasing; frame-rate
+fraction parsing; identical TMK descriptors score level 1 = level 2 = 1 at
+offset 0; copies of a synthetic feature stream shifted by 45, 150 and 600
+frames keep level 2 > 0.9 and level 1 > 0.9; independent streams score
+below 0.3 on both; the normaliser c_0 + 2Σc_j equals 1.9292 from the
+reference table; the grouping/binning rules on constructed relations
+(TMK 0.85 groups and is not binned with the reason `TMK 0.85 under 0.9`;
+frames d 2 p 3 q 40 group and are not binned with
+`frames q 40 over 31; …`; frames d 20 p 30 do not group).
+
+A note on what the TMK tests do not claim: with the reference's
+per-coefficient normalisation the recovered time offset on a slowly varying
+synthetic stream came out at 4 frames for a 45-frame shift. The score
+stays high; the offset is approximate, is not asserted, and is not shown.
+
+## Corpus — `cargo test --release --test video_corpus -- --ignored --nocapture`
+
+16 sources (four Mandelbrot zooms, three Life runs, three cellular
+automata, two test patterns, two gradient fields, SMPTE bars, RGB test),
+20 s each at 640×360 libx264 crf 20; 12 edits each; 208 clips, 60,304
+frames at 15 fps; generation 294 s, hashing 132 s (2.18 ms per frame
+including ffmpeg).
+
+| edit | d med | p med | q med | l1 min | l2 min | positional | TMK | grouped | binnable |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| re-encode crf30 | 2 | 2 | 6 | 0.957 | 0.948 | 94 % | 100 % | 100 % | 100 % |
+| scale 50 % | 1 | 2 | 6 | 0.950 | 0.973 | 100 % | 100 % | 100 % | 100 % |
+| crop 90 % | 9 | 14 | 88 | 0.501 | 0.493 | 50 % | 50 % | 56 % | 31 % |
+| trim head 3 s | 16 | 20 | 104 | 0.762 | 0.890 | 19 % | 100 % | 100 % | 94 % |
+| trim tail 3 s | 15 | 20 | 108 | 0.688 | 0.862 | 12 % | 100 % | 100 % | 88 % |
+| trim both 2+2 s | 12 | 16 | 114 | 0.665 | 0.785 | 19 % | 94 % | 94 % | 88 % |
+| title card 3 s | 15 | 20 | 116 | 0.994 | 0.989 | 12 % | 100 % | 100 % | 100 % |
+| speed 1.1× | 1 | 2 | 16 | 0.975 | 0.982 | 94 % | 100 % | 100 % | 100 % |
+| mirror | 0 | 0 | 4 | −1.000 | 0.010 | 100 % | 6 % | 100 % | 88 % |
+| letterbox | 9 | 18 | 106 | −0.196 | 0.046 | 0 % | 25 % | 25 % | 0 % |
+| fps 15 | 0 | 0 | 2 | 0.997 | 0.995 | 94 % | 100 % | 100 % | 100 % |
+| brightness +0.1 | 1 | 2 | 8 | 0.990 | 0.986 | 100 % | 100 % | 100 % | 100 % |
+
+Level 2 per edit (min / p10 / median): re-encode 0.948/0.981/1.000;
+trim head 0.890/0.906/0.987; trim tail 0.862/0.876/0.971; trim both
+0.785/0.834/0.982; title card 0.989/0.993/0.997.
+
+Negatives, 3,000 pairs: max level 1 **0.817**, max level 2 **0.769**;
+positional closest d 1 p 28 q 124. The six closest are all Mandelbrot
+`mandel_a` against `mandel_d` and its edits.
+
+TMK sweep — false groups | recall over the TMK-carried edits (all but
+crop, mirror, letterbox):
+
+| l1 \ l2 | ≥0.70 | ≥0.75 | ≥0.80 | ≥0.85 | ≥0.90 |
+| --- | --- | --- | --- | --- | --- |
+| ≥0.5 | 19 \| 100 % | 4 \| 100 % | **0 \| 99.3 %** | 0 \| 98.6 % | **0 \| 96.5 %** |
+| ≥0.6 | 19 \| 100 % | 4 \| 100 % | 0 \| 99.3 % | 0 \| 98.6 % | 0 \| 96.5 % |
+| ≥0.7 | 19 \| 98.6 % | 4 \| 98.6 % | 0 \| 97.9 % | 0 \| 97.9 % | 0 \| 96.5 % |
+| ≥0.8 | 2 \| 97.9 % | 2 \| 97.9 % | 0 \| 97.2 % | 0 \| 97.2 % | 0 \| 96.5 % |
+
+Shipped: gate l1 ≥ 0.5; group l2 ≥ 0.8; bin l2 ≥ 0.9. With these: **0
+false groups, 0 false confirms** across the 3,000 negatives.
+
+## Manual, six clips
+
+`find . vid` on a fractal zoom, its byte copy, a 320×180 crf-32 re-encode,
+a mirror, a 4-second head cut, and two unrelated clips: GROUP 001 (zoom +
+byte copy); VIDEO 002 with the zoom as keeper (`keeper of GROUP 001`), the
+mirror at d 0 p 0 q 2 `tmk -` `mirror`, the small copy at d 1 p 2 q 8
+tmk 1.00, the cut at d 15 p 20 q 102 tmk 0.98 `trim`; the unrelated clips
+out. `purge . vid`: 1 `binned`, 3 `binned~`, through the OS trash;
+`--undo`: 4 restored, file list identical. Under a pseudo-terminal the
+FRAMES line redrew in place and closed with `6 videos hashed   1,740
+frames at 15 fps   4.5 s`.
+
+## Scale — the 208-clip corpus as a folder
+
+`find . vid` (821 MB): FRAMES 129 s (one ffmpeg process at a time on this
+2-core box — `concurrency()` is ⌈cores/2⌉ clamped to 1–4), MATCH 3.0 s
+for 21,528 pairs, **16 video groups = the 16 source families, none
+mixed**, 11–13 members each (crop and letterbox edits are the ones
+missing), 192 of 208 clips grouped.
+
+## Phase 3 - Not verified here
+
+- More than one ffmpeg process at a time (this box runs one); the cap of
+  four with `-threads 2` each is the shipped guess for a desktop.
+- Real footage: the corpus is synthetic. The hard negatives (two zooms into
+  the same fractal) model "same generator, different parameters" — burst
+  clips, multiple takes — which is the class a real library will test.
+- Windows execution: `ffmpeg.exe` through `std::process::Command` with a
+  piped stdout is the same code path; not run.
+- Files over ~2 hours (four minutes of ffmpeg each on this box; memory per
+  descriptor is 256 KB regardless of length).

@@ -3,7 +3,7 @@
 Written by `rose campaign --seed 11 --shifts 200` on 2026-11-13 (Full Design v3.20, Narrative and Ivan: The proof; the Build plan's Phase E). Five scripts play the campaign headless at the bot's pace, one for each ending: the steward of `rose city` running the shifts and the campaign's own player on top — the research the chapters ask for, the climb up the stack, the defences once the Oathkeepers come, the gene pair it steers with Ivan's feeds and the Stash's Chrome, the accord refused once a Gate and a Turret stand (taken before), an alliance at chapter 6 and the Great Cleansing met at chapter 7; Scattered's script raises no defence and refuses the accord, and the chapter's Cleansing burns the Heart. **Result: every script reached its ending.**
 
 | script | genes steered | the accord | ending | warchest | shifts | chapters 2–7 opened at shift | strata 2–6 reached at shift | the genome at the end, Vigor to Plasticity | slimos at the end | seconds |
-|---|---|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | garden | Lume and Thrift | accepted | garden | 9119 | 180 | 4 · 9 · 13 · 82 · 83 · 96 | 4 · 22 · 35 · 64 · 77 | 1.00 0.87 0.96 0.95 1.00 0.69 0.48 0.50 0.99 0.74 | 2018 | 462 |
 | hive | Chrome Affinity and Conductance | accepted | hive | 52408 | 134 | 4 · 9 · 13 · 44 · 45 · 64 | 4 · 27 · 44 · 55 · 64 | 1.00 0.85 0.92 0.99 0.90 0.98 0.98 0.50 1.00 0.15 | 2037 | 388 |
 | world_eater | Appetite and Feral Drive | accepted | world_eater | 49891 | 124 | 4 · 9 · 13 · 81 · 84 · 109 | 4 · 21 · 83 · 91 · 109 | 0.99 1.00 0.90 1.00 0.89 0.81 0.90 1.00 0.92 0.61 | 2072 | 209 |
@@ -13,7 +13,7 @@ Written by `rose campaign --seed 11 --shifts 200` on 2026-11-13 (Full Design v3.
 ## garden, every tenth shift
 
 | shift | chapter | stratum | slimos | Mat cells joined | top row | Lume | Thrift | Feral Drive | Bloom tiles | Parts / Chrome / eddies | the loudest grate |
-|---|---|---|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 10 | 3 | S2 | 26 | 614 | 239 | 0.57 | 0.56 | 0.50 | 0 | 6 / 15 / 4 | 28 |
 | 20 | 4 | S2 | 56 | 1354 | 197 | 0.64 | 0.68 | 0.50 | 0 | 33 / 5 / 122 | 100 |
 | 30 | 4 | S3 | 92 | 2475 | 149 | 0.97 | 0.73 | 0.50 | 0 | 20 / 8 / 190 | 100 |
@@ -36,7 +36,7 @@ Written by `rose campaign --seed 11 --shifts 200` on 2026-11-13 (Full Design v3.
 ## hive, every tenth shift
 
 | shift | chapter | stratum | slimos | Mat cells joined | top row | Chrome Affinity | Conductance | Feral Drive | Bloom tiles | Parts / Chrome / eddies | the loudest grate |
-|---|---|---|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 10 | 3 | S2 | 26 | 526 | 225 | 0.53 | 0.60 | 0.50 | 0 | 3 / 3 / 32 | 27 |
 | 20 | 4 | S2 | 62 | 935 | 219 | 0.62 | 0.67 | 0.50 | 0 | 19 / 4 / 129 | 100 |
 | 30 | 4 | S3 | 122 | 1910 | 175 | 0.69 | 0.80 | 0.50 | 253 | 27 / 3 / 242 | 100 |
@@ -55,7 +55,7 @@ Written by `rose campaign --seed 11 --shifts 200` on 2026-11-13 (Full Design v3.
 ## world_eater, every tenth shift
 
 | shift | chapter | stratum | slimos | Mat cells joined | top row | Appetite | Feral Drive | Bloom tiles | Parts / Chrome / eddies | the loudest grate |
-|---|---|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 10 | 3 | S2 | 26 | 423 | 229 | 0.51 | 0.50 | 0 | 6 / 8 / 48 | 27 |
 | 20 | 4 | S2 | 56 | 822 | 200 | 0.88 | 0.50 | 0 | 20 / 2 / 61 | 100 |
 | 30 | 4 | S3 | 68 | 1591 | 167 | 0.93 | 0.50 | 0 | 38 / 7 / 125 | 100 |
@@ -73,7 +73,7 @@ Written by `rose campaign --seed 11 --shifts 200` on 2026-11-13 (Full Design v3.
 ## accord, every tenth shift
 
 | shift | chapter | stratum | slimos | Mat cells joined | top row | Thrift | Toxicity | Feral Drive | Bloom tiles | Parts / Chrome / eddies | the loudest grate |
-|---|---|---|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 10 | 3 | S2 | 26 | 582 | 230 | 0.52 | 0.76 | 0.50 | 0 | 6 / 16 / 1 | 10 |
 | 20 | 4 | S3 | 56 | 1228 | 173 | 0.55 | 0.92 | 0.50 | 0 | 21 / 6 / 200 | 100 |
 | 30 | 4 | S3 | 98 | 1937 | 144 | 0.58 | 0.99 | 0.50 | 0 | 12 / 12 / 399 | 100 |
@@ -96,7 +96,7 @@ Written by `rose campaign --seed 11 --shifts 200` on 2026-11-13 (Full Design v3.
 ## scattered, every tenth shift
 
 | shift | chapter | stratum | slimos | Mat cells joined | top row | Lume | Thrift | Feral Drive | Bloom tiles | Parts / Chrome / eddies | the loudest grate |
-|---|---|---|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 10 | 3 | S2 | 26 | 614 | 239 | 0.57 | 0.56 | 0.50 | 0 | 6 / 15 / 4 | 28 |
 | 11 | 8 | S2 | 22 | 1 | 265 | 0.57 | 0.56 | 0.50 | 0 | 7 / 22 / 6 | 9 |
 
