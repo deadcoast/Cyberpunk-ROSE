@@ -24,7 +24,7 @@ once from the flags (see radius, every sound, melee noise, melee and ranged lean
 walk, a bigger dug pile, Eye in the dark, no fever), followers' `back_off_pct`, and a bonded follower within six
 tiles as +4 stamina. The Outcome carries what the roster reads (items taken, hits survived, follower strikes, the
 statuses carried home). Save v6 carries the roster. The bot and the Phase B tests run on `RunnerSetup::plain(5)`,
-the table's numbers, so `docs/telemetry/cadence.md` is unchanged by this PAC (checked: same aggregate).
+the table's numbers, so `docs/03/telemetry/cadence.md` is unchanged by this PAC (checked: same aggregate).
 
 The game: `RosePeople` (bridge) holds the roster for the session; `Sim.ensure_people()` founds six from the save's
 seed. The Route Board's crew is the roster's eligible slimos — click a name for the Runner, COMES ALONG / STAYS HOME
@@ -36,7 +36,7 @@ the record right (stats as gauges, skills as ten-step bars with XP to next, trai
 Mood target marked, injuries, the record line, bonds, a row of priority cells, the memorial), SEND ON A RUN opens the
 Route Board with them as the Runner.
 
-Reviewed by eye (`docs/shots/slimo.png`, `route.png`, `play_11_slimo.png`): the placeholder font had no `'` or `;`
+Reviewed by eye (`assets/shots/slimo.png`, `route.png`, `play_11_slimo.png`): the placeholder font had no `'` or `;`
 (epithets and trait texts rendered as boxes) — nine glyphs added to `tools/src/font.rs`; the card's trait texts ran
 into the injuries line — moved; the Board's four crew rows overflowed their frame and the Stash rows ran into the
 depart note — compacted to 32 px rows and the rows raised. One first play shot read a Mood target of 85 where the
@@ -87,7 +87,7 @@ refused, right-click to cancel an unpaid ghost, a city line (tier, day and shift
 a ghost waits for) and, in District view, each district's reach, name, foreman and petition. The Slimo card shows the
 slimo's bed, last shift's job and district (FOREMAN), and the schedule row.
 
-Reviewed by eye (`docs/shots/colony.png`, `colony_district.png`, `build.png`, `play_11_slimo.png`): the first
+Reviewed by eye (`assets/shots/colony.png`, `colony_district.png`, `build.png`, `play_11_slimo.png`): the first
 placement rule asked every footprint tile to be Mat, and the probe found no Bunkhouse anchor anywhere on a grown
 Mat (cords are one tile wide) — the rule became anchor-on-Mat, footprint-on-floor, written into the design; zones
 follow the same logic. The Colony's text ran over lit tiles — framed; district labels drew at world scale and
@@ -144,7 +144,7 @@ strike and defection lines and their petitions (ANSWER repeals the law asked, or
 structure; REFUSE); the board's history; Ivan's portrait in his state. A D5's Slimo card shows its feed value and
 DISSOLVE.
 
-Reviewed by eye (`docs/shots/charter.png`): the effect lines lost their third line and the "waits for" notes were
+Reviewed by eye (`assets/shots/charter.png`): the effect lines lost their third line and the "waits for" notes were
 cut mid-word — effect and cost now share four lines and the notes are short in the data; the buttons sat on the cards'
 border and Ivan's portrait overran its frame — moved; a law signed between shifts read "in force: the Heart" while the
 district's hub was inside the wave — the card now shows where the wave stands, the shift announces arrivals. The
@@ -196,7 +196,7 @@ tier's colour (Street, District); the Stack view is the core's circuit board wit
 map are the roster by depth, walking to work or home; the Stash's ledger shows what landed this shift and what is
 on the Mat; the Route Board takes the crew off the map.
 
-Reviewed by eye (`docs/shots/colony*.png`): four packets on a tile overlapped into one square — drawn side by side
+Reviewed by eye (`assets/shots/colony*.png`): four packets on a tile overlapped into one square — drawn side by side
 now; the Stack view at a thirty-second zoom only sampled the placeholder tiles' texels and the traffic vanished in the
 Mat's own pinks — it is now the core's one-pixel-a-tile image; every convoy of four the Heart released counted as a
 jam forever — a jam is now Pass 2's "above capacity", a full tile with cargo waiting behind it; the quota card sat
@@ -252,7 +252,7 @@ priorities (click cycles, a drag paints, the foreman's mark, a district filter);
 the Heart's floor and each stockpile; the Strain Lab reads the genome and every Pit's quota (organs and the
 Strainbook say PAC-080). The city's log is written to `user://telemetry/city.log`.
 
-Reviewed by eye (`docs/shots/colony*.png`, `build.png`, `jobs.png`, `stash.png`, `strain.png`): every gauge in the
+Reviewed by eye (`assets/shots/colony*.png`, `build.png`, `jobs.png`, `stash.png`, `strain.png`): every gauge in the
 game drew full whatever its value — a Control clips its children, not its own drawing — the fill is now a strip
 inside a clip (the Strain Lab's genes, the Run's stamina); the Stack view at one pixel a tile was a 192 × 48 stamp in
 the middle of the screen, the same picture as the minimap — three pixels a tile now, the stratum across the screen;
@@ -260,7 +260,7 @@ the Build card's build-points line ran off the frame; a verb's answer stood on t
 Job grid's status read as Rust's debug text; the Stash's free UPGRADE ignored that the grid is the Heart's tier —
 gone. The Phase A free verbs (free salt, free sever, free Relay, free feed) left the bridge.
 
-`rose city` (`docs/telemetry/city.md`): twenty shifts in 7 s, played twice and compared. What it found and what
+`rose city` (`docs/03/telemetry/city.md`): twenty shifts in 7 s, played twice and compared. What it found and what
 changed: the city parted from its replay (the haul took the backpack in its map's order, and build crews were paid
 in a hash map's order) — ordered now, bit-exact; a bot stood on a source it could not take from for forty minutes —
 it gives one up after five seconds; four sales for a grate the Mat had cut off sat on the Heart's tile and every
@@ -320,7 +320,7 @@ the bot band of 3.3–10 s, bit-exact replay, 6 s. Over seeds 11–26 the cord h
 plan stands on eleven; on 13, 14, 15, 23 and 26 the first route card kills 4–8 of twenty Runners and the city thins
 to 0–3 before its plan stands — the steward never changes card.
 
-Reviewed by eye (`docs/shots/colony*.png`, the play frames): the Stack view shows the founded Mat as one climbing
+Reviewed by eye (`assets/shots/colony*.png`, the play frames): the Stack view shows the founded Mat as one climbing
 strand from the Heart to the grate at the top edge; the District view the same strand in tiles; the Colony HUD reads
 seven slimos and one district on day 2. Tests: 17 in `colony` and 8 in `game` (a cut found anywhere on the founded
 Mat; the Heart's quota above the founding Pit), `mat`'s die-back check restated (no feed and no Deposits: 300 cells to 198 in forty shifts); the

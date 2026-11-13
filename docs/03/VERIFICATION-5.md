@@ -55,12 +55,12 @@ risen water drowns. `rose cadence`, deaths by stratum S1 / S2 / S3:
 | 0 / 25 / 35 % | 40 | 28 / 40 / 28 % |
 | none | 60 | 25 / 30 / 23 % |
 | 0 / 15 / 25 % (shipped) | 60 | 25 / 35 / 25 % |
-| 0 / 15 / 25 % (shipped), `docs/telemetry/cadence.md` | 20 | 10 / 30 / 25 % |
+| 0 / 15 / 25 % (shipped), `docs/03/telemetry/cadence.md` | 20 | 10 / 30 / 25 % |
 
 The bot never waits for a gang to leave; a player can, and the death band is the player's (Phase F calibrates the bot).
 The bot surfaces when it has been under the Flood's water half the drowning time.
 
-**Reviewed by eye** (`docs/shots/colony_sweep.png`, `colony_flood.png`, `colony_stack.png`, `run_pressure.png`,
+**Reviewed by eye** (`assets/shots/colony_sweep.png`, `colony_flood.png`, `colony_stack.png`, `run_pressure.png`,
 `route.png`): a Sweep sent down grate 5 stands at the Heart in one hard-edged pool of white light, its six bodies
 fanned across the tile, bleach drips on the cords beside it; a Flood shift's two risen rows read in Flood Light with
 ripples over the darker standing water, the surface a Cyan line; the Stack view keeps G5's gauge under its grate; on
@@ -120,7 +120,7 @@ twelve (ten before), eleven seeds' deaths unchanged; on 12, 13 and 15 more Runne
 the same route card was killing every Runner from shift 9 or 10 there already, and clinic days and hosts brought more
 slimos to it (4, 9, 7 joined against 2, 2, 2). `rose cleansing` over 11–18: the spread holds on seven, 13 as before.
 
-**Reviewed by eye** (`docs/shots/colony_stack.png`, `stash.png`): G5's gauge carries NOMADS under its three pips; the
+**Reviewed by eye** (`assets/shots/colony_stack.png`, `stash.png`): G5's gauge carries NOMADS under its three pips; the
 Stash card of a Blackline Lamp Core reads "SELL no stall at GRATE 5 NOMADS buys this" with the verb greyed, and the
 bulk panel sends "TO GRATE 5 NOMADS". What changed for it: the markets were named by their index, so grate 5 read
 GRATE 1; a Blackline piece showed a price no stall would pay.
@@ -170,7 +170,7 @@ and the link is done at the shift's end. In the game the body joins the route's 
 Chrome 11,889 e, feeding it 8,519 (more on fifteen), the nearer grate in four cities each way, 50 shifts without a
 market against 24. The design's line carries these numbers.
 
-**Reviewed by eye** (`docs/shots/market.png`, `market_far.png`, `play_12_market.png`, `play_13_intel.png`): the
+**Reviewed by eye** (`assets/shots/market.png`, `market_far.png`, `play_12_market.png`, `play_13_intel.png`): the
 Nomads' tab with G5 lit; the standing line — seven reputation pips with 0 lit, favour 0/20, "TIER 2 AT REP +0 AND 150 E
 TRADED: 0"; today's stock with units and prices, tiers 2–4 dimmed under their tier, the picked Food Paste ordered and
 its count down to 11; the stall's queue with three sales quoted and the order, net +7 e; demand bars with the buy-list
@@ -204,7 +204,7 @@ builders, Hands 13 between them). `rose city` over seeds 11–26: every plan and
 replays bit-exact — in twenty shifts the steward's structures never stand in a Flood's water or a flamer's reach,
 so nothing is mended there.
 
-**Reviewed by eye** (`docs/shots/play_14_mending.png`, `play_15_mended.png`): the Bench outlined in Cyan, its card's
+**Reviewed by eye** (`assets/shots/play_14_mending.png`, `play_15_mended.png`): the Bench outlined in Cyan, its card's
 state line HP 55/100 with 2 MENDING IT in Acid, then HP 81/100. What the frames changed: the click on the Bench
 picked the slimo standing at it, so the frame opens the structure's card directly; and the card's slot line listed
 every worker at the structure as its Tweak slot's, the menders among them — it lists the hosted job's now.

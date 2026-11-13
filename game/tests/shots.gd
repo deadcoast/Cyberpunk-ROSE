@@ -1,5 +1,5 @@
 extends SceneTree
-## Screenshot every screen at native 640x360 into docs/shots/. Needs a display (Xvfb works):
+## Screenshot every screen at native 640x360 into assets/shots/. Needs a display (Xvfb works):
 ##   xvfb-run -s "-screen 0 1920x1080x24" godot --path game --rendering-driver opengl3 --script res://tests/shots.gd
 
 var screen_ids: Array = []
@@ -33,7 +33,7 @@ func _initialize() -> void:
 	# the Market first: the colony's shots send a Sweep down grate 5, whose bleach cuts the cord to its market
 	screen_ids.erase("market")
 	screen_ids.push_front("market")
-	out_dir = ProjectSettings.globalize_path("res://../docs/shots")
+	out_dir = ProjectSettings.globalize_path("res://../assets/shots")
 	DirAccess.make_dir_recursive_absolute(out_dir)
 
 func _process(_delta: float) -> bool:

@@ -83,7 +83,7 @@ Pipeline
 1. Three style anchors (a culvert tile panel, a D2 slimo, a Rare chrome item) are generated in PixelLab with
    `generate_image_pixflux`, curated by hand and committed to game/assets/anchors.
 2. Every later slot is generated with `generate_image_bitforge` against its anchor at style strength 70 or higher,
-   from the brief in docs/pixellab-prompts.md (generated from the manifest; never typed).
+   from the brief in docs/03/pixellab-prompts.md (generated from the manifest; never typed).
 3. `rose-tools validate` checks exact size, the palette lock (at most 2% off-palette pixels) and the outline rule
    (edge pixels Void or the ramp's darkest step); a failing file never ships.
 4. The engine resolves `game/assets/art/<id>.png` when present, else the placeholder; placeholders retire slot by slot.

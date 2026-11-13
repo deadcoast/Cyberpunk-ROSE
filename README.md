@@ -1,13 +1,13 @@
 Cyberpunk: ROSE — Rise of the Slimecity Empire
 ==============================================
 
-An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/FullDesign.md`.
-Art: `docs/art-bible.md` (Sewer Noir 32). Tasks: `todo.PACER.csv`. Status: Phase C, the city, closed (PAC-020–028, PAC-040–045 done); Phase D, pressure, closed (PAC-060–063 done: the threats, the surface's factions and the Market, mending); Phase E, progression, closed (PAC-080 done: the tech tree, the organs, the strain classes, the Strainbook, Nerve logic, route loops, the handoff, Authority's deeds, the city tiers and the collections; PAC-081 done: the stack of six strata, the seven chapters, Ivan, the endings, New Run, the strain code, the profile, the Daily Seed and Endless, and `rose campaign` playing each of the five endings headless). Every backend and feature row in the register is done; the art rows (PAC-090 to 093) wait on the PixelLab agent.
+An extraction colony-builder on a living purple ooze network under Night City. Design: `docs/03/FullDesign.md`.
+Art: `docs/03/art-bible.md` (Sewer Noir 32). Tasks: `todo.PACER.csv`. Agents start at `AGENTS.md`. Status: Phases A–E done (PAC-001 to PAC-083: foundations, the run, the city, pressure, progression and the campaign); the latest review is `docs/03/CURRENT-STATE.md`, and Phase G (PAC-101 to PAC-110) works through it. The art rows (PAC-090 to PAC-093) belong to the pixel-lab-agent.
 
     ./run.sh /path/to/godot4.5
 
 builds the Rust core, runs its tests, regenerates placeholders and validates them, installs the GDExtension,
-runs the Godot shell headless through all fourteen screens, and writes native screenshots to `docs/shots/`.
+runs the Godot shell headless through all fourteen screens, and writes native screenshots to `assets/shots/`.
 
 Layout
 ------
@@ -19,8 +19,9 @@ Layout
     tools/             `rose-tools`: manifest -> placeholders, validate, prompts, contact sheet
     game/              Godot 4.5 project: Main, autoloads (Assets, Screens, Sim), ui/, modes/<screen>/, tests/
     game/assets/       palette/ manifest/ placeholders/ anchors/ art/   (read as files at runtime; .gdignore)
-    data/              items.toml (164 items), chunks.toml (19 run chunks), loot.toml, creatures.toml, recipes.toml (60), traits.toml (40), names.toml, structures.toml (25), laws.toml (8), strings.toml
-    docs/              design · art bible · research/ (01-21) · telemetry/ · pixellab-prompts.md · shots/ · VERIFICATION-*
+    data/              items.toml (164 items), chunks.toml (42 run chunks), loot.toml, creatures.toml, recipes.toml (60), traits.toml (40), names.toml, structures.toml (25), laws.toml (8), strings.toml
+    docs/              01/ Pass 1 · 02/ Pass 2 · 03/ the design, art bible, prompts, CURRENT-STATE, VERIFICATION-*, telemetry/ · research/ (01-22)
+    assets/shots/      native screenshots from game/tests/shots.gd and play.gd
     src/, history/     the Python prototypes and the M1 archive
 
 Where things come from
@@ -29,7 +30,7 @@ Where things come from
 - A drawable in Godot is an `AssetSlot(id)`; the engine resolves `game/assets/art/<id>.png` when it exists and has
   passed `rose-tools validate`, else the placeholder the tool generated from `game/assets/manifest/*.toml`.
 - Items, strings and (from Phase C) structures, laws, traits and barks are data files; balancing never recompiles.
-- One PCG32 stream per simulation; a save is seed + inputs + snapshots and replays exactly.
+- One PCG32 stream per simulation; the save format is seed + inputs + snapshots and replays exactly (the game does not write saves yet: PAC-102).
 
 Controls in the shell
 ---------------------
@@ -41,7 +42,7 @@ its card and the four verbs (Sell to a grate market, Feed to a Pit, Craft to the
 ALL act on the unpinned view; BACK pulls a queued item out; at the shift end after a run the queue leaves the Heart as
 cargo and each item pays or feeds when it lands · Bench:
 pick a recipe, click a slot then a Stash item that carries its tag, CRAFT queues (parts leave the Stash), CANCEL
-returns them; jobs finish at shift end · Slimo: the roster left, click a name for its record; click a job cell to
+returns them; a Tweaker in a Bench slot works the first job a minute at a time · Slimo: the roster left, click a name for its record; click a job cell to
 cycle its priority 0–4; MEMORIAL for the dead; SEND ON A RUN · Route
 Board: click a card or 1–3 to pick a route, click a crew name to make them the Runner and COMES ALONG / STAYS HOME
 for up to two followers (the roster's eligible slimos), click Stash items into the hand, quick slots and pack,
@@ -49,7 +50,7 @@ DEPART or ENTER · Run: WASD move, SHIFT sprint, CTRL sneak, Q (hold) dim veins,
 E open a source (pry bar when carried) or hold E on the Mat or under a grate to extract, R take all, V drop the last
 thing taken, 1–4 use a quick slot (antiseptic, stim, salt line), Z/X/C order followers (follow / hold / guard), L lantern,
 TAB stash. The run is `run::sim::RunSim` in Rust at 20 Hz; the screen
-is its view. `game/tests/play.gd` plays a scripted run under Xvfb and saves review frames to docs/shots/play_*.png.
+is its view. `game/tests/play.gd` plays a scripted run under Xvfb and saves review frames to assets/shots/play_*.png.
 
 `rose route --seed N --stratum S [--sweep 200]` assembles a run route from `data/chunks.toml`, renders it and its
 light to `out/`, reports the authored light bands, a lantern-on / dimmed sight and exposure comparison and a sprint
@@ -57,12 +58,12 @@ step's noise footprint, with `--sweep` chunk, container and spawn averages and t
 with `--loot N` opens every container on N seeds per stratum and reports value per container, tier mix, notable rate and
 the stratum-to-stratum ratio.
 
-`rose city --shifts 20` plays the whole game headless — a bot run each shift, a steward's standing orders, the shift in `game` — twice, asserts that it replays bit-exact, that cargo lands within the next shift, that the build plan stands, that the cord to the first grate stands or a Relay can go out to win it back, that nobody starves and the Heart keeps its signal, and writes the merged run-and-city cadence to `docs/telemetry/city.md` (the full log to `out/city.log`). The game writes the city's log to `user://telemetry/city.log`.
+`rose city --shifts 20` plays the whole game headless — a bot run each shift, a steward's standing orders, the shift in `game` — twice, asserts that it replays bit-exact, that cargo lands within the next shift, that the build plan stands, that the cord to the first grate stands or a Relay can go out to win it back, that nobody starves and the Heart keeps its signal, and writes the merged run-and-city cadence to `docs/03/telemetry/city.md` (the full log to `out/city.log`). The game writes the city's log to `user://telemetry/city.log`.
 
-`rose economy --seed 11 --shifts 30` is Phase D's proof of the economy (`data/factions.toml`, the `economy` crate, `game::trade`): the steward of `rose city` trades thirty shifts — its surplus to whichever stall in reach pays most, the contracts it can fill, protection when a Patrol is due at a Gang grate — and it asserts that every faction's demand stayed inside its band every day, then plays the seed again feeding the haul's Chrome to the Heart and compares reach, the cord and the eddies; the report is `docs/telemetry/economy.md`.
+`rose economy --seed 11 --shifts 30` is Phase D's proof of the economy (`data/factions.toml`, the `economy` crate, `game::trade`): the steward of `rose city` trades thirty shifts — its surplus to whichever stall in reach pays most, the contracts it can fill, protection when a Patrol is due at a Gang grate — and it asserts that every faction's demand stayed inside its band every day, then plays the seed again feeding the haul's Chrome to the Heart and compares reach, the cord and the eddies; the report is `docs/03/telemetry/economy.md`.
 
-`rose cleansing --seed 11 --shifts 10` is Phase D's proof: the steward of `rose city` plays ten shifts, then a Cleansing comes down the first grate twice from the same state — as the city stands, and with two Sphincter Gates and a manned Scrap Turret on the squads' way — and it asserts the designed spread (the Heart falls undefended and stands defended with most of its Mat) and writes both logs to `docs/telemetry/cleansing.md`. The threats (`data/threats.toml`, the `threat` crate) run in `rose city` and the game alike: Attention per grate zone, the stage that comes down at a zone's line, the white light and bleach on the Mat, Blooms from cut-off strains, Flood shifts in the city and on runs, raiders on routes.
+`rose cleansing --seed 11 --shifts 10` is Phase D's proof: the steward of `rose city` plays ten shifts, then a Cleansing comes down the first grate twice from the same state — as the city stands, and with two Sphincter Gates and a manned Scrap Turret on the squads' way — and it asserts the designed spread (the Heart falls undefended and stands defended with most of its Mat) and writes both logs to `docs/03/telemetry/cleansing.md`. The threats (`data/threats.toml`, the `threat` crate) run in `rose city` and the game alike: Attention per grate zone, the stage that comes down at a zone's line, the white light and bleach on the Mat, Blooms from cut-off strains, Flood shifts in the city and on runs, raiders on routes.
 
-`rose campaign --seed 11` is Phase E's proof (`data/chapters.toml`, the `story` crate, `game::campaign`, `game::proof`): five scripts play the campaign headless at the bot's pace, one for each ending — the steward of `rose city` running the shifts and a player on top that climbs the stack, raises the chapters' structures and defences, steers its gene pair with the Stash's Chrome and Ivan's feeds, answers the accord and signs the alliance — and it asserts each reaches its own ending; the report is `docs/telemetry/campaign.md` and every decision is in `out/campaign_<ending>_11.log` (about ten minutes; `--aim` plays one script).
+`rose campaign --seed 11` is Phase E's proof (`data/chapters.toml`, the `story` crate, `game::campaign`, `game::proof`): five scripts play the campaign headless at the bot's pace, one for each ending — the steward of `rose city` running the shifts and a player on top that climbs the stack, raises the chapters' structures and defences, steers its gene pair with the Stash's Chrome and Ivan's feeds, answers the accord and signs the alliance — and it asserts each reaches its own ending; the report is `docs/03/telemetry/campaign.md` and every decision is in `out/campaign_<ending>_11.log` (about twenty-five minutes; `--aim` plays one script).
 
-`rose cadence --runs 20 --strata 1,2,3` plays seeded runs with the cautious bot (`run::bot`) and writes every run's cadence report and the aggregate against the design's budget to `docs/telemetry/cadence.md` (`--logs DIR` keeps each run's full log). Every run played in the game writes the same log to `user://telemetry/`.
+`rose cadence --runs 20 --strata 1,2,3` plays seeded runs with the cautious bot (`run::bot`) and writes every run's cadence report and the aggregate against the design's budget to `docs/03/telemetry/cadence.md` (`--logs DIR` keeps each run's full log). Every run played in the game writes the same log to `user://telemetry/`.

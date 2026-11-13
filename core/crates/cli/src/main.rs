@@ -85,7 +85,7 @@ enum Cmd {
         #[arg(long, default_value_t = 1)]
         seed: u64,
         /// write the aggregate and every run's report here (markdown)
-        #[arg(long, default_value = "docs/telemetry/cadence.md")]
+        #[arg(long, default_value = "docs/03/telemetry/cadence.md")]
         report: PathBuf,
         /// also write each run's full log into this folder
         #[arg(long)]
@@ -99,7 +99,7 @@ enum Cmd {
         #[arg(long, default_value_t = 20)]
         shifts: u32,
         /// the report (markdown)
-        #[arg(long, default_value = "docs/telemetry/city.md")]
+        #[arg(long, default_value = "docs/03/telemetry/city.md")]
         report: PathBuf,
         /// the merged log, every event of every shift on one clock
         #[arg(long, default_value = "out/city.log")]
@@ -113,7 +113,7 @@ enum Cmd {
         /// shifts the steward plays before the Cleansing
         #[arg(long, default_value_t = 10)]
         shifts: u32,
-        #[arg(long, default_value = "docs/telemetry/cleansing.md")]
+        #[arg(long, default_value = "docs/03/telemetry/cleansing.md")]
         report: PathBuf,
     },
     /// Phase D's proof of the economy: the steward trades its surplus for the shifts, every demand's walk inside its
@@ -124,7 +124,7 @@ enum Cmd {
         seed: u64,
         #[arg(long, default_value_t = 30)]
         shifts: u32,
-        #[arg(long, default_value = "docs/telemetry/economy.md")]
+        #[arg(long, default_value = "docs/03/telemetry/economy.md")]
         report: PathBuf,
     },
     /// Phase E's proof: the campaign headless at the bot's pace, chapter 1 to an ending, for each aim's script.
@@ -136,7 +136,7 @@ enum Cmd {
         aim: String,
         #[arg(long, default_value_t = 200)]
         shifts: u32,
-        #[arg(long, default_value = "docs/telemetry/campaign.md")]
+        #[arg(long, default_value = "docs/03/telemetry/campaign.md")]
         report: PathBuf,
     },
 }
@@ -534,8 +534,8 @@ fn cmd_cadence(t: &Term, runs: u64, strata: &str, seed0: u64, report_path: &Path
     md.push_str("# Reward cadence — bot runs against the budget\n\n");
     md.push_str(&format!("Written by `rose cadence --runs {runs} --strata {} --seed {seed0}` on {}. The bot (`run::bot`) opens what it sees, takes what fits, fights adjacent threats over 40 % HP, digs deposits it stands beside, extracts when the rig is nearly full, the shift is under 90 s or the body is under 30 %; it walks the lit route and never waits or reads. Player budget (Full Design, The cadence budget): pull gap {}–{} s median, landing gap {}–{} s median, longest quiet between losses under {} s, death rate {:.0}–{:.0} %. The bot is taken as {}× faster than a cautious player (an assumption until a recorded human run calibrates it), so its bands are pull {:.0}–{:.0} s, landing {:.0}–{:.0} s, quiet under {:.0} s; the death band is the player's. The run is verdicted on pulls, pressure and deaths; the landing budget is the whole game's (run and colony together) and is judged on the combined log from Phase C, so the landing gap is reported and not verdicted.\n\n",
         strata.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(","), chrono_free_date(), PULL_GAP_S.0, PULL_GAP_S.1, LANDING_GAP_S.0, LANDING_GAP_S.1, LOSS_GAP_MAX_S, DEATH_RATE.0 * 100.0, DEATH_RATE.1 * 100.0, BOT_FACTOR, bp.0, bp.1, bl.0, bl.1, bq));
-    md.push_str("## Aggregate\n\n| stratum | runs | deaths | run length (median) | pull gap median | landing gap median | pulls / run | notables / run | kills / run | damage / run | longest quiet (median) | blind e / min | verdict |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
-    let mut per_run_md = String::from("## Every run\n\n| stratum | seed | result | length | pulls | landings | notables | kills | damage | pull gap med | landing gap med | quiet max | blind e |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    md.push_str("## Aggregate\n\n| stratum | runs | deaths | run length (median) | pull gap median | landing gap median | pulls / run | notables / run | kills / run | damage / run | longest quiet (median) | blind e / min | verdict |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
+    let mut per_run_md = String::from("## Every run\n\n| stratum | seed | result | length | pulls | landings | notables | kills | damage | pull gap med | landing gap med | quiet max | blind e |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
     t.hrow(&[("S", 2), ("runs", 5), ("deaths", 7), ("length", 7), ("pull gap", 9), ("land gap", 9), ("pulls", 6), ("notab", 6), ("kills", 6), ("dmg", 5), ("quiet", 6), ("e/min", 6), ("verdict", 34)]);
     for &stratum in &strata {
         let mut reports = Vec::new();
@@ -632,7 +632,7 @@ fn cmd_city(t: &Term, seed: u64, shifts: u32, report_path: &Path, log_path: &Pat
     md.push_str(&format!("Written by `rose city --seed {seed} --shifts {shifts}` on {} (Full Design v3.13, The city's log; The founding; The Mat's metabolism; Build plan, Phase C). The city is founded with the Mat steered to the first grate (Pass 2's first session to 5:30). Each shift the steward gives its standing orders — the Heart's Pit kept at {:.0} nutrient with Uncommon its ceiling, every Curio and Tech sold at the first grate while the Mat reaches it, a Relay at a time toward the first grate whenever the cord to it is lost, the build plan ({}) placed one ghost at a time at the nearest anchor to the Heart (after the first Pod it waits while the cord is being won back), with eight stockpile cells painted at the Rack, every petition answered by placing what it asks — then the eligible slimo of best Scav runs the first route card of S1 as the bot, alone, with the bot's kit packed from the Stash where the Stash has it; the city ticks through the run at the bot's pace ({BOT_FACTOR} city ticks for every ten of the run's, so a shift does to the city what a player's shift does), the haul comes home, and the shift ends in `game`. The steward is this design's stand-in for a player, not a strategy the game recommends; the bot does not go back for its dead.\n\n", chrono_free_date(), game::city::HEART_KEEP.target, game::city::BUILD_PLAN.join(", ")));
     md.push_str(&format!("**Assertions**: the city replays bit-exact (two plays of the seed, compared shift by shift); every shift's cargo lands within the next shift; the build plan stands by the end; every shift ends with the cord to the first grate standing or a Relay able to go out to win it back; nobody starves (Fed under 10); the Heart's core keeps signal 0.3. **Result**: {}.\n\n", if failures.is_empty() { "all hold".to_string() } else { failures.join("; ") }));
     md.push_str(&format!("**The landing cadence** (research 02's whole-game budget of something landing every {}–{} s, the bot's band {:.1}–{:.1} s at the bot factor {BOT_FACTOR}, an assumption until the Phase F playtest): the run alone lands every {rg:.1} s (median of the shifts' medians), the run and the city merged every {mg:.1} s — **{verdict}**. Landings a second apart count as one moment, as the run's report counts them. Deaths: {deaths} of {} runs.\n\n", LANDING_GAP_S.0, LANDING_GAP_S.1, bl.0, bl.1, run_.shifts.len()));
-    md.push_str("| shift | day | runner | run | length | run landings | city landings | run gap | merged gap | population | Stash | in stockpiles | on the Heart's floor | e (+earned −spent) | paste meals | Mat cells | Mat nutrient | late cargo | first grate | built |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    md.push_str("| shift | day | runner | run | length | run landings | city landings | run gap | merged gap | population | Stash | in stockpiles | on the Heart's floor | e (+earned −spent) | paste meals | Mat cells | Mat nutrient | late cargo | first grate | built |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
     for (k, r) in run_.shifts.iter().enumerate() {
         md.push_str(&format!("| {} | {} | {} | {} | {}:{:02} | {} | {} | {:.1} s | {:.1} s | {} | {} | {} | {} | {} (+{} −{}) | {} | {} | {:.1} | {} | {} | {} |\n", k + 1, r.day, if r.runner.is_empty() { "-" } else { &r.runner }, r.result, (r.seconds / 60.0) as u32, r.seconds as u32 % 60, r.run_landings, r.city_landings, r.run_gap, r.merged_gap, r.population, r.stash, r.in_rooms, r.floor, r.eddies, r.earned, r.spent, r.paste_meals, r.mat_cells, r.mat_nutrient, r.late, grate(r), if r.built.is_empty() { "-".to_string() } else { r.built.join(", ") }));
     }
@@ -678,7 +678,7 @@ fn cmd_cleansing(t: &Term, seed: u64, shifts: u32, report_path: &Path) {
     let mut md = String::new();
     md.push_str("# A Cleansing, with and without Gates\n\n");
     md.push_str(&format!("Written by `rose cleansing --seed {seed} --shifts {shifts}` on {} (Full Design v3.14, Colony mode: Pressure — The proof; the Build plan's Phase D). The steward of `rose city` plays {shifts} shifts; then a Cleansing comes down the first grate — the sluice's bleach flood, four lamp carriers advancing a tile a Mat step, four flamers for the Pits and the Heart once the carriers are halfway — twice from the same state: as the city stands, and with two Sphincter Gates and a Scrap Turret on the squads' way from the grate, a Guard ordered to each. The designed spread: as it stands the Heart falls; defended, the Heart stands and most of the Mat with it. **Result: {}.**\n\n", chrono_free_date(), if spread { "the spread holds" } else { "the spread does not hold" }));
-    md.push_str("| city | the Heart | Mat cells | structures | slimos | dead | bleeding | Oathkeepers fell | Mat tiles burned | structures ruined | seconds | Blackline |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    md.push_str("| city | the Heart | Mat cells | structures | slimos | dead | bleeding | Oathkeepers fell | Mat tiles burned | structures ruined | seconds | Blackline |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
     for r in &runs {
         md.push_str(&format!("| {} | {} | {} → {} | {} → {} | {} → {} | {} | {} | {} of {} | {} | {} | {:.0} | {} |\n", if r.defended { "defended" } else { "as it stands" }, if r.heart_lost { "burned".to_string() } else { format!("{} HP", r.after.heart_hp) }, r.before.cells, r.after.cells, r.before.structures, r.after.structures, r.before.slimos, r.after.slimos, r.dead, r.bleeding, r.fallen, r.sent, r.burned, r.ruined, r.seconds, r.blackline));
     }
@@ -772,26 +772,26 @@ fn cmd_economy(t: &Term, seed: u64, shifts: u32, report_path: &Path) {
     let mut md = String::new();
     md.push_str("# The economy, thirty shifts\n\n");
     md.push_str(&format!("Written by `rose economy --seed {seed} --shifts {shifts}` on {} (Full Design v3.15, Economy — The proof; the Build plan's Phase D). The steward of `rose city` plays the seed trading — the surplus, its Chrome too, to whichever stall in reach pays most, five of a category a stall a shift, the three-link deliver and host contracts it can fill taken, protection bought when a Patrol is due at a Gang grate — then plays it again feeding, as `rose city` does: the same, but the Heart keeping 2.0 nutrient on the haul's Common and Uncommon Chrome. (A district's foreman keeps the Heart fed on the members' meals either way.) **Result: {}** (widest walk {:.2}, band {band:.2}).\n\n", chrono_free_date(), if pass { "every demand's walk stayed inside its band every day" } else { "a walk left its band" }, worst));
-    md.push_str("## The streets\n\n| grate | column | faction |\n|---|---|---|\n");
+    md.push_str("## The streets\n\n| grate | column | faction |\n| --- | --- | --- |\n");
     for st in &e.s.streets {
         md.push_str(&format!("| {} | {} | {} |\n", st.number, st.grate, e.name(st.faction)));
     }
-    md.push_str("\n## Shift by shift, trading\n\n| shift | day | grates | sold | earned | eddies | widest walk |\n|---|---|---|---|---|---|---|\n");
+    md.push_str("\n## Shift by shift, trading\n\n| shift | day | grates | sold | earned | eddies | widest walk |\n| --- | --- | --- | --- | --- | --- | --- |\n");
     for (k, r) in trade.shifts.iter().enumerate() {
         md.push_str(&format!("| {} | {} | {} | {} | {} | {} | {:.2} |\n", k + 1, game::trade::day_of(r.day), r.markets, r.sales.len(), r.sales.iter().map(|s| s.eddies).sum::<u32>(), r.eddies, r.drift));
     }
-    md.push_str("\n## What sold, against its base\n\nRealised price over base × condition (× 0.4 for an item sold blind), by the faction that bought and the category: what demand, reputation, haggling and glut made of it (over 100 % where a cheap item's few eddies round up, a stall paying at least 1 e).\n\n| faction | category | sold | blind | eddies | of base |\n|---|---|---|---|---|---|\n");
+    md.push_str("\n## What sold, against its base\n\nRealised price over base × condition (× 0.4 for an item sold blind), by the faction that bought and the category: what demand, reputation, haggling and glut made of it (over 100 % where a cheap item's few eddies round up, a stall paying at least 1 e).\n\n| faction | category | sold | blind | eddies | of base |\n| --- | --- | --- | --- | --- | --- |\n");
     for ((f, c), (n, ratio, eddies, blind)) in &by {
         md.push_str(&format!("| {f} | {c} | {n} | {blind} | {eddies} | {:.0} % |\n", 100.0 * ratio / *n as f32));
     }
-    md.push_str("\n## Standing at the end\n\n| faction | reputation | favour | traded | tier open |\n|---|---|---|---|---|\n");
+    md.push_str("\n## Standing at the end\n\n| faction | reputation | favour | traded | tier open |\n| --- | --- | --- | --- | --- |\n");
     for (k, st) in e.s.standing.iter().enumerate() {
         md.push_str(&format!("| {} | {:+} | {} | {} e | {} |\n", e.name(k as u8), st.rep, st.favour, st.traded, e.tier_open(k as u8)));
     }
     md.push_str(&format!("\n## Contracts\n\n{}\n\nIn hand at the end: {}.\n", if chain_log.is_empty() { "None taken.".to_string() } else { chain_log.iter().map(|l| format!("- {l}")).collect::<Vec<_>>().join("\n") }, if held.is_empty() { "none".to_string() } else { held.join("; ") }));
     let fed = |w: &game::World| w.log.events.iter().filter(|ev| ev.what.ends_with("fed to the Heart")).count();
     let lost = |r: &game::city::CityRun| r.shifts.iter().filter(|s| s.markets == 0).count();
-    md.push_str(&format!("\n## Trading against feeding\n\n| | the nearer grate reached | shifts with no market | eddies at the end | sold | Chrome fed to the Heart |\n|---|---|---|---|---|---|\n| trading | {} | {} | {} | {} | {} |\n| feeding | {} | {} | {} | {} | {} |\n", at(tr), lost(&trade), w.ledger.eddies, trade.shifts.iter().map(|r| r.sales.len()).sum::<usize>(), fed(&w), at(gr), lost(&grow), g.ledger.eddies, grow.shifts.iter().map(|r| r.sales.len()).sum::<usize>(), fed(&g)));
+    md.push_str(&format!("\n## Trading against feeding\n\n| | the nearer grate reached | shifts with no market | eddies at the end | sold | Chrome fed to the Heart |\n| --- | --- | --- | --- | --- | --- |\n| trading | {} | {} | {} | {} | {} |\n| feeding | {} | {} | {} | {} | {} |\n", at(tr), lost(&trade), w.ledger.eddies, trade.shifts.iter().map(|r| r.sales.len()).sum::<usize>(), fed(&w), at(gr), lost(&grow), g.ledger.eddies, grow.shifts.iter().map(|r| r.sales.len()).sum::<usize>(), fed(&g)));
     md.push_str(&format!("\n## Services\n\nTrading: {}.\n\nFeeding: {}.\n", bought(&w), bought(&g)));
     let events: Vec<String> = w.log.events.iter().filter(|ev| ev.what.starts_with("topside")).map(|ev| ev.what.clone()).collect();
     md.push_str(&format!("\n## Topside\n\n{}\n", if events.is_empty() { "No events.".to_string() } else { events.iter().map(|l| format!("- {l}")).collect::<Vec<_>>().join("\n") }));
@@ -850,7 +850,7 @@ fn cmd_campaign(t: &Term, seed: u64, aim: &str, shifts: u32, report: &Path) {
     let mut md = String::new();
     md.push_str("# The campaign, chapter 1 to an ending\n\n");
     md.push_str(&format!("Written by `rose campaign --seed {seed} --shifts {shifts}` on {} (Full Design v3.20, Narrative and Ivan: The proof; the Build plan's Phase E). Five scripts play the campaign headless at the bot's pace, one for each ending: the steward of `rose city` running the shifts and the campaign's own player on top — the research the chapters ask for, the climb up the stack, the defences once the Oathkeepers come, the gene pair it steers with Ivan's feeds and the Stash's Chrome, the accord refused once a Gate and a Turret stand (taken before), an alliance at chapter 6 and the Great Cleansing met at chapter 7; Scattered's script raises no defence and refuses the accord, and the chapter's Cleansing burns the Heart. **Result: {}.**\n\n", chrono_free_date(), if pass { "every script reached its ending" } else { "a script missed its ending" }));
-    md.push_str(&format!("| script | genes steered | the accord | ending | warchest | shifts | chapters 2–7 opened at shift | strata 2–6 reached at shift | the genome at the end, {} to {} | slimos at the end | seconds |\n|---|---|---|---|---|---|---|---|---|---|---|\n", gene(0), gene(9)));
+    md.push_str(&format!("| script | genes steered | the accord | ending | warchest | shifts | chapters 2–7 opened at shift | strata 2–6 reached at shift | the genome at the end, {} to {} | slimos at the end | seconds |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n", gene(0), gene(9)));
     for (a, r) in &runs {
         // a chapter opened when the city first stood in it or past it short of the ending (which closes them all)
         let chapters: Vec<String> = (2..=7).map(|v| r.shifts.iter().find(|c| c.chapter >= v && c.chapter <= 7).map_or("—".to_string(), |c| c.day.to_string())).collect();
@@ -866,7 +866,7 @@ fn cmd_campaign(t: &Term, seed: u64, aim: &str, shifts: u32, report: &Path) {
             shown.push(mat::genome::FERAL);
         }
         let heads: Vec<&str> = shown.iter().map(|&k| gene(k)).collect();
-        md.push_str(&format!("\n## {}, every tenth shift\n\n| shift | chapter | stratum | slimos | Mat cells joined | top row | {} | Bloom tiles | Parts / Chrome / eddies | the loudest grate |\n|---|---|---|---|---|---|{}---|---|---|\n", a.ending, heads.join(" | "), "---|".repeat(shown.len())));
+        md.push_str(&format!("\n## {}, every tenth shift\n\n| shift | chapter | stratum | slimos | Mat cells joined | top row | {} | Bloom tiles | Parts / Chrome / eddies | the loudest grate |\n| --- | --- | --- | --- | --- | --- |{}---| --- | --- |\n", a.ending, heads.join(" | "), "---|".repeat(shown.len())));
         for c in r.shifts.iter().filter(|c| c.day % 10 == 0 || Some(c.day) == r.shifts.last().map(|l| l.day)) {
             let gs: Vec<String> = shown.iter().map(|&k| format!("{:.2}", c.genes[k])).collect();
             md.push_str(&format!("| {} | {} | S{} | {} | {} | {} | {} | {} | {} / {} / {} | {:.0} |\n", c.day, c.chapter, c.stratum, c.population, c.cells, c.top_row, gs.join(" | "), c.bloom.0, c.stock.0, c.stock.1, c.stock.2, c.attention.0));

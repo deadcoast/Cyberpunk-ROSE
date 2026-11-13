@@ -51,9 +51,9 @@ Godot headless smoke — `RoseRun` present; Run: route of 8–14 chunks from a l
 edge, > 2,000 route tiles and ≥ 8 props painted, connectivity ≥ 95 %, the Runner steps east off the Mat, a collapse
 digs open. PASS in 1.2 s with every other Phase-A check still green.
 
-**On the screenshots.** `docs/shots/run.png`: the Mat edge in ooze cords with the Runner on it, brick-lined culvert,
+**On the screenshots.** `assets/shots/run.png`: the Mat edge in ooze cords with the Runner on it, brick-lined culvert,
 water on the floor line, lockers and crates on their tiles, every element a placeholder in the one drawing system.
-`docs/shots/route_map_s1_seed11.png` and `route_map_s3_seed7.png`: whole routes at 4 px per tile — chunk seams, the
+`assets/shots/route_map_s1_seed11.png` and `route_map_s3_seed7.png`: whole routes at 4 px per tile — chunk seams, the
 ooze mark at the entry, light pools in Flood Light, containers in pink and gold, bodies in Bruise, patrol points in
 Vestment White, gas in Pond Scum; unreached pockets dimmed.
 
@@ -102,9 +102,9 @@ the Mat, lantern on reads "lit" with exposure ≥ 7, lantern off lowers exposure
 footprint exceeds 20 tiles with noise ≥ 7 under the Runner, six ticks later it is 0, remembered tiles outnumber
 visible ones after moving, the fog overlay is present. PASS with every earlier check green.
 
-**On the screenshots.** `docs/shots/run.png`: the fog overlay over the route — Void beyond what has been seen, heavy
+**On the screenshots.** `assets/shots/run.png`: the fog overlay over the route — Void beyond what has been seen, heavy
 dither on remembered tiles, the lantern's pool open around the Runner, lit wall faces reading through the dither.
-`docs/shots/route_light_s1_seed11.png`: the whole route under its authored light with the lantern pool and a sprint
+`assets/shots/route_light_s1_seed11.png`: the whole route under its authored light with the lantern pool and a sprint
 step's cyan footprint eight tiles in.
 
 **Known gaps, by design of the PAC.** Nothing listens yet: hearing thresholds (sewerat 2, scout 4) and the awareness
@@ -149,7 +149,7 @@ Godot headless smoke — ≥ 8 sources on the route; six opened in place with `s
 items revealed, taken into the rig, every taken item unidentified with a hidden name, rig weight and blind value
 read, the exported rig imports into a fresh Stash with count = taken − left, and a dug deposit adds a pile. PASS.
 
-**On the screenshots.** `docs/shots/run_loot.png`: the Runner at a tier-1 locker with the panel open — one line,
+**On the screenshots.** `assets/shots/run_loot.png`: the Runner at a tier-1 locker with the panel open — one line,
 tier colour, "unidentified common chrome 1x1 0.6kg c75", F take all.
 
 **Known gaps, by design of the PAC.** The pry bar is a kit flag, not a rig slot (PAC-026 wires gear and the Rig
@@ -171,7 +171,7 @@ rifle shots with magazines, patrols that map and leave, salt lines ferals will n
 presses, poses — walk on a floor, crawl the back wall or ceiling at ×0.7 (no sprint), wade shallow water at ×0.75,
 swim deep water at sneak speed and Soaked. 47 tests in the crate; smoke plays open → take → fight → extract →
 Stash through the input word; `game/tests/play.gd` plays a scripted run under a display and saves
-`docs/shots/play_*.png`, which were reviewed by eye and fixed from: a Runner floating mid-corridor (poses), a fleeing
+`assets/shots/play_*.png`, which were reviewed by eye and fixed from: a Runner floating mid-corridor (poses), a fleeing
 crawler regenerating beside the Runner (flee away, recover out of notice), presses dropped between ticks and during
 actions (latching and buffering), the extraction hold refused mid-swing (hold, not press).
 
@@ -290,7 +290,7 @@ share one log; the Outcome carries it and its report, the Run writes it to `user
 and quotes the pull median in its end summary. `run::bot` is the yardstick: open what it sees, take what fits, fight
 adjacent threats over 40 % HP and back off under it, dig deposits beside it, treat bleeding, extract on a nearly
 full rig, under 90 s of shift or under 30 % HP; it knows only the fog, paths over known tiles and keeps the lantern
-on. `rose cadence` plays twenty seeds per stratum and writes `docs/telemetry/cadence.md` with the aggregate and
+on. `rose cadence` plays twenty seeds per stratum and writes `docs/03/telemetry/cadence.md` with the aggregate and
 every run; `run.sh` runs it on every build.
 
 What the instrument found, and what changed because of it: at the Phase A speeds the bot cleared a route in

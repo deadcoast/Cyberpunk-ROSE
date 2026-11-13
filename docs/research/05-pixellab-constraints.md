@@ -25,4 +25,4 @@ Decisions this changed in the design
 4. **Animations go through the skeleton path** for people (eight-frame walks) and the text path for organs and VFX
    (four to six frames), and every frame passes the palette lock individually.
 5. **The manifest carries the prompt and the negative** so the brief for every slot is generated, not typed, and the
-   prompt sheet (`docs/pixellab-prompts.md`) is the hand-off to the artist.
+   prompt sheet (`docs/03/pixellab-prompts.md`) is the hand-off to the artist.

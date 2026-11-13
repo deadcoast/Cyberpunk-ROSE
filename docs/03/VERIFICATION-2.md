@@ -26,7 +26,7 @@ world and Mat TileMapLayers painted, view switched to Stack, a tool applied; Sta
 added, save round trip through the Rust save crate true, upgrade to 16x14 with every item kept; Run: the Runner moved
 a tile. PASS in 1.2 s.
 
-Screenshots (`game/tests/shots.gd` under Xvfb) — 15 PNGs at native 640x360 in docs/shots/: every screen plus the
+Screenshots (`game/tests/shots.gd` under Xvfb) — 15 PNGs at native 640x360 in assets/shots/: every screen plus the
 Colony at Stack zoom.
 
 ## Manual, on the screenshots

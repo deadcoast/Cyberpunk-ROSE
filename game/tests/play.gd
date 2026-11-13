@@ -1,6 +1,6 @@
 extends SceneTree
 ## Scripted play under a display, for review: the Route Board packs a rig and departs, then the Run is driven frame
-## by frame through the input word; frames at the moments that matter land in docs/shots/play_*.png.
+## by frame through the input word; frames at the moments that matter land in assets/shots/play_*.png.
 ##   xvfb-run -s "-screen 0 1920x1080x24" godot --path game --rendering-driver opengl3 --script res://tests/play.gd
 
 var assets: Node
@@ -32,7 +32,7 @@ func _initialize() -> void:
 	root.add_child((load("res://Main.tscn") as PackedScene).instantiate())
 	# the campaign's panel sets play when the script shows them, not on their own
 	sim.panel_hold = true
-	out_dir = ProjectSettings.globalize_path("res://../docs/shots")
+	out_dir = ProjectSettings.globalize_path("res://../assets/shots")
 	DirAccess.make_dir_recursive_absolute(out_dir)
 
 func _shot(name: String) -> void:

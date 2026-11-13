@@ -48,7 +48,7 @@ the Hive held and a Relay Shrine stood on a Node after one shift; its rules read
 light < 8 → shut gates"; after S1's first run home and a second, Fenn's loop came home with 35 items at 0 % decay; a
 jam gave the Mat's proposal of one tile, CONFIRM and SEVER on the tile's card.
 
-**Reviewed by eye** (`docs/shots/bench_research.png`, `strain.png`, `codex.png`, `play_17_node.png` through
+**Reviewed by eye** (`assets/shots/bench_research.png`, `strain.png`, `codex.png`, `play_17_node.png` through
 `play_24_handoff.png`): the Bench's RESEARCH tab, three branches of twelve tiles with the founding's three DONE in
 Acid and the rest BLUEPRINT in Dust, the project bar with its points and its NEEDS line in Hot Pink; the Strain Lab's
 genome, the twelve organs three by four with their lines and counts, the feed plan, the classes with HELD and the
@@ -74,7 +74,7 @@ crate, the seven chapters and the endings with their panels (2); Ivan on the map
 S4–S6 and every source on its own stratum's loot row (4a); New Run, the strain code, the profile, the Daily Seed,
 Endless, and the Mat's climb (4b); `rose campaign` and the rules it found wanting (4c–4g).
 
-**The proof**: `rose campaign --seed 11` PASS — every script reached its own ending (`docs/telemetry/campaign.md`,
+**The proof**: `rose campaign --seed 11` PASS — every script reached its own ending (`docs/03/telemetry/campaign.md`,
 every tenth shift of each there and every decision in `out/campaign_<ending>_11.log`):
 
 | script | the accord | ending | warchest | shifts | chapters 2–7 opened at shift | strata 2–6 reached at shift |
@@ -117,7 +117,7 @@ reached the Culverts; Ivan rallied five, walked to 102,240 in 71 ticks, Parleyed
 ENVOY with the envoy at the grate, ACCEPT signed the Tithe and the card turned to THE ACCORD'S CLEANSING; the ending
 read Hive, the warchest 290.
 
-**Reviewed by eye** (`docs/shots/newrun.png`, `panels.png`, `ending.png`, `play_25_slab.png` through
+**Reviewed by eye** (`assets/shots/newrun.png`, `panels.png`, `ending.png`, `play_25_slab.png` through
 `play_31_ending.png`): New Run's mode, seed, strain code with its hint ("blank: the Heart is born at the founding's
 genome"), the three difficulties with the chosen one's line, BEGIN and BACK; the slab's card and the breach; Ivan on
 the Mat, his Parley and bark box; the envoy at the grate, chapter 3's panel and the HUD's chapter card ("CH 3 THE
@@ -215,7 +215,7 @@ round the Pit); and PAC-082 gave the tier targets wrongly (corrected there).
 - A Street Eye's card read "FEED 1.80 nutrient 8 tiles as it lands at HEART". Fed at 0:07, it left at the minute and
   the Mat went from 120 to 129 tiles at 1:06 (one of them its own growth).
 - A Lamp Core (3.6, the card's 16) sent with FEED ALL at 1:46: 158 to 174 tiles at 2:06, the new tiles outlined
-  (`docs/shots/feed_growth.png`).
+  (`assets/shots/feed_growth.png`).
 - A Pipe Club queued at 2:54 read "10 min left", "9 min left" at 3:06, and the log read "the Bench made Lead Pipe" at
   12:00 with the queue empty.
 - At 4:00 the log read "3 newcomers came down a grate; 9 more turned back, no beds". With no Bunkhouse built, the

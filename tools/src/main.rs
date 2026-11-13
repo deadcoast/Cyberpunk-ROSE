@@ -2,7 +2,7 @@
 //!
 //!   rose-tools placeholders   manifest -> game/assets/placeholders/*.png, one visual language
 //!   rose-tools validate       game/assets/art/*.png against size, SEEPAGE v2 palette, outline rule
-//!   rose-tools prompts        manifest -> docs/pixellab-prompts.md (per-slot generation briefs)
+//!   rose-tools prompts        manifest -> docs/03/pixellab-prompts.md (per-slot generation briefs)
 //!   rose-tools sheet          every placeholder (and art) on one labelled contact sheet
 //!   rose-tools all            the four above, in order
 
@@ -55,7 +55,7 @@ impl Paths {
             art: root.join("game/assets/art"),
             palette: root.join("game/assets/palette/SEEPAGE_v2.gpl"),
             items: root.join("data/items.toml"),
-            docs: root.join("docs"),
+            docs: root.join("docs").join("03"),
             root,
         }
     }
@@ -375,7 +375,7 @@ fn prompts(paths: &Paths, manifest: &Manifest) -> bool {
     for (file, slots) in by_file {
         out.push_str(&format!("{file}\n{}\n\n", "-".repeat(file.len())));
         for s in slots {
-            out.push_str(&format!("### {}\n\n", s.id));
+            out.push_str(&format!("{}\n---\n\n", s.id));
             out.push_str(&format!("- kind {} · one frame {}x{} · {} frame{} · states {}\n", s.kind, s.size[0], s.size[1], s.frames, if s.frames == 1 { "" } else { "s" }, if s.states.len() == 1 && s.states[0].is_empty() { "single".to_string() } else { s.states.join(", ") }));
             out.push_str(&format!("- anchor `{}` · ramp {} · status {}\n", if s.anchor.is_empty() { "(this is an anchor)" } else { &s.anchor }, s.ramp, s.status));
             out.push_str(&format!("- prompt: {}\n", s.prompt));
