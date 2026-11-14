@@ -46,6 +46,16 @@ func _initialize() -> void:
 	sim.panel_hold = true
 	screen_ids = screens.ids()
 	print("[smoke] extension RoseSim: %s  RoseItems: %s  RoseStash: %s  RoseRun: %s" % [ClassDB.class_exists("RoseSim"), ClassDB.class_exists("RoseItems"), ClassDB.class_exists("RoseStash"), ClassDB.class_exists("RoseRun")])
+	# the data: all ten files through game::data, read from data/ beside the project, none failing (Phase G, PAC-101)
+	var report: PackedStringArray = RoseSim.new().data_report()
+	var disk := 0
+	for line in report:
+		if line.begins_with("ERROR"):
+			_check(false, "data: " + line)
+		elif line.ends_with(" disk"):
+			disk += 1
+	_check(disk == 10, "data: %d of 10 files read from data/ (%s)" % [disk, ", ".join(report)])
+	print("[smoke] data      %d of %d files from data/" % [disk, report.size()])
 
 func _check(cond: bool, msg: String) -> void:
 	if not cond:
@@ -206,7 +216,7 @@ func _verify_current() -> void:
 			for k in 5:
 				scr.pick_tool("overlay")
 			_check(sim.overlay == "" and not scr.world.overlay_sprite.visible, "colony: the overlays did not cycle back to none")
-			_check(rs.alerts(sim.ensure_people()) is Array, "colony: no alerts")
+			_check(rs.alerts() is Array, "colony: no alerts")
 			# the Stack view is the core's circuit board, one pixel a tile
 			scr.set_view(2)
 			_check(rs.stack_image().size() == rs.width() * rs.height() * 3 and scr.world.traffic_sprite.visible and not scr.world.matlayer.visible, "colony: the Stack view did not draw the core's image")
@@ -315,7 +325,7 @@ func _verify_current() -> void:
 			var rs: RoseSim = sim.ensure()
 			var laws: Array = rs.laws()
 			_check(laws.size() == 8 and scr.laws_frame.get_child_count() == 8, "charter: %d laws, %d cards" % [laws.size(), scr.laws_frame.get_child_count()])
-			var ds: Array = rs.districts(sim.ensure_people())
+			var ds: Array = rs.districts()
 			if ds.is_empty():
 				_check(int(rs.authority()) == 0 and String(rs.sign_law("rationing")) == "needs 1 Authority", "charter: signed with no Authority")
 			else:
@@ -363,7 +373,7 @@ func _verify_current() -> void:
 			_check(scr.queue_frame.get_child_count() >= 4, "bench: queue not drawn")
 			# the Tweaker works the job a minute at a time (v3.21): a one-shift recipe is ten work cycles
 			for i in 10 * 120 + 1:
-				sim.step()
+				sim.ensure().step()
 			sim.end_shift()
 			var made := {}
 			for it in st.items():
@@ -563,7 +573,7 @@ func _verify_current() -> void:
 					lantern = st
 			_check(not lantern.is_empty() and bool(lantern.built) and bool(lantern.paid), "run: the lantern ghost did not get built (%s)" % str(lantern))
 			# the first district: the Heart's node with the Board, the Bench and the lantern around it, a foreman elected
-			var ds: Array = rs.districts(pp)
+			var ds: Array = rs.districts()
 			_check(ds.size() == 1 and int(ds[0].foreman) >= 0 and ds[0].structures.size() >= 3, "run: the Heart's district did not form (%s)" % str(ds))
 			var fm: Dictionary = pp.record(int(ds[0].foreman))
 			_check(not fm.is_empty() and ds[0].members.has(int(ds[0].foreman)), "run: the foreman is not a member")

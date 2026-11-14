@@ -6,8 +6,11 @@ Art: `docs/03/art-bible.md` (Sewer Noir 32). Tasks: `todo.PACER.csv`. Agents sta
 
     ./run.sh /path/to/godot4.5
 
-builds the Rust core, runs its tests, regenerates placeholders and validates them, installs the GDExtension,
-runs the Godot shell headless through all fourteen screens, and writes native screenshots to `assets/shots/`.
+builds the Rust core, runs its tests and the proofs, regenerates placeholders and validates them, installs the
+GDExtension, runs the Godot shell headless through all fourteen screens, writes native screenshots to
+`assets/shots/` and plays the scripted session, each holding every step it scripts to happening.
+`./run.sh --quick /path/to/godot4.5` is the per-commit tier: build, tests, `rose city`, the smoke and the played
+session. The game and `rose` run one `game::World`; the bridge holds none of the rules.
 
 Layout
 ------
@@ -29,7 +32,10 @@ Where things come from
 
 - A drawable in Godot is an `AssetSlot(id)`; the engine resolves `game/assets/art/<id>.png` when it exists and has
   passed `rose-tools validate`, else the placeholder the tool generated from `game/assets/manifest/*.toml`.
-- Items, strings and (from Phase C) structures, laws, traits and barks are data files; balancing never recompiles.
+- Items, structures, laws, recipes, traits, names, chunks, loot, creatures and factions are read through one loader
+  (`game::data`): the game reads `data/` beside the project, `rose` reads `--data DIR`, and an edit moves the game and
+  the proofs alike with no rebuild; a file that does not parse stops `rose` and fails the smoke. Barks, strings,
+  chapters, strata, threats, tech and the strain file are data files compiled in.
 - One PCG32 stream per simulation; the save format is seed + inputs + snapshots and replays exactly (the game does not write saves yet: PAC-102).
 
 Controls in the shell
@@ -50,7 +56,9 @@ DEPART or ENTER · Run: WASD move, SHIFT sprint, CTRL sneak, Q (hold) dim veins,
 E open a source (pry bar when carried) or hold E on the Mat or under a grate to extract, R take all, V drop the last
 thing taken, 1–4 use a quick slot (antiseptic, stim, salt line), Z/X/C order followers (follow / hold / guard), L lantern,
 TAB stash. The run is `run::sim::RunSim` in Rust at 20 Hz; the screen
-is its view. `game/tests/play.gd` plays a scripted run under Xvfb and saves review frames to assets/shots/play_*.png.
+is its view. `game/tests/play.gd` plays a scripted session under Xvfb — a run, then the colony's shifts, research,
+the breach, Ivan, chapter 3's envoy and an ending — holds each of its 37 beats to happening, and saves review frames
+to assets/shots/play_*.png with the city's digest at each in play_digest.txt.
 
 `rose route --seed N --stratum S [--sweep 200]` assembles a run route from `data/chunks.toml`, renders it and its
 light to `out/`, reports the authored light bands, a lantern-on / dimmed sight and exposure comparison and a sprint

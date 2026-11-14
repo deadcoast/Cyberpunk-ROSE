@@ -4,7 +4,7 @@
 
 use items::{ItemInstance, ItemTable};
 use mat::rng::Pcg32;
-use people::{Depth, NameFile, Record, Roster, TraitFile};
+use people::{Depth, Record, Roster};
 
 pub struct Daily {
     pub date: u32,
@@ -18,11 +18,11 @@ pub fn daily(date: u32) -> Daily {
     let mut rng = Pcg32::new((date as u64) ^ 0xDA17_5EED);
     let stratum = 1 + rng.below(3) as u8;
     let route_seed = run::route_seed(date as u64, stratum);
-    let (traits, names) = (TraitFile::shipped(), NameFile::shipped());
+    let (traits, names) = (&crate::data::get().traits, &crate::data::get().names);
     let mut roster = Roster::new();
     // Creation rolls D2 or D3 seven times in ten; the first of them runs
     let runner = loop {
-        let id = roster.create(&traits, &names, &mut rng, 1, false);
+        let id = roster.create(traits, names, &mut rng, 1, false);
         let r = roster.get(id).expect("created");
         if matches!(r.depth, Depth::D2 | Depth::D3) {
             break r.clone();

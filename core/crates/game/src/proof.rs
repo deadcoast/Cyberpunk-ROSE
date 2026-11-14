@@ -334,7 +334,7 @@ impl CampaignSteward {
         let laws = [("conscription", "Conscription signed: every D2 is militia while the white light is down", true), ("quarantine", "the Quarantine Protocol signed: what loses signal for a shift is severed before it blooms", blooms)];
         for (id, line, want) in laws {
             if threatened && want && w.colony.charter.law(id).is_none() {
-                if let Some(law) = colony::LawFile::shipped().get(id).cloned() {
+                if let Some(law) = crate::data::get().laws.get(id).cloned() {
                     if w.colony.sign(&w.defs, &w.city.sim, &law).is_ok() {
                         out.push(line.into());
                     }
@@ -1017,7 +1017,7 @@ pub struct CampaignRun {
 /// Play a campaign for an aim, up to `max` shifts or its ending; `each` hears every shift.
 pub fn play(seed: u64, aim: Aim, max: u32, each: &mut dyn FnMut(&CampaignShift, &ShiftRecord)) -> (CampaignRun, World) {
     let started = std::time::Instant::now();
-    let table = items::ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
+    let table = crate::data::get().items.clone();
     let w = World::found_with(seed, table, story::Campaign::new(Mode::Campaign, story::Difficulty::Culvert), mat::Genome::default());
     let mut p = Player::new(w, seed, Haul::Feed);
     // the Turret first: the flamers end at the Heart's walls, where it stands

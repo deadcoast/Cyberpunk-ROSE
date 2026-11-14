@@ -17,7 +17,7 @@ func _ready() -> void:
 	super._ready()
 
 func _build_content(c: Control) -> void:
-	data = Sim.ensure().codex(Sim.ensure_people())
+	data = Sim.ensure().codex()
 	# what outlives a run (Full Design v3.19, Meta): an entry seen or earned in any run counts
 	var dex_ever: PackedStringArray = Sim.ensure_profile().scrapdex()
 	for e in data.get("scrapdex", []):

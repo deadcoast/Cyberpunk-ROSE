@@ -24,7 +24,7 @@ pub fn day_of(shift: u32) -> u32 {
 
 /// Whether raiders walk the routes of a Board open to `strata` strata (data/creatures.toml's raid chance by stratum).
 pub fn raiders_walk(strata: u8) -> bool {
-    let chance = run::CreatureFile::shipped().raid.chance;
+    let chance = &crate::data::get().creatures.raid.chance;
     (1..=strata.max(1)).any(|s| chance[(s as usize - 1).min(chance.len() - 1)] > 0.0)
 }
 

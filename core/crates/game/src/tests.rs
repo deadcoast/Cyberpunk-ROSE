@@ -9,10 +9,7 @@ use crate::{Level, World};
 
 /// A player's shift: ten minutes of the city's clock (the desk work is the minute's, v3.21), then its end.
 fn play_shift(w: &mut World) {
-    for _ in 0..(colony::MINUTES_A_SHIFT as u64 * crate::shift::WORK_TICKS) {
-        w.tick();
-    }
-    w.end_shift();
+    w.play_shift();
 }
 
 fn world() -> World {

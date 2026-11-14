@@ -485,8 +485,12 @@ pub struct NameFile {
 }
 
 impl NameFile {
+    pub fn from_toml(s: &str) -> Result<Self, String> {
+        toml::from_str(s).map_err(|e| e.to_string())
+    }
+
     pub fn shipped() -> Self {
-        toml::from_str(NAMES_TOML).expect("shipped names")
+        NameFile::from_toml(NAMES_TOML).expect("shipped names")
     }
 }
 

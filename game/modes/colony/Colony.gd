@@ -113,7 +113,7 @@ func _build_content(c: Control) -> void:
 	for k in 2:
 		var accept := k == 0
 		var b := make_button(chapter_frame, "ACCEPT" if accept else "REFUSE", Vector2(300 + k * 64, 0), func():
-			var why: String = Sim.ensure().answer_accord(Sim.ensure_people(), accept)
+			var why: String = Sim.ensure().answer_accord(accept)
 			if why != "":
 				push_warning(why)
 			_refresh_lines(Sim.ensure()))
@@ -292,7 +292,7 @@ func _refresh_lines(sim: RoseSim) -> void:
 		else:
 			ghosts += 1
 	var beds: PackedInt32Array = sim.beds()
-	var ds: Array = sim.districts(Sim.ensure_people())
+	var ds: Array = sim.districts()
 	var cuts: int = sim.cuts().size()
 	# the last shift's meals: the Mat's larder fed the rest (Full Design v3.21, Homes, meals)
 	var paste := int(Sim.last_shift.get("paste_meals", 0))
@@ -621,7 +621,7 @@ func _card_info() -> Dictionary:
 			info.rec = people.record(id)
 			info.job = ""
 			info.at = ""
-			for row in sim.job_grid(people):
+			for row in sim.job_grid():
 				if int(row.id) == id:
 					info.job = String(row.job)
 					info.at = String(row.structure_name)
@@ -698,7 +698,7 @@ func _card_ivan(info: Dictionary) -> void:
 		var b := make_button(card, vb[0], Vector2(x, 28), func():
 			var why: String
 			match key:
-				"rally": why = sim.ivan_rally(Sim.ensure_people())
+				"rally": why = sim.ivan_rally()
 				"parley": why = sim.ivan_parley()
 				"ooze": why = Sim.ooze()
 			_say("" if why.begins_with("+") or why == "" else why, why.trim_prefix("+") if why.begins_with("+") else "%s" % key.to_upper())
@@ -1050,7 +1050,7 @@ func _level_color(level: String) -> Color:
 
 ## The crates' alerts: a new one joins the queue (one line a second), one whose cause has gone clears.
 func _poll_alerts(sim: RoseSim) -> void:
-	alerts_now = sim.alerts(Sim.ensure_people())
+	alerts_now = sim.alerts()
 	var keys := {}
 	for a in alerts_now:
 		keys[String(a.key)] = a
@@ -1187,7 +1187,7 @@ func _draw_cursor() -> void:
 						cursor.draw_rect(Rect2(int(st.x) * T - 2, int(st.y) * T - 2, int(st.w) * T + 4, int(st.h) * T + 4), UiTheme.ACID, false, 2.0)
 	# the first-ten-minutes beat that lights a ghost (Full Design v3.21, Onboarding): every ghost framed, pulsing
 	if String(Sim.ensure().onboarding_highlight()) == "ghost":
-		var a := 0.7 + 0.3 * sin(Time.get_ticks_msec() / 160.0)
+		var a := 0.7 + 0.3 * sin(Sim.anim_msec() / 160.0)
 		for st in Sim.ensure().structures():
 			if not bool(st.built):
 				cursor.draw_rect(Rect2(int(st.x) * T - 3, int(st.y) * T - 3, int(st.w) * T + 6, int(st.h) * T + 6), Color(UiTheme.CYAN, a), false, 2.0)

@@ -9,24 +9,28 @@ var ticks_per_frame := 0   # headless tests: fixed ticks per frame instead of th
 var seed_value := 11
 signal ticked
 
-## The city (Full Design, The city's clock; The founding): the Mat steered to the first grate, on its own clock,
-## the roster's slimos and the Stash's cargo — no phantoms. The Stash is bound so cargo lands into it as it arrives.
+## The city (Full Design, The city's clock; The founding): one `game::World`, founded as `rose` founds it — the Mat
+## steered to the first grate, the Heart, a Route Board, a Bench, the founders, the starting haul, the surface's
+## factions — and stepped, shift-ended and read through RoseSim. The Stash and the roster are views onto it.
 func ensure() -> RoseSim:
 	if sim == null:
 		sim = RoseSim.new()
 		# New Run's choices (mode, difficulty, strain code): the founding reads them
 		if not run_config.is_empty():
 			sim.configure_run(String(run_config.mode), String(run_config.difficulty), String(run_config.code), ensure_profile())
-		sim.start_city(seed_value)
-		# the Board's open strata: whether raiders walk its routes (the clear-raiders contracts)
-		sim.set_strata_open(strata_open)
-		# the city on the founding Mat: the Heart, a Route Board, a Bench
-		sim.found_city()
-		sim.bind_stash(ensure_stash())
-		sim.refresh_movers(ensure_people(), day)
+		sim.found(seed_value)
 	return sim
 
+## The picture's clock in milliseconds: the frames' own time, advanced by each frame's delta, paused or not. Every
+## animation phase (pulses, blinks, a strip's frame, a fresh tile's glow) reads this instead of the wall clock, so a
+## frame drawn under --fixed-fps repeats byte for byte (Phase G: the shots and play.gd as regression evidence).
+var anim_ms := 0.0
+
+func anim_msec() -> int:
+	return int(anim_ms)
+
 func _process(delta: float) -> void:
+	anim_ms += delta * 1000.0
 	if sim == null:
 		return
 	if ticks_per_frame > 0:
@@ -119,8 +123,6 @@ var stash: RoseStash
 var panel_return := "colony"
 var panel_replay := ""
 var panel_hold := false
-## The highest stratum the Board offers at the founding (the bridge follows the city's stratum after it).
-var strata_open := 3
 ## The roster (people crate through RosePeople): every slimo's record, founded from the save's seed on first use.
 var people: RosePeople
 ## What the Route Board hands the Run: {stratum, seed, name, rig: PackedByteArray, runner: RosePeople.runner_setup,
@@ -156,15 +158,23 @@ func pit_name(i: int) -> String:
 
 ## Who is on the map changed (a Runner left): the movers follow the roster.
 func refresh_movers() -> void:
-	ensure().refresh_movers(ensure_people(), day)
+	ensure().refresh_movers()
 
 ## Shift end, whole (RoseSim.colony_end_shift): the colony hands out the jobs and pays the ghosts from the Stash,
 ## the Stash resolves its queues and the Bench's slots, the Pits take the nutrient and the genome drifts, the
 ## colony's products land, and every record takes its work and its context (home, meal, light, water, sleep).
 func end_shift() -> void:
-	var st := ensure_stash()
+	_shift_ended(ensure().colony_end_shift(day))
+
+## A shift played at home (RoseSim.colony_play_shift, Full Design v3.21): the city's clock for a whole shift — the
+## builders raise the ghosts, the researchers put their points in, the cargo rides — then its end, whole; the next day.
+func play_shift() -> void:
+	_shift_ended(ensure().colony_play_shift(day))
+	day += 1
+
+func _shift_ended(shift: Dictionary) -> void:
 	var city := ensure()
-	last_shift = city.colony_end_shift(ensure_people(), st, day)
+	last_shift = shift
 	# the Strainbook and the Scrapdex outlive the run (Full Design v3.19, Meta)
 	if ensure_profile().absorb(city) > 0:
 		save_profile()
@@ -181,11 +191,11 @@ func lay_bodies(laid: Array) -> void:
 ## The structure def the Colony's build tool places next ("" none); set by the Build menu.
 var build_tool := ""
 
-## The roster, founded once per session from the save's seed (Full Design, Creation).
+## The roster (Full Design, Creation): a view onto the World's, founded with the city.
 func ensure_people() -> RosePeople:
 	if people == null:
 		people = RosePeople.new()
-		people.found(seed_value, day)
+		people.attach(ensure())
 	return people
 
 ## The crew's names, for the Route Board's stranded line and the Run's chips.
@@ -198,12 +208,11 @@ func slimo_name(id: int) -> String:
 		return "#%d" % id
 	return String(rec.full_name)
 
-## The Stash, created once for the session with its starting haul (game::world::STARTING_HAUL, the same one
-## `rose city` founds with).
+## The Stash (game::world::STARTING_HAUL, founded with the city as `rose city` founds it): a view onto the World's.
 func ensure_stash() -> RoseStash:
 	if stash == null:
 		stash = RoseStash.new()
-		stash.found()
+		stash.attach(ensure())
 	return stash
 
 ## A route's seed is fixed by the save and the stratum, so a route can be re-run and learned.
@@ -365,8 +374,14 @@ func new_run(seed_v: int, mode: String, difficulty: String, code: String) -> Str
 	ensure()
 	return ""
 
+## A fixed date in place of the system's (YYYYMMDD; 0 none): the screenshot scripts set it so the Menu's Daily
+## Seed reads the same every day.
+var today_fixed := 0
+
 ## Today as the Daily's seed (YYYYMMDD, the system's date).
 func today() -> int:
+	if today_fixed > 0:
+		return today_fixed
 	var d := Time.get_date_dict_from_system()
 	return int(d.year) * 10000 + int(d.month) * 100 + int(d.day)
 

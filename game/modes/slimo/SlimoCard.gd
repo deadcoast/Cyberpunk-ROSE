@@ -121,7 +121,7 @@ func _draw_card() -> void:
 	for a in Sim.last_shift.get("assignments", []):
 		if int(a.slimo) == selected:
 			city_line += "   last shift %s at the %s" % [String(a.job).to_lower(), String(a.structure_name)]
-	for d in csim.districts(people):
+	for d in csim.districts():
 		var members: PackedInt32Array = d.members
 		if members.has(selected):
 			city_line += "   %s" % String(d.name)
@@ -247,7 +247,7 @@ func _draw_card() -> void:
 			if String(l.id) == "dissolution_rite" and String(l.state) in ["signed", "spreading"]:
 				rite = true
 		make_button(card_frame, "DISSOLVE: 0.30 NUTRIENT", Vector2(300, 282), func():
-			Sim.people_lines = PackedStringArray([String(Sim.ensure().dissolve(people, selected))])
+			Sim.people_lines = PackedStringArray([String(Sim.ensure().dissolve(selected))])
 			_reload()
 			selected = ids[0] if not ids.is_empty() else -1
 			_redraw())

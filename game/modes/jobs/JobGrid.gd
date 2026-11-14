@@ -42,7 +42,7 @@ func _build_content(c: Control) -> void:
 
 func _reload() -> void:
 	rows = []
-	for r in sim.job_grid(people):
+	for r in sim.job_grid():
 		if district < 0 or int(r.district) == district:
 			rows.append(r)
 	page = clampi(page, 0, maxi(0, (rows.size() - 1) / ROWS))
@@ -59,7 +59,7 @@ func _draw_head() -> void:
 		_reload())
 	all.add_theme_color_override("font_color", UiTheme.ACID if district < 0 else UiTheme.CHALK)
 	x += 26
-	for d in sim.districts(people):
+	for d in sim.districts():
 		var id := int(d.id)
 		var b := make_button(head, String(d.name).to_upper(), Vector2(x, 0), func():
 			district = id

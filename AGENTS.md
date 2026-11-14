@@ -104,12 +104,25 @@ and draws. A drawable is an `AssetSlot(id)` with a manifest row and a placeholde
 that is drawn as rectangles has no way to receive art (CURRENT-STATE ART-01, PAC-109).
 
     cargo build --release && cp target/release/librose_godot.so game/bin/      the core, the bridge, the tools
-    cargo test --release --workspace --exclude rose-godot                         192 tests at PAC-100
+    cargo test --release --workspace --exclude rose-godot                         193 tests at PAC-101 (part 2)
     ./target/release/rose --plain city | cleansing | economy | campaign           the proofs (campaign: ~25 min)
+    ./target/release/rose --data data city                                        any proof on data/ as edited, no rebuild
     godot --headless --path game --script res://tests/smoke.gd                   every screen, headless
-    xvfb-run -a godot --path game --rendering-driver opengl3 --script res://tests/shots.gd   every screen to assets/shots/
-    xvfb-run -a godot --path game --rendering-driver opengl3 --script res://tests/play.gd    a scripted session, review by eye
+    xvfb-run -a godot --path game --rendering-driver opengl3 --fixed-fps 60 --script res://tests/shots.gd   every screen to assets/shots/, 28 stages held
+    xvfb-run -a godot --path game --rendering-driver opengl3 --fixed-fps 60 --script res://tests/play.gd    the played session: 37 beats held, frames, play_digest.txt
+    ./run.sh --quick /path/to/godot                                               per commit: build, tests, rose city, smoke, the played session
     ./run.sh /path/to/godot                                                       all of it
+
+`--fixed-fps 60` makes every frame advance the clock 1/60 s whatever the machine's speed: without it the Run screen's
+clock follows the wall, and two plays of `play.gd` diverge from the first extraction on. With it the frames and
+`assets/shots/play_digest.txt` repeat byte for byte, so a change in either is a change in the game, and a refactor
+that must not change the game is held to the digest file (Phase G, PAC-101). `play.gd` and `shots.gd` hold every beat
+and stage they script to happening (`_expect`): a verb refused, an item that did not fit, a shift that ran out before
+the research did, fails the script with the beat named and exits 1, and `run.sh` fails with it. A script that prints a
+refusal and plays on is not a check. A shift in a script is a played shift (`Sim.play_shift`, `World::play_shift`:
+the city's clock for `SHIFT_TICKS` then its end), because the living city builds and researches inside the shift. The ten files `game::data` loads
+(items, structures, laws, recipes, traits, names, chunks, loot, creatures, factions) are read through it everywhere
+(`crate::data()` in the bridge): runtime code never parses one or calls its `::shipped()`, which is for tests.
 
 Commit to `main` with a message that names the PAC and what changed; rebase on `origin/main` before pushing. Before
 every commit check that no secret is staged: `git diff --cached | grep -cE "pixl_[0-9a-f]{8}"` must print 0 (the PixelLab token

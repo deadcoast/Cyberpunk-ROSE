@@ -8,7 +8,7 @@ use colony::Colony;
 use inventory::{Rig, Stash};
 use items::{ItemInstance, ItemTable};
 use people::{Depth, Injury, Past, RunReport};
-use run::{ChunkLib, CreatureFile, LootTables, RouteMap, RunResult, RunSetup};
+use run::{RouteMap, RunResult, RunSetup};
 
 use crate::log::{CityLog, Class};
 use crate::shift::Folk;
@@ -32,8 +32,8 @@ pub fn play(colony: &mut Colony, folk: &mut Folk, stash: &mut Stash, table: &Ite
     if colony.loops.is_empty() || !colony.progress.tech.flag("route_loops") {
         return lines;
     }
-    let lib = ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
-    let (tables, creatures) = (LootTables::shipped(), CreatureFile::shipped());
+    let d = crate::data::get();
+    let (lib, tables, creatures) = (&d.chunks, &d.loot, &d.creatures);
     let flags = crate::grow::run_flags(colony, threats, sim);
     let mut ended = Vec::new();
     for k in 0..colony.loops.len() {
@@ -52,8 +52,8 @@ pub fn play(colony: &mut Colony, folk: &mut Folk, stash: &mut Stash, table: &Ite
         setup.flags.extend(flags.iter().cloned());
         setup.flags.push(format!("yield_cut_{cut}"));
         let name = r.full_name();
-        let Ok(layout) = run::route(&lib, run::route_seed(city_seed, l.stratum), l.stratum) else { continue };
-        let map = RouteMap::compile(&lib, &layout);
+        let Ok(layout) = run::route(lib, run::route_seed(city_seed, l.stratum), l.stratum) else { continue };
+        let map = RouteMap::compile(lib, &layout);
         let mut rig = Rig::new(8, setup.rig_rows.clamp(3, 8), 4, setup.carry_kg());
         rig.gear.hands[0] = take(stash, table, crate::city::KIT_HAND);
         for (i, id) in crate::city::KIT_QUICK.iter().enumerate() {

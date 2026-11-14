@@ -1,6 +1,9 @@
 extends SceneTree
 ## Scripted play under a display, for review: the Route Board packs a rig and departs, then the Run is driven frame
 ## by frame through the input word; frames at the moments that matter land in assets/shots/play_*.png.
+## Every beat the script plays is held to happening (_expect): a refusal printed and played past is a failed beat, and
+## the session exits 1 naming each. A shift that passes is a played shift (Sim.play_shift: the city's clock for a
+## shift, then its end), so what the living city does inside a shift — ghosts rising, research — happens in it.
 ##   xvfb-run -s "-screen 0 1920x1080x24" godot --path game --rendering-driver opengl3 --script res://tests/play.gd
 
 var assets: Node
@@ -10,7 +13,13 @@ var scr: Node
 var out_dir := ""
 var t := 0
 var shots := 0
+## the city's digest at every frame, written beside the frames as play_digest.txt (run with --fixed-fps 60 it repeats
+## byte for byte, so a refactor that changes it changed the game)
+var digests := PackedStringArray()
 var phase := 0
+## the beats held to happening, and the ones that did not
+var beats := 0
+var failed := PackedStringArray()
 var crawler_id := -1
 var take_t := 0
 
@@ -23,9 +32,12 @@ func _autoload(name: String, path: String) -> Node:
 	return n
 
 func _initialize() -> void:
+	# the engine's own random stream (New Run's offered seed) fixed, so the frames repeat byte for byte
+	seed(11)
 	assets = _autoload("Assets", "res://autoload/Assets.gd")
 	screens = _autoload("Screens", "res://autoload/Screens.gd")
 	sim = _autoload("Sim", "res://autoload/Sim.gd")
+	sim.today_fixed = 20261113
 	# the tests' own profile, fresh each time: nothing lands in the player's
 	sim.profile_path = "user://profile_test"
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(sim.profile_path))
@@ -39,6 +51,20 @@ func _shot(name: String) -> void:
 	var img: Image = root.get_viewport().get_texture().get_image()
 	img.save_png(out_dir + "/play_" + name + ".png")
 	shots += 1
+	# the city's digest at every frame, so a refactor can be held to the same session (Phase G, PAC-101)
+	var rs: RoseSim = sim.ensure()
+	var parts := PackedStringArray()
+	for p in rs.digest_split():
+		parts.append(String(p).get_slice(" ", 1))
+	digests.append("%-16s day %3d  tick %6d  %s" % [name, int(sim.day), int(rs.tick()), "  ".join(parts)])
+
+## A beat the script plays: it happened, or the session fails naming it and why.
+func _expect(beat: String, ok: bool, why: String = "") -> bool:
+	beats += 1
+	if not ok:
+		failed.append(beat)
+		print("[play] FAIL %s%s" % [beat, (": " + why) if why != "" else ""])
+	return ok
 
 var t0 := 0
 var runner_id := -1
@@ -154,6 +180,7 @@ func _process(_delta: float) -> bool:
 					print("[play] teleport to %s at %d,%d: %s" % [src.kind, int(src.x), int(src.y), str(ok)])
 					done = ok
 					break
+			_expect("a closed container reached", done)
 			scr.scripted = [0, 0, 0]
 			phase = 7 if done else 8
 		7:
@@ -166,7 +193,7 @@ func _process(_delta: float) -> bool:
 				_shot("07_loot")
 				phase = 8
 			elif t > 2600:
-				print("[play] loot panel never opened; src_here %d" % int(scr.route.runner().source_here))
+				_expect("the loot panel opens", false, "src_here %d" % int(scr.route.runner().source_here))
 				phase = 8
 		8:
 			scr.scripted = [scr.B_TAKE, 0, 0]
@@ -231,6 +258,7 @@ func _process(_delta: float) -> bool:
 				# the Gangs' protection ordered at the Nomads' stall over grate 5
 				var why: String = sim.ensure().sign_law("open_grates")
 				print("[play] Open Grates: %s" % ("signed" if why == "" else why))
+				_expect("Open Grates signed", why == "", why)
 				screens.show_screen("market")
 				scr = screens.current
 				phase = 17
@@ -245,6 +273,7 @@ func _process(_delta: float) -> bool:
 							scr.picked_entry = int(e.entry)
 							scr._order()
 							print("[play] %s from the %s: %s" % [svc[1], svc[0], scr.status])
+							_expect("%s ordered" % svc[1], String(scr.status).begins_with("ordered"), scr.status)
 				phase = 18
 		18:
 			if t % 10 == 5:
@@ -259,6 +288,7 @@ func _process(_delta: float) -> bool:
 					rs.step()
 					steps += 1
 				print("[play] the orders waited a shift; %d ticks later the ledger holds %d e" % [steps, int(sim.ensure_stash().eddies())])
+				_expect("the sales land and pay for the orders", int(sim.ensure_stash().eddies()) >= 70, "%d e" % int(sim.ensure_stash().eddies()))
 				sim.end_shift()
 				sim.day += 1
 				screens.show_screen("colony")
@@ -270,13 +300,14 @@ func _process(_delta: float) -> bool:
 				_shot("13_intel")
 				var z: Array = sim.ensure().attention()
 				print("[play] after the shift: intel shows %s; ledger %d e" % [str(z.map(func(q): return bool(q.get("exact", false)))), int(sim.ensure_stash().eddies())])
+				_expect("intel shows the zones exactly", z.size() > 0 and z.all(func(q): return bool(q.get("exact", false))))
 				# mending (Full Design v3.17): the Bench left at 55 of its HP, as a flamer would leave it; its card
 				var rs: RoseSim = sim.ensure()
 				for st in rs.structures():
 					if String(st.def) == "bench" and bool(st.built):
 						mend_id = int(st.id)
 						rs.debug_hp(mend_id, int(int(st.hp_max) * 0.55))
-						rs.refresh_movers(sim.ensure_people(), sim.day)
+						rs.refresh_movers()
 						scr.set_view(0)
 						scr.cam.position = Vector2(int(st.x) * 32 + 16, int(st.y) * 32 + 48)
 						scr.selected = {"kind": "structure", "id": mend_id}
@@ -292,6 +323,7 @@ func _process(_delta: float) -> bool:
 				scr.card_sig = ""
 				scr._draw_card()
 				print("[play] the Bench mended from %d to %d HP at the shift's end" % [before, _hp(mend_id)])
+				_expect("the Bench mends", mend_id >= 0 and _hp(mend_id) > before, "%d to %d" % [before, _hp(mend_id)])
 				phase = 21
 		21:
 			if t % 10 == 5:
@@ -299,7 +331,7 @@ func _process(_delta: float) -> bool:
 				# research (Full Design v3.18): a Blueprint I in the Stash as a haul brings it; the Bench's Research tab,
 				# STUDY as its button does it
 				var st: RoseStash = sim.ensure_stash()
-				st.add(RoseItems.new().find("tec_blueprint_chrome1"), 80, true)
+				_expect("Blueprint I into the Stash", st.add(RoseItems.new().find("tec_blueprint_chrome1"), 80, true) >= 0, "the grid is full")
 				screens.show_screen("bench")
 				scr = screens.current
 				scr._set_tab("research")
@@ -307,8 +339,9 @@ func _process(_delta: float) -> bool:
 				scr._replan()
 				scr._draw_research()
 				print("[play] study: %s" % ("picked" if scr.research_msg == "" else scr.research_msg))
+				_expect("STUDY Blueprint I", scr.research_msg == "", scr.research_msg)
 				# the Job grid: the D3s put Research at 4, as a player paints the column (Research is the job index 8)
-				for row in sim.ensure().job_grid(sim.ensure_people()):
+				for row in sim.ensure().job_grid():
 					if String(row.depth) == "D3":
 						sim.ensure_people().set_priority(int(row.id), 8, 4)
 				phase = 22
@@ -319,22 +352,25 @@ func _process(_delta: float) -> bool:
 				var rs: RoseSim = sim.ensure()
 				var shifts := 0
 				while int((rs.tech().open as PackedInt32Array)[0]) < 2 and shifts < 20:
-					sim.end_shift()
-					sim.day += 1
+					sim.play_shift()
 					shifts += 1
 				print("[play] Chrome tier 2 open after %d shifts" % shifts)
+				_expect("Chrome tier 2 opens from the study", int((rs.tech().open as PackedInt32Array)[0]) >= 2, "not open after %d shifts: %s" % [shifts, str(rs.tech().project)])
 				# the node's Parts and Chrome, as the Stash holds them
 				var st: RoseStash = sim.ensure_stash()
+				var placed := 0
 				for k in 6:
-					st.add(RoseItems.new().find("prt_pipe"), 70, true)
+					placed += 1 if st.add(RoseItems.new().find("prt_pipe"), 70, true) >= 0 else 0
 				for k in 2:
-					st.add(RoseItems.new().find("chr_optic_slag"), 70, true)
+					placed += 1 if st.add(RoseItems.new().find("chr_optic_slag"), 70, true) >= 0 else 0
+				_expect("the node's Parts and Chrome into the Stash", placed == 8, "%d of 8 placed" % placed)
 				scr._set_tab("research")
 				scr.picked_node = "c2_gate"
 				scr.research_msg = rs.research_pick("node", "c2_gate")
 				scr._replan()
 				scr._draw_research()
 				print("[play] node: %s" % ("picked" if scr.research_msg == "" else scr.research_msg))
+				_expect("RESEARCH the Sphincter housing", scr.research_msg == "", scr.research_msg)
 				phase = 23
 		23:
 			if t % 10 == 5:
@@ -343,13 +379,13 @@ func _process(_delta: float) -> bool:
 				var shifts := 0
 				var done := false
 				while not done and shifts < 30:
-					sim.end_shift()
-					sim.day += 1
+					sim.play_shift()
 					shifts += 1
 					for n in rs.tech().nodes:
 						if String(n.id) == "c2_gate" and String(n.state) == "researched":
 							done = true
 				print("[play] the Sphincter housing researched after %d more shifts" % shifts)
+				_expect("the Sphincter housing researched", done, "not after %d shifts: %s" % [shifts, str(rs.tech().project)])
 				sim.build_tool = "gate"
 				screens.show_screen("build")
 				scr = screens.current
@@ -364,6 +400,7 @@ func _process(_delta: float) -> bool:
 				rs.debug_gene(1, 0.7)
 				sim.end_shift()
 				sim.day += 1
+				_expect("a Lume Bulb grows", rs.organs().any(func(o): return String(o.id) == "bulb"))
 				screens.show_screen("colony")
 				scr = screens.current
 				scr.set_view(0)
@@ -399,16 +436,20 @@ func _process(_delta: float) -> bool:
 				rs.debug_gene(8, 0.7)
 				sim.end_shift()
 				sim.day += 1
-				print("[play] Hive held: %s" % str(rs.strain().classes.filter(func(c): return String(c.id) == "hive")[0].held))
+				var hive: bool = bool(rs.strain().classes.filter(func(c): return String(c.id) == "hive")[0].held)
+				print("[play] Hive held: %s" % str(hive))
+				_expect("the Hive class held", hive)
 				screens.show_screen("colony")
 				scr = screens.current
 				var heart: Dictionary = rs.structures()[0]
 				# the Shrine's Parts and Chrome, as the Stash holds them
 				var st0: RoseStash = sim.ensure_stash()
+				var placed0 := 0
 				for k in 6:
-					st0.add(RoseItems.new().find("prt_pipe"), 70, true)
+					placed0 += 1 if st0.add(RoseItems.new().find("prt_pipe"), 70, true) >= 0 else 0
 				for k in 2:
-					st0.add(RoseItems.new().find("chr_optic_slag"), 70, true)
+					placed0 += 1 if st0.add(RoseItems.new().find("chr_optic_slag"), 70, true) >= 0 else 0
+				_expect("the Shrine's Parts and Chrome into the Stash", placed0 == 8, "%d of 8 placed" % placed0)
 				sim.build_tool = "shrine"
 				shrine_id = -1
 				for r in range(2, 14):
@@ -428,18 +469,19 @@ func _process(_delta: float) -> bool:
 									break
 				sim.build_tool = ""
 				scr.tool = ""
+				_expect("the Relay Shrine placed on a Node", shrine_id >= 0)
 				var shifts := 0
+				var built := false
 				while shifts < 8:
-					var built := false
 					for st in rs.structures():
 						if int(st.id) == shrine_id and bool(st.built):
 							built = true
 					if built:
 						break
-					sim.end_shift()
-					sim.day += 1
+					sim.play_shift()
 					shifts += 1
 				print("[play] the Relay Shrine on a Node (%d) built after %d shifts" % [shrine_id, shifts])
+				_expect("the Relay Shrine built", built, "not after %d shifts" % shifts)
 				# its rules, as the card's words set them: when signal > 0 then dim; when white light < 8 shut gates
 				rs.set_nerve_rule(shrine_id, 0, 0, true, 0.0, 5)
 				rs.set_nerve_rule(shrine_id, 1, 5, false, 8.0, 1)
@@ -458,16 +500,20 @@ func _process(_delta: float) -> bool:
 				_shot("22_nerve")
 				var n: Dictionary = sim.ensure().nerve_rules(shrine_id)
 				print("[play] the Shrine's rules: %s" % str(n.rules.map(func(r): return "%s %s %s" % [String(r.reading_name), String(r.action_name), "holds" if bool(r.held) else "-"])))
+				_expect("the Shrine's two rules set", (n.get("rules", []) as Array).size() == 2, "rules %s" % str(n.get("rules", [])))
 				# a route loop: the play's run came home once; the Board shows it, a second run home, then LOOP IT
-				print("[play] S1 runs home: %d" % int((sim.ensure().route_loops().homes as Dictionary).get(1, 0)))
+				var homes := int((sim.ensure().route_loops().homes as Dictionary).get(1, 0))
+				print("[play] S1 runs home: %d" % homes)
+				_expect("the play's run counted home on S1", homes >= 1)
 				sim.ensure().note_route_home(1)
 				screens.show_screen("route")
 				scr = screens.current
 				phase = 29
 		29:
 			if t % 10 == 5:
-				var why: String = sim.ensure().set_route_loop(sim.ensure_people(), 1, scr.runner_id)
+				var why: String = sim.ensure().set_route_loop(1, scr.runner_id)
 				print("[play] loop with %s: %s" % [sim.slimo_name(scr.runner_id), "set" if why == "" else why])
+				_expect("LOOP IT on the S1 route", why == "", why)
 				scr._refresh_cards()
 				phase = 30
 		30:
@@ -475,13 +521,18 @@ func _process(_delta: float) -> bool:
 				_shot("23_loop")
 				sim.end_shift()
 				sim.day += 1
+				var looped := false
 				for l in sim.people_lines:
 					if String(l).contains("loop"):
 						print("[play] %s" % String(l))
+						looped = true
+				_expect("the loop comes home at the shift's end", looped)
 				# the handoff: a bred strain's proposal round a jam, on the Stack view
 				var rs: RoseSim = sim.ensure()
 				rs.debug_gene(9, 0.75)
-				print("[play] the Mat proposes %d tiles" % rs.debug_proposal())
+				var proposed: int = rs.debug_proposal()
+				print("[play] the Mat proposes %d tiles" % proposed)
+				_expect("the Mat proposes a way round the jam", proposed > 0)
 				screens.show_screen("colony")
 				scr = screens.current
 				var p: Dictionary = rs.proposal()
@@ -499,7 +550,7 @@ func _process(_delta: float) -> bool:
 				_shot("24_handoff")
 				# the breach (Full Design v3.19): the slab over the first grate, its card, the Sump Grate Key
 				var rs: RoseSim = sim.ensure()
-				sim.ensure_stash().add(RoseItems.new().find("key_grate_sump"), 100, true)
+				_expect("the Sump Grate Key into the Stash", sim.ensure_stash().add(RoseItems.new().find("key_grate_sump"), 100, true) >= 0, "the grid is full")
 				var hs: Dictionary = rs.structures()[0]
 				var heart := Vector2i(int(hs.x), int(hs.y))
 				var best := {}
@@ -507,6 +558,7 @@ func _process(_delta: float) -> bool:
 					if int(cr.below) == 1 and (best.is_empty() or absi(int(cr.x) - heart.x) < absi(int(best.x) - heart.x)):
 						best = cr
 				slab = best
+				_expect("a sealed slab over the first grate", not best.is_empty())
 				scr.set_view(0)
 				scr.cam.position = Vector2(int(slab.x) * 32 + 16, int(slab.y) * 32 + 64)
 				scr.selected = {"kind": "tile", "x": int(slab.x), "y": int(slab.y)}
@@ -519,10 +571,12 @@ func _process(_delta: float) -> bool:
 				var rs: RoseSim = sim.ensure()
 				var why: String = rs.open_crossing(int(slab.tile))
 				print("[play] the Sump Grate Key on the slab at %d,%d: %s" % [int(slab.x), int(slab.y), "open" if why == "" else why])
+				_expect("the Sump Grate Key opens the slab", why == "", why)
 				rs.debug_climb(int(slab.tile), 6)
 				sim.end_shift()
 				sim.day += 1
 				print("[play] the city's stratum: S%d" % rs.city_stratum())
+				_expect("the Mat climbs into the Culverts", rs.city_stratum() >= 2, "S%d" % rs.city_stratum())
 				for l in sim.people_lines:
 					if String(l).contains("reached"):
 						print("[play] %s" % String(l))
@@ -544,7 +598,9 @@ func _process(_delta: float) -> bool:
 				var w: int = rs.width()
 				var v: Dictionary = rs.ivan()
 				# Rally at the Heart, where the founders sleep
-				print("[play] RALLY: %s" % rs.ivan_rally(sim.ensure_people()))
+				var rally: String = rs.ivan_rally()
+				print("[play] RALLY: %s" % rally)
+				_expect("Ivan's RALLY", rally.begins_with("+"), rally)
 				# the first market's cell: the tile of Mat nearest its grate
 				var g: int = int(rs.attention().filter(func(z): return bool(z.reached))[0].grate)
 				var best := Vector2i(int(v.x), int(v.y))
@@ -557,13 +613,16 @@ func _process(_delta: float) -> bool:
 						if String(ti.get("mat", "")) in ["cord", "node", "tip"] and absi(dx) + dy < bd:
 							bd = absi(dx) + dy
 							best = Vector2i(x, y)
-				print("[play] Ivan sent to %d,%d: %s" % [best.x, best.y, rs.ivan_order(best.x, best.y)])
+				var sent: String = rs.ivan_order(best.x, best.y)
+				print("[play] Ivan sent to %d,%d: %s" % [best.x, best.y, "on his way" if sent == "" else sent])
+				_expect("Ivan sent along the Mat", sent == "", sent)
 				var walked := 0
 				while walked < 2000 and int(rs.ivan().goal_x) >= 0:
 					rs.step()
 					walked += 1
 				v = rs.ivan()
 				print("[play] Ivan at %d,%d after %d ticks, at market %d" % [int(v.x), int(v.y), walked, int(v.at_market)])
+				_expect("Ivan reaches the first market", int(v.at_market) >= 0 and int(v.goal_x) < 0, "at %d,%d" % [int(v.x), int(v.y)])
 				scr.selected = {"kind": "ivan"}
 				scr.cam.position = Vector2(int(v.x) * 32 + 16, int(v.y) * 32 + 64)
 				scr.card_sig = ""
@@ -574,7 +633,9 @@ func _process(_delta: float) -> bool:
 				_shot("26a_ivan")
 				var rs: RoseSim = sim.ensure()
 				rs.debug_earn(2)
-				print("[play] PARLEY: %s" % rs.ivan_parley())
+				var parley: String = rs.ivan_parley()
+				print("[play] PARLEY: %s" % parley)
+				_expect("Ivan's PARLEY", parley.begins_with("+"), parley)
 				rs.bark_event("law", "Curfew")
 				var said := ""
 				for k in 60:
@@ -583,6 +644,7 @@ func _process(_delta: float) -> bool:
 						said = rs.bark()
 						break
 				print("[play] Ivan says: %s" % said)
+				_expect("Ivan barks at the Curfew", said != "")
 				scr.card_sig = ""
 				scr._draw_card()
 				scr._refresh_lines(rs)
@@ -600,6 +662,7 @@ func _process(_delta: float) -> bool:
 				sim.day += 1
 				var camp: Dictionary = rs.campaign()
 				print("[play] %s, the envoy %s at %d" % [String(camp.card), String(camp.accord), int(camp.envoy)])
+				_expect("chapter 3 opens with the envoy waiting", String(camp.accord) == "waiting" and int(camp.envoy) >= 0, "%s, the envoy %s" % [String(camp.card), String(camp.accord)])
 				var w: int = rs.width()
 				scr.set_view(0)
 				scr.cam.position = Vector2((int(camp.envoy) % w) * 32 + 16, (int(camp.envoy) / w) * 32 + 96)
@@ -608,7 +671,9 @@ func _process(_delta: float) -> bool:
 				scr._draw_card()
 				scr._refresh_lines(rs)
 				scr.world.threat_bodies.queue_redraw()
-				print("[play] bodies: %s" % str(rs.threat_bodies().map(func(b): return "%s %d,%d" % [String(b.role), int(b.x), int(b.y)])))
+				var bodies: Array = rs.threat_bodies()
+				print("[play] bodies: %s" % str(bodies.map(func(b): return "%s %d,%d" % [String(b.role), int(b.x), int(b.y)])))
+				_expect("the envoy on the map", bodies.any(func(b): return String(b.role) == "envoy"), str(bodies.map(func(b): return String(b.role))))
 				phase = 34
 		34:
 			if t % 10 == 5:
@@ -624,15 +689,18 @@ func _process(_delta: float) -> bool:
 				_shot("28_panel")
 				screens.show_screen("colony")
 				scr = screens.current
-				var why: String = sim.ensure().answer_accord(sim.ensure_people(), true)
+				var why: String = sim.ensure().answer_accord(true)
 				print("[play] ACCEPT: %s" % ("the accord stands" if why == "" else why))
+				_expect("ACCEPT the accord", why == "", why)
 				scr._refresh_lines(sim.ensure())
 				phase = 36
 		36:
 			if t % 10 == 5:
 				_shot("29_accord")
 				var rs: RoseSim = sim.ensure()
-				print("[play] the Tithe on the Charter: %s; %s" % [str(rs.laws().any(func(l): return String(l.id) == "tithe" and String(l.state) in ["signed", "spreading"])), String(rs.campaign().card)])
+				var tithe: bool = rs.laws().any(func(l): return String(l.id) == "tithe" and String(l.state) in ["signed", "spreading"])
+				print("[play] the Tithe on the Charter: %s; %s" % [str(tithe), String(rs.campaign().card)])
+				_expect("the Tithe signed by the accord", tithe)
 				# the ending: a Hive strain, chapter 7's Great Cleansing come and gone
 				rs.debug_gene(6, 0.82)
 				rs.debug_gene(8, 0.8)
@@ -641,6 +709,7 @@ func _process(_delta: float) -> bool:
 				sim.day += 1
 				var camp: Dictionary = rs.campaign()
 				print("[play] the ending: %s, the warchest %d" % [String(camp.ending), int(camp.warchest)])
+				_expect("a Hive strain ends the campaign at the Hive", String(camp.ending) == "hive", String(camp.ending))
 				sim.panel_replay = "end.%s" % String(camp.ending)
 				screens.show_screen("panels")
 				scr = screens.current
@@ -654,11 +723,19 @@ func _process(_delta: float) -> bool:
 		38:
 			if t % 10 == 5:
 				_shot("31_ending")
+				var f := FileAccess.open(out_dir + "/play_digest.txt", FileAccess.WRITE)
+				if f != null:
+					f.store_string("# the city's digest at each frame of play.gd (--fixed-fps 60): frame, day, tick, then whole, mat, structures, stash, roster, log, surface\n" + "\n".join(digests) + "\n")
 				print("[play] %d frames, %d shots -> %s" % [t, shots, out_dir])
-				quit(0)
+				if failed.is_empty():
+					print("[play] PASS %d beats" % beats)
+					quit(0)
+				else:
+					print("[play] FAIL %d of %d beats: %s" % [failed.size(), beats, ", ".join(failed)])
+					quit(1)
 				return true
 	if t > 4000:
-		print("[play] timed out at phase %d" % phase)
+		print("[play] FAIL timed out at phase %d; %d beats failed before: %s" % [phase, failed.size(), ", ".join(failed)])
 		quit(1)
 		return true
 	return false

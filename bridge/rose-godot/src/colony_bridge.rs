@@ -1,16 +1,8 @@
-//! The colony side of `RoseSim` (Full Design v3.9, Colony mode): structures, zones, districts, the shift. The
-//! `#[func]`s live on `RoseSim` in lib.rs and call these; the Stash and the roster are other Godot objects, bound
-//! for the shift.
+//! The colony side of `RoseSim` (Full Design v3.9, Colony mode): structures, zones, districts, the shift, as the
+//! screens read them. The `#[func]`s live on `RoseSim` in lib.rs and call these over its World.
 
 use colony::{Colony, Cost, Filter, ShiftOutcome, StructureFile, ZoneKind};
 use godot::prelude::*;
-
-use crate::data_text;
-use crate::people::RosePeople;
-
-pub fn structure_file() -> StructureFile {
-    StructureFile::from_toml(&data_text("structures.toml", colony::STRUCTURES_TOML)).unwrap_or_else(|_| StructureFile::shipped())
-}
 
 fn cost_dict(c: Cost) -> VarDictionary {
     let mut d = VarDictionary::new();
@@ -114,7 +106,7 @@ pub fn zones_array(colony: &Colony) -> VarArray {
     out
 }
 
-pub fn districts_array(colony: &Colony, people: Option<&RosePeople>, defs: Option<&StructureFile>, mat: Option<&mat::MatSim>) -> VarArray {
+pub fn districts_array(colony: &Colony, roster: Option<&people::Roster>, defs: Option<&StructureFile>, mat: Option<&mat::MatSim>) -> VarArray {
     let mut out = VarArray::new();
     for d in &colony.districts {
         let mut e = VarDictionary::new();
@@ -125,7 +117,7 @@ pub fn districts_array(colony: &Colony, people: Option<&RosePeople>, defs: Optio
         e.set("structures", &ints(&d.structures));
         e.set("members", &ints(&d.members));
         e.set("foreman", d.foreman.map(|f| f as i64).unwrap_or(-1));
-        e.set("foreman_name", d.foreman.and_then(|f| people.and_then(|p| p.roster.get(f)).map(|r| r.full_name())).unwrap_or_default().as_str());
+        e.set("foreman_name", d.foreman.and_then(|f| roster.and_then(|r| r.get(f)).map(|r| r.full_name())).unwrap_or_default().as_str());
         e.set("term_left", d.term_left as i64);
         e.set("priorities", &PackedInt32Array::from(d.priorities.iter().map(|p| *p as i32).collect::<Vec<_>>().as_slice()));
         e.set("boon_shifts", d.boon_shifts as i64);

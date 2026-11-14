@@ -3,7 +3,7 @@
 
 use godot::prelude::*;
 
-use crate::{RosePeople, RoseSim};
+use crate::RoseSim;
 use progress::tech::{BRANCHES, BRANCH_NAMES};
 use progress::{CollectionsFile, Project, StrainFile, TechFile};
 
@@ -21,8 +21,9 @@ impl RoseSim {
     /// project standing, the blueprints the Stash holds, the history.
     #[func]
     fn tech(&self) -> VarDictionary {
+        let Some(w) = self.world.as_ref() else { return VarDictionary::new() };
         let f = TechFile::shipped();
-        let t = &self.colony.progress.tech;
+        let t = &w.colony.progress.tech;
         let mut d = VarDictionary::new();
         d.set("open", &PackedInt32Array::from(t.open.iter().map(|&x| x as i32).collect::<Vec<i32>>().as_slice()));
         d.set("branches", &strings(&BRANCH_NAMES.iter().map(|s| s.to_string()).collect::<Vec<_>>()));
@@ -53,31 +54,29 @@ impl RoseSim {
             proj.set("got", t.got as i64);
             proj.set("need", f.points_of(p) as i64);
             proj.set("study", matches!(p, Project::Study(_)));
-            let workers: Vec<String> = self.plan.iter().filter(|a| a.1 == ::people::Job::Research).map(|a| a.0.to_string()).collect();
+            let workers: Vec<String> = w.plan.iter().filter(|a| a.1 == ::people::Job::Research).map(|a| a.0.to_string()).collect();
             proj.set("workers", workers.len() as i64);
         }
         d.set("project", &proj);
         let mut bps = VarArray::new();
-        if let Some(st) = self.stash.as_ref() {
-            let st = st.bind();
-            if let (Some(stash), Some(table)) = (st.stash.as_ref(), st.table.as_ref()) {
-                let mut seen: Vec<String> = Vec::new();
-                for (_, _, it) in stash.handles() {
-                    let id = table.def(it.def).id.clone();
-                    let Some((b, tier)) = f.blueprint(&id) else { continue };
-                    if seen.contains(&id) {
-                        continue;
-                    }
-                    seen.push(id.clone());
-                    let mut e = VarDictionary::new();
-                    e.set("item", id.as_str());
-                    e.set("name", table.def(it.def).name.as_str());
-                    e.set("branch", b as i64);
-                    e.set("tier", tier as i64);
-                    e.set("points", f.study[(tier as usize - 2).min(2)] as i64);
-                    e.set("why", t.cannot_pick(&Project::Study(id.clone())).unwrap_or_default().as_str());
-                    bps.push(&e.to_variant());
+        {
+            let (stash, table) = (&w.stash, &w.table);
+            let mut seen: Vec<String> = Vec::new();
+            for (_, _, it) in stash.handles() {
+                let id = table.def(it.def).id.clone();
+                let Some((b, tier)) = f.blueprint(&id) else { continue };
+                if seen.contains(&id) {
+                    continue;
                 }
+                seen.push(id.clone());
+                let mut e = VarDictionary::new();
+                e.set("item", id.as_str());
+                e.set("name", table.def(it.def).name.as_str());
+                e.set("branch", b as i64);
+                e.set("tier", tier as i64);
+                e.set("points", f.study[(tier as usize - 2).min(2)] as i64);
+                e.set("why", t.cannot_pick(&Project::Study(id.clone())).unwrap_or_default().as_str());
+                bps.push(&e.to_variant());
             }
         }
         d.set("blueprints", &bps);
@@ -93,16 +92,12 @@ impl RoseSim {
     /// Stash. Returns why not, or "" when it stands.
     #[func]
     fn research_pick(&mut self, kind: GString, id: GString) -> GString {
+        let Some(w) = self.world.as_mut() else { return GString::from("no city") };
         let p = if kind == "study" { Project::Study(id.to_string()) } else { Project::Node(id.to_string()) };
-        let Some(st) = self.stash.as_mut() else { return "no Stash".into() };
-        let mut st = st.bind_mut();
-        st.ensure();
-        let st = &mut *st;
-        let (Some(stash), Some(table)) = (st.stash.as_mut(), st.table.as_ref()) else { return "no Stash".into() };
-        match game::grow::pick_project(&mut self.colony, stash, &mut st.ledger, table, p) {
+        match game::grow::pick_project(&mut w.colony, &mut w.stash, &mut w.ledger, &w.table, p) {
             Ok(()) => {
-                let name = self.colony.progress.tech.project_name().unwrap_or_default();
-                self.log.push(self.city.as_ref().map_or(0, |c| c.tick), game::Class::Decision, format!("research: {name}"));
+                let name = w.colony.progress.tech.project_name().unwrap_or_default();
+                crate::decide(w, format!("research: {name}"));
                 GString::new()
             }
             Err(why) => why.as_str().into(),
@@ -112,16 +107,18 @@ impl RoseSim {
     /// Set the project aside: its points stay with it.
     #[func]
     fn research_drop(&mut self) {
-        self.colony.progress.tech.drop_project();
+        let Some(w) = self.world.as_mut() else { return };
+        w.colony.progress.tech.drop_project();
     }
 
     /// The strain for the Strain Lab: the organs with their lines, grown and cap; the classes and which are held;
     /// the Strainbook's count; the lineage as each gene's values over the shifts.
     #[func]
     fn strain(&self) -> VarDictionary {
+        let Some(w) = self.world.as_ref() else { return VarDictionary::new() };
         let f = StrainFile::shipped();
         let mut d = VarDictionary::new();
-        let Some(city) = self.city.as_ref() else { return d };
+        let city = &w.city;
         let g = city.sim.genome.0;
         let cap = 1 + city.sim.node_count() / f.organ_per_nodes.max(1);
         let mut organs = VarArray::new();
@@ -137,7 +134,7 @@ impl RoseSim {
             e.set("crossed", g[gi] > o.line);
             e.set("count", city.sim.organs_of(k as u8).count() as i64);
             e.set("cap", cap as i64);
-            e.set("seen", self.colony.progress.strain.has_card(&o.id));
+            e.set("seen", w.colony.progress.strain.has_card(&o.id));
             e.set("text", o.text.as_str());
             organs.push(&e.to_variant());
         }
@@ -150,15 +147,15 @@ impl RoseSim {
             let names: Vec<String> = c.genes.iter().map(|k| mat::genome::GENE_NAMES[progress::strain::gene_index(k).unwrap_or(0)].to_string()).collect();
             e.set("genes", &strings(&names));
             e.set("line", c.line);
-            e.set("held", self.colony.progress.strain.holds(&c.id));
+            e.set("held", w.colony.progress.strain.holds(&c.id));
             e.set("text", c.text.as_str());
             classes.push(&e.to_variant());
         }
         d.set("classes", &classes);
-        d.set("book", self.colony.progress.strain.book.len() as i64);
+        d.set("book", w.colony.progress.strain.book.len() as i64);
         d.set("book_total", f.cards().len() as i64);
         // the lineage: ten rows of the shifts' values
-        let lin = &self.colony.progress.strain.lineage;
+        let lin = &w.colony.progress.strain.lineage;
         let mut rows = VarArray::new();
         for gi in 0..10 {
             rows.push(&PackedFloat32Array::from(lin.iter().map(|(_, v)| v[gi]).collect::<Vec<f32>>().as_slice()).to_variant());
@@ -170,15 +167,15 @@ impl RoseSim {
     /// The organs on the Mat for the World view: {i, x, y, id, name, art, rule, dark, housed}.
     #[func]
     fn organs(&mut self) -> VarArray {
+        let Some(w) = self.world.as_mut() else { return VarArray::new() };
         let f = StrainFile::shipped();
-        let defs = self.defs().clone();
-        let defs = &defs;
+        let defs = &w.defs;
         let mut a = VarArray::new();
-        let Some(city) = self.city.as_ref() else { return a };
-        let w = city.sim.w;
+        let city = &w.city;
+        let mw = city.sim.w;
         for o in &city.sim.organs {
             let Some(od) = f.organ.get(o.kind as usize) else { continue };
-            let (x, y) = ((o.i as usize % w) as u16, (o.i as usize / w) as u16);
+            let (x, y) = ((o.i as usize % mw) as u16, (o.i as usize / mw) as u16);
             let mut e = VarDictionary::new();
             e.set("i", o.i as i64);
             e.set("x", x as i64);
@@ -187,8 +184,8 @@ impl RoseSim {
             e.set("name", od.name.as_str());
             e.set("art", od.art.as_str());
             e.set("rule", o.rule as i64);
-            e.set("dark", self.colony.dark_bulbs.contains(&o.i) || self.colony.nerve.dark_bulbs.contains(&o.i));
-            e.set("housed", self.colony.occupied(defs, x, y).is_some_and(|sid| self.colony.get(sid).is_some_and(|s| defs.structure[s.def].category != "organ")));
+            e.set("dark", w.colony.dark_bulbs.contains(&o.i) || w.colony.nerve.dark_bulbs.contains(&o.i));
+            e.set("housed", w.colony.occupied(defs, x, y).is_some_and(|sid| w.colony.get(sid).is_some_and(|s| defs.structure[s.def].category != "organ")));
             a.push(&e.to_variant());
         }
         a
@@ -198,11 +195,12 @@ impl RoseSim {
     /// Sphincter's 0-4 (8, 4, 12 tiles, always shut, always open), the Spore Sac's 0-1 (release, hold).
     #[func]
     fn organ_rule(&mut self, tile: i64, rule: i64) -> GString {
-        if !self.colony.progress.tech.flag("organ_rules") {
+        let Some(w) = self.world.as_mut() else { return GString::from("no city") };
+        if !w.colony.progress.tech.flag("organ_rules") {
             return "needs Organ rules researched".into();
         }
         let f = StrainFile::shipped();
-        let Some(city) = self.city.as_mut() else { return "no city".into() };
+        let Some(city) = Some(&mut w.city) else { return "no city".into() };
         let Some(o) = city.sim.organs.iter_mut().find(|o| o.i as i64 == tile) else { return "no organ there".into() };
         let most = match f.organ.get(o.kind as usize).map(|d| d.id.as_str()) {
             Some("bulb") => 3,
@@ -217,14 +215,17 @@ impl RoseSim {
     /// The Codex's collections: the Scrapdex (every entry, seen or a silhouette), the Strainbook's cards, the curio
     /// sets, the trophies; the Memorial is the roster's.
     #[func]
-    fn codex(&self, people: Gd<RosePeople>) -> VarDictionary {
+    fn codex(&self) -> VarDictionary {
+        let Some(w) = self.world.as_ref() else { return VarDictionary::new() };
         let mut d = VarDictionary::new();
-        let c = &self.colony.progress.collections;
+        let c = &w.colony.progress.collections;
         let cf = CollectionsFile::shipped();
-        let table = items::ItemTable::from_toml(items::ITEMS_TOML).expect("items");
+        let table = &w.table;
         let mut dex = VarArray::new();
-        for id in cf.scrapdex(&table) {
-            let def = table.def(table.id_of(id).unwrap());
+        for id in cf.scrapdex(table) {
+            // the Scrapdex lists the table's own ids (CollectionsFile::scrapdex)
+            let Some(k) = table.id_of(id) else { continue };
+            let def = table.def(k);
             let mut e = VarDictionary::new();
             e.set("id", id);
             e.set("name", def.name.as_str());
@@ -242,14 +243,11 @@ impl RoseSim {
             e.set("name", name);
             e.set("text", text);
             e.set("art", sf.organ.iter().find(|o| o.id == id).map_or("", |o| o.art.as_str()));
-            e.set("earned", self.colony.progress.strain.book.iter().find(|b| b.0 == id).map_or(-1, |b| b.1 as i64));
+            e.set("earned", w.colony.progress.strain.book.iter().find(|b| b.0 == id).map_or(-1, |b| b.1 as i64));
             book.push(&e.to_variant());
         }
         d.set("strainbook", &book);
-        let owned: Vec<items::SetBonus> = self.stash.as_ref().map(|st| {
-            let st = st.bind();
-            st.stash.as_ref().map(|s| items::set_bonuses(&table, s.all_items())).unwrap_or_default()
-        }).unwrap_or_default();
+        let owned: Vec<items::SetBonus> = items::set_bonuses(table, w.stash.all_items());
         let mut sets = VarArray::new();
         for s in &cf.set {
             let mut e = VarDictionary::new();
@@ -274,9 +272,8 @@ impl RoseSim {
             trophies.push(&e.to_variant());
         }
         d.set("trophies", &trophies);
-        let p = people.bind();
         let mut memorial = VarArray::new();
-        for r in p.roster.memorial.iter().rev() {
+        for r in w.roster.memorial.iter().rev() {
             let mut e = VarDictionary::new();
             e.set("name", r.full_name().as_str());
             e.set("depth", format!("D{}", r.depth as u8 + 1).as_str());
@@ -293,10 +290,11 @@ impl RoseSim {
     /// action, action_name, held} each, with whether Nerve logic stands.
     #[func]
     fn nerve_rules(&self, shrine: i64) -> VarDictionary {
+        let Some(w) = self.world.as_ref() else { return VarDictionary::new() };
         let mut d = VarDictionary::new();
-        d.set("researched", self.colony.progress.tech.flag("nerve_logic"));
+        d.set("researched", w.colony.progress.tech.flag("nerve_logic"));
         let mut a = VarArray::new();
-        for r in self.colony.rules_of(shrine.max(0) as u32) {
+        for r in w.colony.rules_of(shrine.max(0) as u32) {
             let mut e = VarDictionary::new();
             e.set("reading", colony::Reading::ALL.iter().position(|x| *x == r.reading).unwrap_or(0) as i64);
             e.set("reading_name", r.reading.name());
@@ -320,7 +318,8 @@ impl RoseSim {
     /// `action` an index into the actions. Returns why not, or "".
     #[func]
     fn set_nerve_rule(&mut self, shrine: i64, k: i64, reading: i64, above: bool, value: f64, action: i64) -> GString {
-        let defs = self.defs().clone();
+        let Some(w) = self.world.as_mut() else { return GString::from("no city") };
+        let defs = &w.defs;
         let rule = (reading >= 0).then(|| colony::NerveRule {
             reading: colony::Reading::ALL[(reading as usize).min(6)],
             above,
@@ -328,7 +327,7 @@ impl RoseSim {
             action: colony::NerveAction::ALL[(action.max(0) as usize).min(6)],
             held: false,
         });
-        match self.colony.set_rule(&defs, shrine.max(0) as u32, k.max(0) as usize, rule) {
+        match w.colony.set_rule(&defs, shrine.max(0) as u32, k.max(0) as usize, rule) {
             Ok(()) => GString::new(),
             Err(why) => why.as_str().into(),
         }
@@ -337,22 +336,24 @@ impl RoseSim {
     /// A run by hand came home from a stratum's route (Full Design v3.18, Route loops).
     #[func]
     fn note_route_home(&mut self, stratum: i64) {
-        self.colony.home_from(stratum.clamp(1, 6) as u8);
+        let Some(w) = self.world.as_mut() else { return };
+        w.colony.home_from(stratum.clamp(1, 6) as u8);
     }
 
     /// The route loops for the Route Board: {stratum, slimo, repeats, decay, homes}, and whether loops can be set.
     #[func]
     fn route_loops(&self) -> VarDictionary {
+        let Some(w) = self.world.as_ref() else { return VarDictionary::new() };
         let mut d = VarDictionary::new();
-        d.set("researched", self.colony.progress.tech.flag("route_loops"));
+        d.set("researched", w.colony.progress.tech.flag("route_loops"));
         let mut homes = VarDictionary::new();
-        for (st, n) in &self.colony.route_homes {
+        for (st, n) in &w.colony.route_homes {
             homes.set(*st as i64, *n as i64);
         }
         d.set("homes", &homes);
         d.set("after", colony::LOOP_AFTER as i64);
         let mut a = VarArray::new();
-        for l in &self.colony.loops {
+        for l in &w.colony.loops {
             let mut e = VarDictionary::new();
             e.set("stratum", l.stratum as i64);
             e.set("slimo", l.slimo as i64);
@@ -365,19 +366,19 @@ impl RoseSim {
 
     /// Put a stratum's route on a loop with a slimo (-1 takes it off). Returns why not, or "".
     #[func]
-    fn set_route_loop(&mut self, people: Gd<RosePeople>, stratum: i64, slimo: i64) -> GString {
+    fn set_route_loop(&mut self, stratum: i64, slimo: i64) -> GString {
+        let Some(w) = self.world.as_mut() else { return GString::from("no city") };
         let st = stratum.clamp(1, 6) as u8;
         if slimo < 0 {
-            let _ = self.colony.set_loop(st, None);
+            let _ = w.colony.set_loop(st, None);
             return GString::new();
         }
-        let p = people.bind();
-        let Some(r) = p.roster.get(slimo as u32) else { return "no such slimo".into() };
-        let able = r.can_run() || (p.roster.d4_runs && r.depth == ::people::Depth::D4 && r.is_up());
+        let Some(r) = w.roster.get(slimo as u32) else { return "no such slimo".into() };
+        let able = r.can_run() || (w.roster.d4_runs && r.depth == ::people::Depth::D4 && r.is_up());
         if !able {
             return "cannot run now".into();
         }
-        match self.colony.set_loop(st, Some(slimo as u32)) {
+        match w.colony.set_loop(st, Some(slimo as u32)) {
             Ok(()) => GString::new(),
             Err(why) => why.as_str().into(),
         }
@@ -386,15 +387,17 @@ impl RoseSim {
     /// The handoff's proposal (Full Design v3.18): its tiles and whether it was confirmed.
     #[func]
     fn proposal(&self) -> VarDictionary {
+        let Some(w) = self.world.as_ref() else { return VarDictionary::new() };
         let mut d = VarDictionary::new();
-        d.set("tiles", &PackedInt32Array::from(self.colony.proposal.iter().map(|&i| i as i32).collect::<Vec<i32>>().as_slice()));
-        d.set("confirmed", self.colony.proposal_confirmed);
+        d.set("tiles", &PackedInt32Array::from(w.colony.proposal.iter().map(|&i| i as i32).collect::<Vec<i32>>().as_slice()));
+        d.set("confirmed", w.colony.proposal_confirmed);
         d
     }
 
     /// Answer the proposal: confirm lays it, sever drops it.
     #[func]
     fn answer_proposal(&mut self, confirm: bool) {
-        game::handoff::answer(&mut self.colony, confirm);
+        let Some(w) = self.world.as_mut() else { return };
+        game::handoff::answer(&mut w.colony, confirm);
     }
 }

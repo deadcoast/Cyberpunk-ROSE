@@ -180,7 +180,7 @@ func _draw_research() -> void:
 ## A project picked opens the Research slots: the shift's plan takes them now, as an order does.
 func _replan() -> void:
 	if research_msg == "":
-		Sim.ensure().refresh_movers(Sim.ensure_people(), Sim.day)
+		Sim.ensure().refresh_movers()
 
 func _node_tile(parent: Control, pos: Vector2, n: Dictionary) -> void:
 	var st := String(n.state)

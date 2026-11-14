@@ -317,6 +317,9 @@ pub fn end_shift(town: Town, st: Store, mut folk: Folk, day: u32, log: &mut City
 /// colony hands its jobs out again and the builders' Hands go into what is placed, so a ghost rises while the player
 /// watches instead of waiting for the shift's end.
 pub const WORK_TICKS: u64 = 120;
+/// A player's shift on the city's clock (Full Design v3.21, The living city): ten minutes at 2 Hz, the work cycles that
+/// raise the ghosts and the desk work that researches inside it.
+pub const SHIFT_TICKS: u64 = colony::MINUTES_A_SHIFT as u64 * WORK_TICKS;
 /// The onboarding beats look at the city every two seconds, so a beat ends as the player does its deed.
 pub const LOOK_TICKS: u64 = 4;
 

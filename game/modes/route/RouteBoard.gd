@@ -161,11 +161,11 @@ func _fill_card(f: Panel, r: Dictionary, i: int) -> void:
 		if not mine.is_empty():
 			make_label(f, "LOOP: %s, %d REPEATS" % [_crew_name(int(mine.slimo)).to_upper(), int(mine.repeats)], Vector2(6, 84), UiTheme.OOZE_GLOW)
 			_card_word(f, "END", Vector2(180, 84), UiTheme.HOT_PINK, func():
-				Sim.ensure().set_route_loop(Sim.ensure_people(), st, -1)
+				Sim.ensure().set_route_loop(st, -1)
 				_refresh_cards())
 		elif homes >= int(lp.after) and runner_id >= 0:
 			_card_word(f, "LOOP IT WITH %s" % _crew_name(runner_id).to_upper(), Vector2(6, 84), UiTheme.ACID, func():
-				var why: String = Sim.ensure().set_route_loop(Sim.ensure_people(), st, runner_id)
+				var why: String = Sim.ensure().set_route_loop(st, runner_id)
 				depart_note.text = why
 				_refresh_cards())
 		else:

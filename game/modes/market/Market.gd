@@ -37,7 +37,7 @@ func _build_content(c: Control) -> void:
 	demand_frame = make_frame(c, Vector2(306, 50), Vector2(326, 104))
 	contracts_frame = make_frame(c, Vector2(306, 158), Vector2(326, 148))
 	# the first faction whose street the Mat reaches
-	var first: Dictionary = Sim.ensure().market(Sim.ensure_people(), 0)
+	var first: Dictionary = Sim.ensure().market(0)
 	for t in first.get("factions", []):
 		if bool(t.reached):
 			faction = int(t.index)
@@ -62,7 +62,7 @@ func _tab(f: int) -> void:
 	_redraw()
 
 func _redraw() -> void:
-	m = Sim.ensure().market(Sim.ensure_people(), faction)
+	m = Sim.ensure().market(faction)
 	if m.is_empty():
 		return
 	_draw_tabs()
@@ -215,7 +215,7 @@ func _draw_stock() -> void:
 	b.disabled = not bool(picked.open) or int(picked.units) <= 0 or int(m.market) < 0 or bool(m.closed)
 
 func _order() -> void:
-	var why: String = Sim.ensure().market_order(Sim.ensure_people(), faction, picked_entry, 1)
+	var why: String = Sim.ensure().market_order(faction, picked_entry, 1)
 	status = "ordered: paid at the shift's end" if why == "" else why
 	_redraw()
 
@@ -334,7 +334,7 @@ func _draw_contracts() -> void:
 		make_label(contracts_frame, status, Vector2(6, 134), UiTheme.ACID)
 
 func _accept() -> void:
-	var r: Dictionary = Sim.ensure().market_accept(Sim.ensure_people(), picked_offer, Sim.day)
+	var r: Dictionary = Sim.ensure().market_accept(picked_offer, Sim.day)
 	if String(r.get("why", "")) != "":
 		status = String(r.why)
 	else:

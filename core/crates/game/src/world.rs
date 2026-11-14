@@ -64,7 +64,7 @@ pub fn starting_haul(stash: &mut Stash, table: &ItemTable) {
 pub fn found_economy(sim: &mat::MatSim, table: &ItemTable, seed: u64) -> economy::Economy {
     let grates: Vec<(u16, u8)> = sim.grates().into_iter().map(|g| (g as u16, sim.stratum_at(g))).collect();
     let first = sim.heart.and_then(|(hx, hy)| logistics::first_grate(sim, hx, hy)).unwrap_or(0) as u16;
-    economy::Economy::found(economy::FactionFile::shipped(), table, seed, &grates, first)
+    economy::Economy::found(crate::data::get().factions.clone(), table, seed, &grates, first)
 }
 
 pub struct World {
@@ -95,8 +95,14 @@ pub struct World {
     pub economy: economy::Economy,
     /// the shift's plan: (slimo, job, structure)
     pub plan: Vec<(u32, people::Job, u32)>,
-    /// raiders walk the Board's routes (clear-raiders contracts are offered); the headless city's Board is S1's
+    /// the highest stratum the Route Board offers: one above the city's (Full Design v3.19, the Route Board's three
+    /// strata), from the founding and again at each breach
+    pub strata: u8,
+    /// raiders walk the Board's routes (clear-raiders contracts are offered): the raid chance of the Board's strata
     pub raiders: bool,
+    /// recover contracts' bodies laid at the last shift's end, on the Board's routes, for the caller to keep with our
+    /// dead (Full Design v3.16, Economy: Contracts)
+    pub laid: Vec<crate::trade::Laid>,
     /// the sales landed since the caller last took them (`rose economy`'s report)
     pub sales: Vec<cargo::Sale>,
     /// the campaign (Full Design v3.19, Narrative and Ivan)
@@ -124,12 +130,13 @@ impl World {
     pub fn found_with(seed: u64, table: ItemTable, mut campaign: story::Campaign, genome: mat::Genome) -> World {
         campaign.seed = seed as u32;
         let city = City::game(logistics::founding_with(seed, genome), seed);
-        let defs = StructureFile::shipped();
+        let data = crate::data::get();
+        let defs = data.structures.clone();
         let mut colony = Colony::new();
         colony.found(&defs, &city.sim).expect("the founding stratum takes the city");
         colony.found_home(&defs, &city.sim);
-        let traits = TraitFile::shipped();
-        let names = NameFile::shipped();
+        let traits = data.traits.clone();
+        let names = data.names.clone();
         let mut roster = Roster::new();
         roster.found(&traits, &names, seed, 1);
         let mut stash = Stash::new();
@@ -137,16 +144,17 @@ impl World {
         let mut threats = threat::Threats::new(&city.sim, seed);
         let mut economy = found_economy(&city.sim, &table, seed);
         crate::campaign::found(&campaign, &mut threats, &mut economy);
+        let strata = *logistics::board_strata(threats.stratum, city.sim.strata).end();
         let mut w = World {
             city,
             colony,
             defs,
-            laws: LawFile::shipped(),
+            laws: data.laws.clone(),
             stash,
             ledger: Ledger::new(),
             bench: BenchQueue::new(),
             table,
-            recipes: RecipeFile::shipped(),
+            recipes: data.recipes.clone(),
             roster,
             traits,
             names,
@@ -160,7 +168,9 @@ impl World {
             run_kills: 0,
             economy,
             plan: Vec::new(),
-            raiders: crate::trade::raiders_walk(1),
+            strata,
+            raiders: crate::trade::raiders_walk(strata),
+            laid: Vec::new(),
             sales: Vec::new(),
             campaign,
         };
@@ -170,8 +180,7 @@ impl World {
         let notes = w.threats.start_shift(&mut w.city, &mut w.colony, &w.defs, 1, w.threats.is_flood_shift(1));
         w.note(notes);
         w.publish();
-        w.movers();
-        w.trade_start();
+        w.start_shift();
         w
     }
 
@@ -190,9 +199,12 @@ impl World {
         self.posts = threat::Posts::from_plan(&self.plan, &self.roster);
     }
 
-    /// The surface's side of a shift's start: see `trade::start_shift`.
-    fn trade_start(&mut self) {
+    /// A shift's start: the movers take the shift's plan and the posts it sets, the surface's side of the shift
+    /// (`trade::start_shift`), then the first ten minutes' beats read the city as the shift opens (v3.21).
+    fn start_shift(&mut self) {
+        self.movers();
         crate::trade::start_shift(&mut self.economy, &mut self.ledger, &self.city, &self.colony, &self.defs, &self.roster, &self.names, &self.plan, Some(&self.threats), self.day, self.raiders, &mut self.log);
+        crate::campaign::onboard(&mut self.campaign, &self.city, &self.colony, &self.defs, &self.roster, &self.ledger, &self.economy, &self.threats);
     }
 
     /// One city tick: slimos walk, cargo rides and lands, the Mat steps on its clock.
@@ -218,6 +230,8 @@ impl World {
             let folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
             let store = Store { stash: &mut self.stash, ledger: &mut self.ledger, bench: &mut self.bench, table: &self.table, recipes: &self.recipes };
             self.plan = shift::work_cycle(&mut self.city, &mut self.colony, &self.defs, folk, store, flush_mult, self.day, &mut self.log);
+            // the Guards stand where the minute's plan puts them (Full Design v3.21, The living city)
+            self.posts = threat::Posts::from_plan(&self.plan, &self.roster);
         }
         if self.city.tick.is_multiple_of(shift::LOOK_TICKS) {
             crate::campaign::onboard(&mut self.campaign, &self.city, &self.colony, &self.defs, &self.roster, &self.ledger, &self.economy, &self.threats);
@@ -230,6 +244,15 @@ impl World {
         crate::shift::bark_run(&mut self.log, report, &name, !haul.is_empty());
         let mut folk = Folk { roster: &mut self.roster, traits: &self.traits, names: &self.names, died: &mut self.died };
         shift::run_home(&mut folk, &mut self.stash, &self.table, report, haul)
+    }
+
+    /// A player's shift (Full Design v3.21, The living city): the city's clock for `shift::SHIFT_TICKS` — the ghosts
+    /// rise, the researchers put their points in, the cargo rides — then its end. What a shift is when nobody runs.
+    pub fn play_shift(&mut self) -> Shift {
+        for _ in 0..shift::SHIFT_TICKS {
+            self.tick();
+        }
+        self.end_shift()
     }
 
     /// The shift ends; the next one's plan goes to the movers. The route loops run first (Full Design v3.18).
@@ -245,11 +268,19 @@ impl World {
         s.people_lines.splice(0..0, loop_lines);
         self.last = Some(s.outcome.clone());
         // the breach and the city's stratum before the threats choose what comes (Full Design v3.19)
-        crate::breach::shift_end(&mut self.city, &self.colony, &self.defs, Some(&mut self.threats), &mut self.log);
+        if let Some(top) = crate::breach::shift_end(&mut self.city, &self.colony, &self.defs, Some(&mut self.threats), &mut self.log) {
+            // the Board follows the city's stratum, and the raid chance its strata (Full Design v3.19)
+            let name = logistics::StrataFile::shipped().get(top).map(|d| d.name.clone()).unwrap_or_default();
+            s.people_lines.push(format!("the Mat reached {name} (S{top})"));
+            self.strata = *logistics::board_strata(top, self.city.sim.strata).end();
+            self.raiders = crate::trade::raiders_walk(self.strata);
+        }
         self.pressure_end(&s.outcome);
-        // the headless city's runs carry no bodies: a recover link here is laid nowhere
-        let (lines, _) = crate::trade::end_shift(&mut self.economy, &mut self.ledger, &mut self.stash, &self.table, &mut self.city, &mut self.colony, &mut self.roster, &self.traits, &self.names, Some(&mut self.threats), None, &s.closed.report.to_faction, self.day, self.raiders, &mut self.log);
+        // a recover link taken at this shift's end lays its body on a route of the Board's strata
+        let board = crate::trade::Board { lib: &crate::data::get().chunks, city_seed: self.economy.s.seed, strata: self.strata.max(1) };
+        let (lines, laid) = crate::trade::end_shift(&mut self.economy, &mut self.ledger, &mut self.stash, &self.table, &mut self.city, &mut self.colony, &mut self.roster, &self.traits, &self.names, Some(&mut self.threats), Some(&board), &s.closed.report.to_faction, self.day, self.raiders, &mut self.log);
         s.stash_lines.extend(lines);
+        self.laid = laid;
         // the campaign reads the city's shift: a chapter's goal, the accord, the Great Cleansing, the ending
         let guards = self.posts.guards.len();
         let mut parts = crate::campaign::Parts { city: &mut self.city, colony: &mut self.colony, defs: &self.defs, threats: &mut self.threats, economy: &mut self.economy, roster: &mut self.roster, died: &mut self.died, stash: &mut self.stash, table: &self.table, log: &mut self.log, guards };
@@ -262,8 +293,7 @@ impl World {
             self.log.bark("flood", &[]);
         }
         crate::ivan::shift_end(&mut self.campaign, &mut self.city);
-        self.movers();
-        self.trade_start();
+        self.start_shift();
         s
     }
 

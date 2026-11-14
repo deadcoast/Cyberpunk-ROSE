@@ -270,7 +270,7 @@ pub fn answer_accord(c: &mut Campaign, p: &mut Parts, accept: bool, day: u32) ->
     p.threats.envoy_leaves();
     if accept {
         c.accord = Some(Accord::Accepted { on: day });
-        if let Some(law) = colony::LawFile::shipped().get("tithe") {
+        if let Some(law) = crate::data::get().laws.get("tithe") {
             if !p.colony.charter.offered.iter().any(|l| l == "tithe") {
                 p.colony.charter.offered.push("tithe".into());
             }

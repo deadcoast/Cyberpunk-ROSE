@@ -84,7 +84,7 @@ func _draw_light() -> void:
 	if t == null or not is_instance_valid(t) or not t.is_visible_in_tree():
 		return
 	var r := t.get_global_rect().grow(2)
-	var a := 0.7 + 0.3 * sin(Time.get_ticks_msec() / 160.0)
+	var a := 0.7 + 0.3 * sin(Sim.anim_msec() / 160.0)
 	_light.draw_rect(r, Color(UiTheme.CYAN, a), false, 1.0)
 	_light.draw_rect(r.grow(1), Color(UiTheme.CYAN, a * 0.6), false, 1.0)
 	_light.draw_rect(r.grow(2), Color(UiTheme.CYAN, a * 0.25), false, 1.0)

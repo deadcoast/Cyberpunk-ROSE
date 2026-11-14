@@ -103,7 +103,8 @@ impl RoseProfile {
     #[func]
     fn absorb(&mut self, sim: Gd<RoseSim>) -> i64 {
         let s = sim.bind();
-        game::meta::absorb(&mut self.p, &s.colony) as i64
+        let Some(w) = s.world.as_ref() else { return 0 };
+        game::meta::absorb(&mut self.p, &w.colony) as i64
     }
 
     /// A finished run into the profile: the ending with its warchest and code and the laws it signed, or an Endless
@@ -111,7 +112,7 @@ impl RoseProfile {
     #[func]
     fn record_end(&mut self, sim: Gd<RoseSim>) -> bool {
         let s = sim.bind();
-        let Some(c) = s.city.as_ref() else { return false };
-        game::meta::record_end(&mut self.p, &s.campaign, &c.sim, &s.colony)
+        let Some(w) = s.world.as_ref() else { return false };
+        game::meta::record_end(&mut self.p, &w.campaign, &w.city.sim, &w.colony)
     }
 }

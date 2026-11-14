@@ -3,7 +3,7 @@
 
 use godot::prelude::*;
 
-use crate::{RosePeople, RoseSim};
+use crate::RoseSim;
 use economy::Kind;
 use items::{ItemTable, Tier};
 
@@ -62,18 +62,13 @@ impl RoseSim {
     ///  contracts: [{id, kind, link, links, got, n, due, eddies, ask, where}],
     ///  queue: [{index, name, verb, quote}], orders: [{name, units, each}]}
     #[func]
-    fn market(&mut self, people: Gd<RosePeople>, faction: i64) -> VarDictionary {
-        let defs = self.defs().clone();
+    fn market(&self, faction: i64) -> VarDictionary {
+        let Some(w) = self.world.as_ref() else { return VarDictionary::new() };
+        let defs = &w.defs;
         let mut d = VarDictionary::new();
-        let (Some(e), Some(city), Some(st)) = (self.economy.as_ref(), self.city.as_ref(), self.stash.as_ref()) else { return d };
-        let p = people.bind();
-        let mut st = st.clone();
-        let mut st = st.bind_mut();
-        st.ensure();
-        let st = &*st;
-        let table = st.table.as_ref().unwrap();
+        let (e, city, table) = (&w.economy, &w.city, &w.table);
         let f = (faction.max(0) as u8).min(e.file.factions.len() as u8 - 1);
-        let open_grates = game::trade::open_grates(&self.colony);
+        let open_grates = game::trade::open_grates(&w.colony);
         // the tabs
         let mut tabs = VarArray::new();
         for (k, def) in e.file.factions.iter().enumerate() {
@@ -88,18 +83,18 @@ impl RoseSim {
             t.set("index", k as i64);
             t.set("name", def.name.as_str());
             t.set("grates", grates.join(" ").as_str());
-            t.set("reached", game::trade::market_of(e, city, &self.colony, k as u8).is_some());
+            t.set("reached", game::trade::market_of(e, city, &w.colony, k as u8).is_some());
             tabs.push(&t.to_variant());
         }
         d.set("factions", &tabs);
         d.set("events", &PackedStringArray::from(e.s.events.iter().map(|&(k, days)| GString::from(format!("{} {} day{}", e.file.events[k as usize].name, days, if days == 1 { "" } else { "s" }).as_str())).collect::<Vec<_>>().as_slice()));
-        d.set("eddies", st.ledger.eddies as i64);
+        d.set("eddies", w.ledger.eddies as i64);
         d.set("day", e.s.day as i64);
         // the faction and where the city deals with it
         let def = &e.file.factions[f as usize];
         d.set("faction", f as i64);
         d.set("name", def.name.as_str());
-        let market = game::trade::market_of(e, city, &self.colony, f);
+        let market = game::trade::market_of(e, city, &w.colony, f);
         d.set("market", market.map_or(-1, |m| m as i64));
         d.set("market_name", market.map_or(String::new(), |m| format!("grate {}", city.market_grate(m as usize))).as_str());
         let streets: Vec<String> = e.s.streets.iter().filter(|s| s.faction == f).map(|s| format!("G{}", s.number)).collect();
@@ -136,7 +131,7 @@ impl RoseSim {
         sv.set("convoy", !e.s.convoy.is_empty());
         d.set("services", &sv);
         // the stall's haggling and Past where the city deals with it
-        let staff = game::trade::stalls(city, &self.colony, &defs, &p.roster, &self.plan);
+        let staff = game::trade::stalls(city, &w.colony, defs, &w.roster, &w.plan);
         let (trade, pasts) = market.and_then(|m| staff.get(m as usize).cloned()).unwrap_or_default();
         let past = pasts.contains(&def.past);
         // the stock: today's entries, every tier, the closed ones dimmed
@@ -177,7 +172,7 @@ impl RoseSim {
             b.set("uncommon", e.demand(f, c, Tier::Uncommon) as f64);
             b.set("rare", e.demand(f, c, Tier::Rare) as f64);
             b.set("base", def.base(c) as f64);
-            let glut = market.map_or(0, |m| st.ledger.glut_units(m, c as usize));
+            let glut = market.map_or(0, |m| w.ledger.glut_units(m, c as usize));
             b.set("glut", (glut * 5).min(75) as i64);
             bars.push(&b.to_variant());
         }
@@ -211,7 +206,7 @@ impl RoseSim {
             x.set("ask", ask_line(c, table).as_str());
             let at = match (c.kind, c.route) {
                 (Kind::Recover, Some((s, _))) => format!("the body lies at the far end of the S{s} route"),
-                (Kind::Host, Some(_)) | (Kind::Host, None) => c.host.and_then(|h| p.roster.get(h).map(|r| format!("{} is in the city", r.name)).or_else(|| p.roster.waiting.iter().find(|(r, _)| r.id == h).map(|(r, _)| format!("{} waits at a grate for a bed", r.name)))).unwrap_or_default(),
+                (Kind::Host, Some(_)) | (Kind::Host, None) => c.host.and_then(|h| w.roster.get(h).map(|r| format!("{} is in the city", r.name)).or_else(|| w.roster.waiting.iter().find(|(r, _)| r.id == h).map(|(r, _)| format!("{} waits at a grate for a bed", r.name)))).unwrap_or_default(),
                 _ => String::new(),
             };
             x.set("where", at.as_str());
@@ -222,12 +217,12 @@ impl RoseSim {
         // the market's queue and this faction's orders
         let mine: Vec<u32> = e.s.contracts.iter().filter(|c| c.faction == f).map(|c| c.id).collect();
         let mut queue = VarArray::new();
-        for (i, q) in st.ledger.queue.iter().enumerate() {
+        for (i, q) in w.ledger.queue.iter().enumerate() {
             let (verb, quote) = match q.verb {
                 inventory::Verb::Sell { market: m } if Some(m) == market => {
                     let cat = table.def(q.item.def).category;
-                    let ahead = st.ledger.queue[..i].iter().filter(|x| x.verb == q.verb && table.def(x.item.def).category == cat).count() as u32;
-                    ("sell", st.ledger.best(table, &q.item, m, st.ledger.glut_units(m, cat as usize) + ahead).map_or(-1, |(v, _)| v as i64))
+                    let ahead = w.ledger.queue[..i].iter().filter(|x| x.verb == q.verb && table.def(x.item.def).category == cat).count() as u32;
+                    ("sell", w.ledger.best(table, &q.item, m, w.ledger.glut_units(m, cat as usize) + ahead).map_or(-1, |(v, _)| v as i64))
                 }
                 inventory::Verb::Deliver { contract, .. } if mine.contains(&contract) => ("deliver", 0),
                 _ => continue,
@@ -241,7 +236,7 @@ impl RoseSim {
         }
         d.set("queue", &queue);
         let mut orders = VarArray::new();
-        for o in st.ledger.orders.iter().filter(|o| o.faction == f) {
+        for o in w.ledger.orders.iter().filter(|o| o.faction == f) {
             let s = &def.stock[o.entry as usize];
             let mut x = VarDictionary::new();
             x.set("name", table.id_of(&s.item).map_or(s.service.clone(), |i| table.def(i).name.clone()).as_str());
@@ -256,18 +251,14 @@ impl RoseSim {
     /// Order `units` of a stock entry from a faction where the city deals with it: paid at the shift's end. Returns
     /// "" or why not.
     #[func]
-    fn market_order(&mut self, people: Gd<RosePeople>, faction: i64, entry: i64, units: i64) -> GString {
-        let defs = self.defs().clone();
-        let (Some(e), Some(city), Some(st)) = (self.economy.as_mut(), self.city.as_ref(), self.stash.as_mut()) else { return "no city".into() };
-        let p = people.bind();
-        let mut st = st.bind_mut();
-        st.ensure();
-        let st = &mut *st;
+    fn market_order(&mut self, faction: i64, entry: i64, units: i64) -> GString {
+        let Some(w) = self.world.as_mut() else { return GString::from("no city") };
+        let (e, city) = (&mut w.economy, &w.city);
         let f = faction.clamp(0, e.file.factions.len() as i64 - 1) as u8;
-        let Some(m) = game::trade::market_of(e, city, &self.colony, f) else { return format!("the Mat reaches no street of the {}", e.name(f)).as_str().into() };
-        match game::trade::order(e, &mut st.ledger, st.table.as_ref().unwrap(), city, &self.colony, &defs, &p.roster, &self.plan, m, f, entry.clamp(0, u16::MAX as i64) as u16, units.clamp(1, 99) as u16) {
+        let Some(m) = game::trade::market_of(e, city, &w.colony, f) else { return format!("the Mat reaches no street of the {}", e.name(f)).as_str().into() };
+        match game::trade::order(e, &mut w.ledger, &w.table, city, &w.colony, &w.defs, &w.roster, &w.plan, m, f, entry.clamp(0, u16::MAX as i64) as u16, units.clamp(1, 99) as u16) {
             Ok(each) => {
-                self.log.push(city.tick, game::Class::Decision, format!("ordered {} from the {} at {each} e", units.max(1), e.name(f)));
+                w.log.push(city.tick, game::Class::Decision, format!("ordered {} from the {} at {each} e", units.max(1), e.name(f)));
                 GString::new()
             }
             Err(why) => why.as_str().into(),
@@ -277,21 +268,11 @@ impl RoseSim {
     /// Take an offer. A recover's body is laid on its route as it is taken: {line, why, laid: [{contract, stratum,
     /// route, name, x, y, chunk, day, rig: bytes}]}.
     #[func]
-    fn market_accept(&mut self, people: Gd<RosePeople>, offer: i64, day: i64) -> VarDictionary {
+    fn market_accept(&mut self, offer: i64, day: i64) -> VarDictionary {
+        let Some(w) = self.world.as_mut() else { return VarDictionary::new() };
         let mut d = VarDictionary::new();
-        let (Some(e), Some(city), Some(st)) = (self.economy.as_mut(), self.city.as_ref(), self.stash.as_mut()) else { return d };
-        let mut people = people;
-        let mut p = people.bind_mut();
-        p.ensure();
-        let p = &mut *p;
-        let traits = p.traits.clone().unwrap();
-        let names = p.names.clone().unwrap();
-        let mut st = st.bind_mut();
-        st.ensure();
-        let table = st.table.as_ref().unwrap();
-        let lib = run::ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
-        let board = game::trade::Board { lib: &lib, city_seed: e.s.seed, strata: self.strata.max(1) };
-        match game::trade::accept(e, (city, &self.colony), &mut p.roster, &traits, &names, table, Some(&board), offer.max(0) as u32, day.max(1) as u32, &mut self.log) {
+        let board = game::trade::Board { lib: &crate::data().chunks, city_seed: w.economy.s.seed, strata: w.strata.max(1) };
+        match game::trade::accept(&mut w.economy, (&w.city, &w.colony), &mut w.roster, &w.traits, &w.names, &w.table, Some(&board), offer.max(0) as u32, day.max(1) as u32, &mut w.log) {
             Ok((line, laid)) => {
                 d.set("line", line.as_str());
                 d.set("why", "");
@@ -310,21 +291,18 @@ impl RoseSim {
     /// riding, to the faction's market. Returns how many went, or -1 when the faction has no market in reach.
     #[func]
     fn market_send(&mut self, contract: i64, day: i64) -> i64 {
-        let (Some(e), Some(city), Some(st)) = (self.economy.as_ref(), self.city.as_ref(), self.stash.as_mut()) else { return -1 };
+        let Some(w) = self.world.as_mut() else { return -1 };
+        let (e, city) = (&w.economy, &w.city);
         let Some(c) = e.s.contracts.iter().find(|c| c.id as i64 == contract).cloned() else { return 0 };
-        let Some(m) = game::trade::market_of(e, city, &self.colony, c.faction) else { return -1 };
-        let mut st = st.bind_mut();
-        st.ensure();
-        let st = &mut *st;
-        let table = st.table.as_ref().unwrap();
-        let stash = st.stash.as_mut().unwrap();
-        let riding = st.ledger.in_flight.iter().filter(|s| s.contract == Some(c.id)).count() + st.ledger.queue.iter().filter(|q| matches!(q.verb, inventory::Verb::Deliver { contract, .. } if contract == c.id)).count();
+        let Some(m) = game::trade::market_of(e, city, &w.colony, c.faction) else { return -1 };
+        let (table, stash, ledger) = (&w.table, &mut w.stash, &mut w.ledger);
+        let riding = ledger.in_flight.iter().filter(|s| s.contract == Some(c.id)).count() + ledger.queue.iter().filter(|q| matches!(q.verb, inventory::Verb::Deliver { contract, .. } if contract == c.id)).count();
         let need = (c.ask.n as usize).saturating_sub(c.got as usize + riding);
         let mut fit: Vec<(u32, u32)> = stash.handles().into_iter().filter(|(_, _, it)| !it.pinned && e.fits(&c, it, table)).map(|(h, _, it)| (table.def(it.def).value, h)).collect();
         fit.sort_unstable();
         let mut sent = 0;
         for (_, h) in fit.into_iter().take(need) {
-            if st.ledger.queue(stash, h, inventory::Verb::Deliver { market: m, contract: c.id }, day.max(0) as u32) {
+            if ledger.queue(stash, h, inventory::Verb::Deliver { market: m, contract: c.id }, day.max(0) as u32) {
                 sent += 1;
             }
         }

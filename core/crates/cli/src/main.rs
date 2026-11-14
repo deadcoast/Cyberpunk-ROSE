@@ -23,6 +23,11 @@ struct Cli {
     /// no ANSI colour
     #[arg(long)]
     plain: bool,
+    /// read the data files from this directory where it holds them (items, structures, laws, recipes, traits,
+    /// names, chunks, loot, creatures, factions), else the copies compiled in; a file that does not parse stops the
+    /// run. Without it every file is the compiled copy.
+    #[arg(long, global = true)]
+    data: Option<PathBuf>,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -362,7 +367,7 @@ fn cmd_bench(t: &Term, seed: u64, ticks: u64) {
 }
 
 fn cmd_route(t: &Term, out: &Path, seed: u64, stratum: u8, chunks: usize, sweep: u64, loot: u64) {
-    let lib = run::ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
+    let lib = game::data::get().chunks.clone();
     t.head("route", &format!("seed {seed}  stratum {stratum}  library {} chunks over strata {:?}", lib.chunks.len(), lib.strata()));
     let lay = if chunks == 0 { run::route(&lib, seed, stratum) } else { run::assemble(&lib, seed, stratum, chunks) }.expect("assemble");
     let m = run::RouteMap::compile(&lib, &lay);
@@ -435,8 +440,8 @@ fn cmd_route(t: &Term, out: &Path, seed: u64, stratum: u8, chunks: usize, sweep:
 /// Open every locker, crate and corpse on `n` seeds per stratum with a pry bar (not a first run), and report what
 /// the tables pay: value per container, tier mix, notable rate, stratum-to-stratum ratio, longest dry streak.
 fn loot_sweep(t: &Term, lib: &run::ChunkLib, n: u64) {
-    let tables = run::LootTables::shipped();
-    let table = items::ItemTable::from_toml(include_str!("../../../../data/items.toml")).expect("items");
+    let tables = game::data::get().loot.clone();
+    let table = game::data::get().items.clone();
     t.hrow(&[("loot", 6), ("opens", 6), ("mean", 7), ("p50", 6), ("p90", 6), ("x prev", 7), ("C/U/R/B/X %", 20), ("notable", 8), ("dry max", 8)]);
     let mut prev_mean = 0.0f32;
     for stratum in lib.strata() {
@@ -489,6 +494,18 @@ fn main() {
     use std::io::IsTerminal;
     let tty = std::io::stdout().is_terminal();
     let t = Term { colour: !cli.plain && tty, tty };
+    if let Some(dir) = &cli.data {
+        let (d, errors) = game::data::Data::load(Some(dir));
+        for e in &errors {
+            eprintln!("  {} {e}", t.hi("FAIL"));
+        }
+        if !errors.is_empty() {
+            std::process::exit(1);
+        }
+        let disk: Vec<&str> = d.sources.iter().filter(|(_, s)| *s == game::data::Source::Disk).map(|(f, _)| *f).collect();
+        println!("  {}  {} of {} files from {}: {}", t.dim("data"), disk.len(), d.sources.len(), dir.display(), disk.join(" "));
+        game::data::install(d);
+    }
     match cli.cmd {
         Cmd::Grow { seed, ticks, cutoff } => cmd_grow(&t, &cli.out, seed, ticks, cutoff),
         Cmd::Evidence { seed } => cmd_evidence(&t, &cli.out, seed),
@@ -521,10 +538,8 @@ fn in_band(v: f32, lo: f32, hi: f32) -> &'static str {
 fn cmd_cadence(t: &Term, runs: u64, strata: &str, seed0: u64, report_path: &Path, logs: Option<&Path>) {
     use run::telemetry::{bot_bands, BOT_FACTOR, DEATH_RATE, LANDING_GAP_S, LOSS_GAP_MAX_S, PULL_GAP_S};
     let (bp, bl, bq) = bot_bands();
-    let lib = run::ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml");
-    let table = items::ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
-    let tables = run::LootTables::shipped();
-    let defs = run::CreatureFile::shipped();
+    let d = game::data::get();
+    let (lib, table, tables, defs) = (d.chunks.clone(), d.items.clone(), d.loot.clone(), d.creatures.clone());
     let strata: Vec<u8> = strata.split(',').filter_map(|s| s.trim().parse().ok()).collect();
     t.head("cadence", &format!("{runs} bot runs per stratum {strata:?} from seed {seed0}  player budget: pull {}-{} s, landing {}-{} s, loss under {} s, deaths {:.0}-{:.0} %  |  bot bands (/{}): pull {:.0}-{:.0} s, landing {:.0}-{:.0} s, loss under {:.0} s", PULL_GAP_S.0, PULL_GAP_S.1, LANDING_GAP_S.0, LANDING_GAP_S.1, LOSS_GAP_MAX_S, DEATH_RATE.0 * 100.0, DEATH_RATE.1 * 100.0, BOT_FACTOR, bp.0, bp.1, bl.0, bl.1, bq));
     if let Some(d) = logs {
@@ -689,9 +704,9 @@ fn cmd_cleansing(t: &Term, seed: u64, shifts: u32, report_path: &Path) {
         md.push_str(&format!("**After, {}** (HP short across the standing structures at the Cleansing's shift end and the next three, the builders mending from the shift after): {line}.\n\n", if r.defended { "defended" } else { "as it stands" }));
         println!("  {} {}: {}{line}", t.dim("after"), if r.defended { "defended" } else { "as it is" }, if r.heart_lost { "" } else { "HP short " });
     }
-    for r in &runs {
-        md.push_str(&format!("**The Cleansing, {}**\n\n```\n{}```\n\n", if r.defended { "defended" } else { "as it stands" }, r.log));
-    }
+    // each log as the report's hand-edited format has it: a quoted heading over a bash block, no trailing blank line
+    let logs: Vec<String> = runs.iter().map(|r| format!("> **The Cleansing, {}**\n\n```bash\n{}```\n", if r.defended { "defended" } else { "as it stands" }, r.log)).collect();
+    md.push_str(&logs.join("\n"));
     if let Some(parent) = report_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -866,7 +881,7 @@ fn cmd_campaign(t: &Term, seed: u64, aim: &str, shifts: u32, report: &Path) {
             shown.push(mat::genome::FERAL);
         }
         let heads: Vec<&str> = shown.iter().map(|&k| gene(k)).collect();
-        md.push_str(&format!("\n## {}, every tenth shift\n\n| shift | chapter | stratum | slimos | Mat cells joined | top row | {} | Bloom tiles | Parts / Chrome / eddies | the loudest grate |\n| --- | --- | --- | --- | --- | --- |{}---| --- | --- |\n", a.ending, heads.join(" | "), "---|".repeat(shown.len())));
+        md.push_str(&format!("\n## {}, every tenth shift\n\n| shift | chapter | stratum | slimos | Mat cells joined | top row | {} | Bloom tiles | Parts / Chrome / eddies | the loudest grate |\n| --- | --- | --- | --- | --- | --- |{} --- | --- | --- |\n", a.ending, heads.join(" | "), " --- |".repeat(shown.len())));
         for c in r.shifts.iter().filter(|c| c.day % 10 == 0 || Some(c.day) == r.shifts.last().map(|l| l.day)) {
             let gs: Vec<String> = shown.iter().map(|&k| format!("{:.2}", c.genes[k])).collect();
             md.push_str(&format!("| {} | {} | S{} | {} | {} | {} | {} | {} | {} / {} / {} | {:.0} |\n", c.day, c.chapter, c.stratum, c.population, c.cells, c.top_row, gs.join(" | "), c.bloom.0, c.stock.0, c.stock.1, c.stock.2, c.attention.0));

@@ -105,7 +105,7 @@ func _draw_laws() -> void:
 func _draw_districts() -> void:
 	for ch in districts_frame.get_children():
 		ch.queue_free()
-	var ds: Array = sim.districts(people)
+	var ds: Array = sim.districts()
 	make_label(districts_frame, "DISTRICTS   %d" % ds.size(), Vector2(6, 4), UiTheme.CYAN)
 	var y := 16
 	if ds.is_empty():

@@ -641,31 +641,91 @@ fn pack(w: &mut World, rows: u8, carry: f32) -> Rig {
     rig
 }
 
-fn digest(w: &World) -> u64 {
+/// The city's digest: the Mat's tissue, the structures, the Stash, the ledger, the roster, the log and the surface's
+/// standing. `rose city` asserts its replay with it; `rose idle` and the game's `RoseSim.digest` print it, so the
+/// live game and the headless World can be compared shift by shift (Phase G, PAC-101).
+pub fn digest(w: &World) -> u64 {
+    digest_parts(&w.city, &w.colony, &w.stash, &w.ledger, &w.roster, &w.log, Some(&w.economy))
+}
+
+/// The digest over the parts, for a caller that holds them apart (the game's bridge).
+pub fn digest_parts(city: &logistics::City, colony: &colony::Colony, stash: &inventory::Stash, ledger: &inventory::Ledger, roster: &people::Roster, log: &crate::CityLog, economy: Option<&economy::Economy>) -> u64 {
     let mut h = DefaultHasher::new();
-    w.city.tick.hash(&mut h);
-    w.city.sim.hy.hash(&mut h);
-    for s in &w.colony.structures {
+    city.tick.hash(&mut h);
+    city.sim.hy.hash(&mut h);
+    for s in &colony.structures {
         (s.id, s.def, s.x, s.y, s.built, s.tier, s.progress, s.paid).hash(&mut h);
     }
-    let mut items: Vec<(u32, u8)> = w.stash.handles().into_iter().map(|(_, _, it)| (it.def.0 as u32, it.condition)).collect();
+    let mut items: Vec<(u32, u8)> = stash.handles().into_iter().map(|(_, _, it)| (it.def.0 as u32, it.condition)).collect();
     items.sort_unstable();
     items.hash(&mut h);
-    (w.ledger.eddies, w.ledger.in_flight.len(), w.stash.floor.len()).hash(&mut h);
-    for r in &w.roster.records {
+    (ledger.eddies, ledger.in_flight.len(), stash.floor.len()).hash(&mut h);
+    for r in &roster.records {
         (r.id, format!("{:?}", r.status), r.needs, r.priorities).hash(&mut h);
         for s in Skill::all() {
             r.skill(s).hash(&mut h);
         }
     }
-    for e in &w.log.events {
+    for e in &log.events {
         (e.tick, e.class.name(), &e.what).hash(&mut h);
     }
-    for st in &w.economy.s.standing {
-        (st.rep, st.favour, st.traded, st.opened).hash(&mut h);
+    if let Some(e) = economy {
+        for st in &e.s.standing {
+            (st.rep, st.favour, st.traded, st.opened).hash(&mut h);
+        }
+        (e.s.contracts.len(), e.s.offers.len()).hash(&mut h);
     }
-    (w.economy.s.contracts.len(), w.economy.s.offers.len(), w.ledger.orders.len()).hash(&mut h);
+    ledger.orders.len().hash(&mut h);
     h.finish()
+}
+
+/// Several digests of the city at once, so a difference can be placed: the whole digest, then the Mat, the
+/// structures, the Stash and ledger, the roster, the log and the surface each alone.
+pub fn digest_split(city: &logistics::City, colony: &colony::Colony, stash: &inventory::Stash, ledger: &inventory::Ledger, roster: &people::Roster, log: &crate::CityLog, economy: Option<&economy::Economy>) -> [(&'static str, u64); 7] {
+    fn one(f: impl FnOnce(&mut DefaultHasher)) -> u64 {
+        let mut h = DefaultHasher::new();
+        f(&mut h);
+        h.finish()
+    }
+    [
+        ("whole", digest_parts(city, colony, stash, ledger, roster, log, economy)),
+        ("mat", one(|h| {
+            city.tick.hash(h);
+            city.sim.hy.hash(h);
+        })),
+        ("structures", one(|h| {
+            for s in &colony.structures {
+                (s.id, s.def, s.x, s.y, s.built, s.tier, s.progress, s.paid).hash(h);
+            }
+        })),
+        ("stash", one(|h| {
+            let mut items: Vec<(u32, u8)> = stash.handles().into_iter().map(|(_, _, it)| (it.def.0 as u32, it.condition)).collect();
+            items.sort_unstable();
+            items.hash(h);
+            (ledger.eddies, ledger.in_flight.len(), stash.floor.len(), ledger.orders.len()).hash(h);
+        })),
+        ("roster", one(|h| {
+            for r in &roster.records {
+                (r.id, format!("{:?}", r.status), r.needs, r.priorities).hash(h);
+                for s in Skill::all() {
+                    r.skill(s).hash(h);
+                }
+            }
+        })),
+        ("log", one(|h| {
+            for e in &log.events {
+                (e.tick, e.class.name(), &e.what).hash(h);
+            }
+        })),
+        ("surface", one(|h| {
+            if let Some(e) = economy {
+                for st in &e.s.standing {
+                    (st.rep, st.favour, st.traded, st.opened).hash(h);
+                }
+                (e.s.contracts.len(), e.s.offers.len()).hash(h);
+            }
+        })),
+    ]
 }
 
 fn median(v: &mut [f32]) -> f32 {
@@ -702,7 +762,7 @@ pub fn play_world(seed: u64, shifts: u32, each: &mut dyn FnMut(usize, &ShiftReco
 
 /// The same with the steward's haul given (`rose economy` plays both).
 pub fn play_with(seed: u64, shifts: u32, haul: Haul, each: &mut dyn FnMut(usize, &ShiftRecord)) -> (CityRun, World) {
-    let table = ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
+    let table = crate::data::get().items.clone();
     let mut p = Player::new(World::found(seed, table), seed, haul);
     for k in 0..shifts as usize {
         let r = p.shift(1, &mut |_| Vec::new());
@@ -766,9 +826,9 @@ impl Player {
             out: CityRun { seed, ..Default::default() },
             seed,
             table,
-            lib: ChunkLib::from_toml(run::CHUNKS_TOML).expect("chunks.toml"),
-            tables: LootTables::shipped(),
-            creatures: CreatureFile::shipped(),
+            lib: crate::data::get().chunks.clone(),
+            tables: crate::data::get().loot.clone(),
+            creatures: crate::data::get().creatures.clone(),
             routes: Vec::new(),
         }
     }

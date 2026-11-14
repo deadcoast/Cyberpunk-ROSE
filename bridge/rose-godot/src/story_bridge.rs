@@ -3,7 +3,7 @@
 
 use godot::prelude::*;
 
-use crate::{RosePeople, RoseSim};
+use crate::RoseSim;
 use story::campaign::Accord;
 
 #[godot_api(secondary)]
@@ -12,8 +12,9 @@ impl RoseSim {
     /// tile, -1), great_at (-1), ending ("" until one), warchest (-1), waiting (a panel set waits), seen, difficulty}.
     #[func]
     fn campaign(&self) -> VarDictionary {
-        let c = &self.campaign;
-        let day = self.threats.as_ref().map_or(1, |t| t.shift);
+        let Some(w) = self.world.as_ref() else { return VarDictionary::new() };
+        let c = &w.campaign;
+        let day = w.threats.shift;
         let mut d = VarDictionary::new();
         d.set("mode", if c.mode == story::Mode::Endless { "endless" } else { "campaign" });
         d.set("difficulty", c.difficulty.name());
@@ -29,7 +30,7 @@ impl RoseSim {
             Some(Accord::Refused { .. }) => "refused",
             None => "",
         });
-        let envoy = c.envoy_zone.and_then(|z| self.threats.as_ref().and_then(|t| t.zones.get(z as usize)).map(|z| z.grate as i64)).unwrap_or(-1);
+        let envoy = c.envoy_zone.and_then(|z| Some(&w.threats).and_then(|t| t.zones.get(z as usize)).map(|z| z.grate as i64)).unwrap_or(-1);
         d.set("envoy", envoy);
         d.set("great_at", c.great_at.map_or(-1, |x| x as i64));
         d.set("ending", c.ending.clone().unwrap_or_default().as_str());
@@ -46,41 +47,35 @@ impl RoseSim {
     /// The next panel set waiting, marked seen: {key, title, panels: [{slot, caption}]}; empty when none waits.
     #[func]
     fn take_panels(&mut self) -> VarDictionary {
+        let Some(w) = self.world.as_mut() else { return VarDictionary::new() };
         let mut d = VarDictionary::new();
-        let Some(key) = self.campaign.take_panels() else { return d };
+        let Some(key) = w.campaign.take_panels() else { return d };
         d.set("key", key.as_str());
         d.set("title", panel_title(&key).as_str());
-        d.set("panels", &panels_array(&self.campaign, &key));
+        d.set("panels", &panels_array(&w.campaign, &key));
         d
     }
 
     /// A panel set already seen (the Codex's Lore replays it): {key, title, panels}.
     #[func]
     fn panel_set(&self, key: GString) -> VarDictionary {
+        let Some(w) = self.world.as_ref() else { return VarDictionary::new() };
         let mut d = VarDictionary::new();
         let key = key.to_string();
         d.set("key", key.as_str());
         d.set("title", panel_title(&key).as_str());
-        d.set("panels", &panels_array(&self.campaign, &key));
+        d.set("panels", &panels_array(&w.campaign, &key));
         d
     }
 
     /// The envoy's answer (chapter 3): "" when it stands, else why not.
     #[func]
-    fn answer_accord(&mut self, people: Gd<RosePeople>, accept: bool) -> GString {
-        let defs = self.defs().clone();
-        let day = self.threats.as_ref().map_or(1, |t| t.shift);
-        let (Some(city), Some(t), Some(e), Some(st)) = (self.city.as_mut(), self.threats.as_mut(), self.economy.as_mut(), self.stash.as_mut()) else { return "no city".into() };
-        let mut p = people.clone();
-        let mut p = p.bind_mut();
-        p.ensure();
-        let p = &mut *p;
-        let mut st = st.bind_mut();
-        st.ensure();
-        let st = &mut *st;
-        let guards = self.posts.guards.len();
-        let mut parts = game::campaign::Parts { city, colony: &mut self.colony, defs: &defs, threats: t, economy: e, roster: &mut p.roster, died: &mut p.died_this_shift, stash: st.stash.as_mut().unwrap(), table: st.table.as_ref().unwrap(), log: &mut self.log, guards };
-        match game::campaign::answer_accord(&mut self.campaign, &mut parts, accept, day) {
+    fn answer_accord(&mut self, accept: bool) -> GString {
+        let Some(w) = self.world.as_mut() else { return GString::from("no city") };
+        let day = w.threats.shift;
+        let guards = w.posts.guards.len();
+        let mut parts = game::campaign::Parts { city: &mut w.city, colony: &mut w.colony, defs: &w.defs, threats: &mut w.threats, economy: &mut w.economy, roster: &mut w.roster, died: &mut w.died, stash: &mut w.stash, table: &w.table, log: &mut w.log, guards };
+        match game::campaign::answer_accord(&mut w.campaign, &mut parts, accept, day) {
             Ok(()) => GString::new(),
             Err(why) => why.as_str().into(),
         }
@@ -89,7 +84,8 @@ impl RoseSim {
     /// Development only (the play script): Authority earned, as deeds would earn it.
     #[func]
     fn debug_earn(&mut self, n: i64) {
-        self.colony.charter.earn(n.clamp(0, 99) as u32);
+        let Some(w) = self.world.as_mut() else { return };
+        w.colony.charter.earn(n.clamp(0, 99) as u32);
     }
 
     /// Development only (the play script): the campaign at chapter `n`, the earlier ones closed, opening at the next
@@ -97,9 +93,10 @@ impl RoseSim {
     /// reads the ending off the genome.
     #[func]
     fn debug_chapter(&mut self, n: i64) {
+        let Some(w) = self.world.as_mut() else { return };
         let n = n.clamp(1, 7) as u8;
-        let day = self.threats.as_ref().map_or(1, |t| t.shift);
-        let c = &mut self.campaign;
+        let day = w.threats.shift;
+        let c = &mut w.campaign;
         for k in 1..n {
             if !c.closed.iter().any(|x| x.0 == k) {
                 c.closed.push((k, day));
@@ -122,9 +119,10 @@ impl RoseSim {
     /// at_pit (a Pit's structure, -1), hostile_near}.
     #[func]
     fn ivan(&self) -> VarDictionary {
+        let Some(w) = self.world.as_ref() else { return VarDictionary::new() };
         let mut d = VarDictionary::new();
-        let v = &self.campaign.ivan;
-        let day = self.threats.as_ref().map_or(1, |t| t.shift);
+        let v = &w.campaign.ivan;
+        let day = w.threats.shift;
         d.set("x", v.x as i64);
         d.set("y", v.y as i64);
         d.set("goal_x", v.goal.map_or(-1, |g| g.0 as i64));
@@ -132,18 +130,18 @@ impl RoseSim {
         d.set("hp", v.hp as f64);
         d.set("hp_max", story::campaign::IVAN_HP as f64);
         d.set("fell", v.fell);
-        d.set("state", self.colony.charter.ivan_state() as i64);
+        d.set("state", w.colony.charter.ivan_state() as i64);
         d.set("rally", v.rally != day);
         d.set("parley", v.parley != day);
         d.set("feed", v.feed != day);
         d.set("ooze", v.ooze != day);
-        if let Some(c) = self.city.as_ref() {
-            d.set("at_market", game::ivan::market_here(&self.campaign, c).map_or(-1, |m| m as i64));
-            let defs = self.defs.clone().unwrap_or_else(crate::colony_bridge::structure_file);
-            d.set("at_pit", game::ivan::pit_here(&self.campaign, c, &self.colony, &defs).map_or(-1, |p| p.0 as i64));
+        if let Some(c) = Some(&w.city) {
+            d.set("at_market", game::ivan::market_here(&w.campaign, c).map_or(-1, |m| m as i64));
+            let defs = &w.defs;
+            d.set("at_pit", game::ivan::pit_here(&w.campaign, c, &w.colony, &defs).map_or(-1, |p| p.0 as i64));
         }
         let me = (v.x as i32, v.y as i32);
-        let near = self.threats.as_ref().is_some_and(|t| t.bodies.iter().any(|b| !b.dead && !b.gone && b.role.hostile() && (b.x as i32 - me.0).abs().max((b.y as i32 - me.1).abs()) <= game::ivan::OOZE_REACH));
+        let near = Some(&w.threats).is_some_and(|t| t.bodies.iter().any(|b| !b.dead && !b.gone && b.role.hostile() && (b.x as i32 - me.0).abs().max((b.y as i32 - me.1).abs()) <= game::ivan::OOZE_REACH));
         d.set("hostile_near", near);
         d
     }
@@ -151,8 +149,9 @@ impl RoseSim {
     /// Send Ivan to a tile of the Mat: "" or why not.
     #[func]
     fn ivan_order(&mut self, x: i64, y: i64) -> GString {
-        let Some(c) = self.city.as_ref() else { return "no city".into() };
-        match game::ivan::order(&mut self.campaign, &c.sim, x.max(0) as u16, y.max(0) as u16) {
+        let Some(w) = self.world.as_mut() else { return GString::from("no city") };
+        let c = &w.city;
+        match game::ivan::order(&mut w.campaign, &c.sim, x.max(0) as u16, y.max(0) as u16) {
             Ok(()) => GString::new(),
             Err(e) => e.as_str().into(),
         }
@@ -160,13 +159,10 @@ impl RoseSim {
 
     /// Ivan's verbs: "" or why not (Parley and Feed return what they did on success, prefixed "+").
     #[func]
-    fn ivan_rally(&mut self, people: Gd<RosePeople>) -> GString {
-        let day = self.threats.as_ref().map_or(1, |t| t.shift);
-        let Some(c) = self.city.as_mut() else { return "no city".into() };
-        let mut p = people.clone();
-        let mut p = p.bind_mut();
-        p.ensure();
-        match game::ivan::rally(&mut self.campaign, c, &mut p.roster, day, &mut self.log) {
+    fn ivan_rally(&mut self) -> GString {
+        let Some(w) = self.world.as_mut() else { return GString::from("no city") };
+        let day = w.threats.shift;
+        match game::ivan::rally(&mut w.campaign, &mut w.city, &mut w.roster, day, &mut w.log) {
             Ok(n) => format!("+{n} rallied").as_str().into(),
             Err(e) => e.as_str().into(),
         }
@@ -174,9 +170,10 @@ impl RoseSim {
 
     #[func]
     fn ivan_parley(&mut self) -> GString {
-        let day = self.threats.as_ref().map_or(1, |t| t.shift);
-        let (Some(c), Some(e)) = (self.city.as_ref(), self.economy.as_mut()) else { return "no city".into() };
-        match game::ivan::parley(&mut self.campaign, c, &mut self.colony, e, day, &mut self.log) {
+        let Some(w) = self.world.as_mut() else { return GString::from("no city") };
+        let day = w.threats.shift;
+        let (Some(c), Some(e)) = (Some(&w.city), Some(&mut w.economy)) else { return "no city".into() };
+        match game::ivan::parley(&mut w.campaign, c, &mut w.colony, e, day, &mut w.log) {
             Ok(line) => format!("+{line}").as_str().into(),
             Err(e) => e.as_str().into(),
         }
@@ -184,14 +181,9 @@ impl RoseSim {
 
     #[func]
     fn ivan_feed(&mut self, handle: i64) -> GString {
-        let day = self.threats.as_ref().map_or(1, |t| t.shift);
-        let defs = self.defs().clone();
-        let Some(st) = self.stash.as_mut() else { return "no Stash".into() };
-        let mut st = st.bind_mut();
-        st.ensure();
-        let st = &mut *st;
-        let Some(c) = self.city.as_mut() else { return "no city".into() };
-        match game::ivan::feed(&mut self.campaign, c, &mut self.colony, &defs, st.stash.as_mut().unwrap(), st.table.as_ref().unwrap(), handle.max(0) as u32, day, &mut self.log) {
+        let Some(w) = self.world.as_mut() else { return GString::from("no city") };
+        let day = w.threats.shift;
+        match game::ivan::feed(&mut w.campaign, &mut w.city, &mut w.colony, &w.defs, &mut w.stash, &w.table, handle.max(0) as u32, day, &mut w.log) {
             Ok(line) => format!("+{line}").as_str().into(),
             Err(e) => e.as_str().into(),
         }
@@ -200,9 +192,10 @@ impl RoseSim {
     /// Ooze-time: "" when it holds (the view slows the clock to OOZE_SCALE for OOZE_SECONDS), else why not.
     #[func]
     fn ivan_ooze(&mut self) -> GString {
-        let day = self.threats.as_ref().map_or(1, |t| t.shift);
-        let Some(t) = self.threats.as_ref() else { return "no threats".into() };
-        match game::ivan::ooze(&mut self.campaign, t, day) {
+        let Some(w) = self.world.as_mut() else { return GString::from("no city") };
+        let day = w.threats.shift;
+        let Some(t) = Some(&w.threats) else { return "no threats".into() };
+        match game::ivan::ooze(&mut w.campaign, t, day) {
             Ok(()) => GString::new(),
             Err(e) => e.as_str().into(),
         }
@@ -211,26 +204,29 @@ impl RoseSim {
     /// Ivan's line on screen now, or "".
     #[func]
     fn bark(&self) -> GString {
+        let Some(w) = self.world.as_ref() else { return GString::from("no city") };
         // a first-ten-minutes beat speaks over the bark pools while it is live (Full Design v3.21, Onboarding)
-        if let Some(b) = self.campaign.onboarding.showing() {
+        if let Some(b) = w.campaign.onboarding.showing() {
             return b.line.into();
         }
-        self.campaign.barker.current().unwrap_or("").into()
+        w.campaign.barker.current().unwrap_or("").into()
     }
 
     /// The first-ten-minutes beat showing: what the screen lights ("tool:build", "nav:route", "ghost",
     /// "alert:newcomers", "clock"), or "" when none is live.
     #[func]
     fn onboarding_highlight(&self) -> GString {
-        self.campaign.onboarding.showing().map_or("", |b| b.highlight).into()
+        let Some(w) = self.world.as_ref() else { return GString::from("no city") };
+        w.campaign.onboarding.showing().map_or("", |b| b.highlight).into()
     }
 
     /// The Codex's Systems entries: each system the first ten minutes showed or the player used, in the tour's
     /// order: {id, title, line}.
     #[func]
     fn systems_seen(&self) -> VarArray {
+        let Some(w) = self.world.as_ref() else { return VarArray::new() };
         let mut out = VarArray::new();
-        for b in story::onboarding::BEATS.iter().filter(|b| self.campaign.onboarding.seen.iter().any(|s| s == b.id)) {
+        for b in story::onboarding::BEATS.iter().filter(|b| w.campaign.onboarding.seen.iter().any(|s| s == b.id)) {
             let mut d = VarDictionary::new();
             d.set("id", b.id);
             d.set("title", b.title);
@@ -243,10 +239,11 @@ impl RoseSim {
     /// A bark from the run (the Run HUD: runner_down) with the runner's name.
     #[func]
     fn bark_event(&mut self, event: GString, name: GString) {
+        let Some(w) = self.world.as_mut() else { return };
         let n = name.to_string();
-        self.log.bark(&event.to_string(), &[("name", n.as_str())]);
-        if let (Some(c), Some(t)) = (self.city.as_ref(), self.threats.as_mut()) {
-            game::ivan::voice(&mut self.campaign, &self.colony, &c.sim, t, &mut self.log, c.tick);
+        w.log.bark(&event.to_string(), &[("name", n.as_str())]);
+        if let (Some(c), Some(t)) = (Some(&w.city), Some(&mut w.threats)) {
+            game::ivan::voice(&mut w.campaign, &w.colony, &c.sim, t, &mut w.log, c.tick);
         }
     }
 
@@ -254,9 +251,10 @@ impl RoseSim {
     /// (postcard), whose best item names the run's tier.
     #[func]
     fn campaign_run_home(&mut self, stratum: i64, name: GString, extracted: bool, died: bool, rig: PackedByteArray) {
-        let table = items::ItemTable::from_toml(items::ITEMS_TOML).expect("items.toml");
+        let Some(w) = self.world.as_mut() else { return };
+        let table = &crate::data().items;
         let r = postcard::from_bytes::<inventory::Rig>(rig.as_slice()).ok();
-        game::campaign::run_home(&mut self.campaign, &mut self.log, &table, stratum.clamp(0, 255) as u8, &name.to_string(), extracted, died, r.as_ref());
+        game::campaign::run_home(&mut w.campaign, &mut w.log, table, stratum.clamp(0, 255) as u8, &name.to_string(), extracted, died, r.as_ref());
     }
 }
 

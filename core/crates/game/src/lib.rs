@@ -8,6 +8,7 @@ pub mod campaign;
 pub mod cargo;
 pub mod city;
 pub mod daily;
+pub mod data;
 pub mod grow;
 pub mod handoff;
 pub mod ivan;
@@ -25,7 +26,7 @@ pub mod world;
 
 pub use alerts::{Alert, Level};
 pub use log::{CityLog, Class, Event};
-pub use shift::{end_shift, refresh_movers, run_home, run_report, shift_of_day, Folk, Shift, Store, Town};
+pub use shift::{end_shift, refresh_movers, run_home, run_report, shift_of_day, Folk, Shift, Store, Town, SHIFT_TICKS};
 pub use world::World;
 
 #[cfg(test)]

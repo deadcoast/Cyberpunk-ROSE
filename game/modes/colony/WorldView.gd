@@ -215,7 +215,7 @@ func _on_tick() -> void:
 		var hy: PackedByteArray = sim.hyphae()
 		var sig: PackedFloat32Array = sim.signal()
 		var sub: PackedByteArray = sim.substrate()
-		var now := Time.get_ticks_msec()
+		var now := Sim.anim_msec()
 		for i in changed:
 			if i < hy_seen.size():
 				if hy_seen[i] == 0 and hy[i] != 0:
@@ -433,7 +433,7 @@ func _draw_districts() -> void:
 	var cam := get_viewport().get_camera_2d()
 	var k := 1.0 / (cam.zoom.x if cam != null else 1.0)   # the pixel font is 6 px on screen whatever the zoom
 	var font := UiTheme.pixel_font()
-	for d in sim.districts(Sim.ensure_people()):
+	for d in sim.districts():
 		var hx := int(d.hub_x) * TILE + TILE / 2
 		var hy := int(d.hub_y) * TILE + TILE / 2
 		var rc: PackedInt32Array = d.get("reach", PackedInt32Array([int(d.hub_x) - 12, int(d.hub_y) - 12, int(d.hub_x) + 12, int(d.hub_y) + 12]))
@@ -478,8 +478,6 @@ func _draw_crowd() -> void:
 	if cam == null:
 		return
 	var sim: RoseSim = Sim.ensure()
-	var ids: PackedInt32Array = sim.agent_ids()
-	var people: RosePeople = Sim.ensure_people()
 	var half: Vector2 = get_viewport_rect().size * 0.5 / cam.zoom.x
 	var x0 := int(floor((cam.position.x - half.x) / TILE)) - 1
 	var y0 := int(floor((cam.position.y - half.y) / TILE)) - 2
@@ -487,7 +485,8 @@ func _draw_crowd() -> void:
 	var y1 := int(ceil((cam.position.y + half.y) / TILE)) + 1
 	var pos: PackedInt32Array = sim.agent_positions()
 	var st: PackedByteArray = sim.agent_states()
-	var frame := int(Time.get_ticks_msec() / 125) % 8
+	var depths: PackedByteArray = sim.agent_depths()
+	var frame := int(Sim.anim_msec() / 125) % 8
 	var slot := {}
 	for k in pos.size():
 		var p: int = pos[k]
@@ -499,8 +498,7 @@ func _draw_crowd() -> void:
 		if s >= 4:
 			continue
 		slot[p] = s + 1
-		var rec: Dictionary = people.record(ids[k]) if k < ids.size() else {}
-		var depth := String(rec.get("depth", "D2")).to_lower()
+		var depth := "d%d" % (depths[k] if k < depths.size() else 2)
 		var moving: bool = st[k] == 3 or st[k] == 4
 		var tex := Assets.texture("slimo.%s.%s" % [depth, "walk" if moving else "idle"])
 		if depth == "d5":
@@ -543,7 +541,7 @@ func _process(_delta: float) -> void:
 ## New Mat tissue: an acid outline that fades over FRESH_MS, so a feed's growth reads at a glance (Full Design v3.21,
 ## Translocation; the ooze pink of the first try vanished on the Mat's own purple).
 func _draw_fresh() -> void:
-	var now := Time.get_ticks_msec()
+	var now := Sim.anim_msec()
 	for i in fresh.keys():
 		var age: int = now - int(fresh[i])
 		if age >= FRESH_MS:
@@ -607,7 +605,7 @@ func _draw_threat_bodies() -> void:
 	if not bind_sim or view_level == 2:
 		return
 	var sim: RoseSim = Sim.ensure()
-	var frame := int(Time.get_ticks_msec() / 160) % 6
+	var frame := int(Sim.anim_msec() / 160) % 6
 	var on_tile := {}
 	for b in sim.threat_bodies():
 		var role := String(b.role)
@@ -657,7 +655,7 @@ func _draw_gauges() -> void:
 		var who := String(z.get("faction", "")).split(" ")[0].to_upper()
 		var wide := maxi(29, who.length() * 4 + 5)
 		gauges.draw_rect(Rect2(-wide / 2, -1, wide, 22), Color(UiTheme.SUMP, 0.9))
-		var blink: bool = bool(z.down) and int(Time.get_ticks_msec() / 250) % 2 == 0
+		var blink: bool = bool(z.down) and int(Sim.anim_msec() / 250) % 2 == 0
 		var label := String(z.get("label", "G%d" % int(z.number)))
 		if bool(z.get("exact", false)):
 			label += " %d" % int(round(float(z.attention)))
@@ -701,7 +699,7 @@ func _draw_ivan() -> void:
 	var y := int(v.y) * TILE + TILE - 64
 	if tex != null:
 		var frames := maxi(1, tex.get_width() / 48)
-		var f := int(Time.get_ticks_msec() / 250) % frames
+		var f := int(Sim.anim_msec() / 250) % frames
 		ivan_node.draw_texture_rect_region(tex, Rect2(x, y, 48, 64), Rect2(f * 48, 0, 48, 64))
 	if int(v.goal_x) >= 0:
 		var g := Vector2(int(v.goal_x) * TILE + TILE / 2, int(v.goal_y) * TILE + TILE / 2)
