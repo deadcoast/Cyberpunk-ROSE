@@ -107,6 +107,8 @@ pub struct World {
     pub sales: Vec<cargo::Sale>,
     /// the campaign (Full Design v3.19, Narrative and Ivan)
     pub campaign: story::Campaign,
+    /// the Board's routes between runs: runs, fog memory, bodies, the stranded
+    pub routes: crate::routes::RouteBook,
 }
 
 impl World {
@@ -173,6 +175,7 @@ impl World {
             laid: Vec::new(),
             sales: Vec::new(),
             campaign,
+            routes: crate::routes::RouteBook::default(),
         };
         crate::grow::refresh_mat(&mut w.city, &w.colony);
         crate::ivan::found(&mut w.campaign, &w.city.sim);
@@ -280,6 +283,7 @@ impl World {
         let board = crate::trade::Board { lib: &crate::data::get().chunks, city_seed: self.economy.s.seed, strata: self.strata.max(1) };
         let (lines, laid) = crate::trade::end_shift(&mut self.economy, &mut self.ledger, &mut self.stash, &self.table, &mut self.city, &mut self.colony, &mut self.roster, &self.traits, &self.names, Some(&mut self.threats), Some(&board), &s.closed.report.to_faction, self.day, self.raiders, &mut self.log);
         s.stash_lines.extend(lines);
+        self.routes.lay(&laid);
         self.laid = laid;
         // the campaign reads the city's shift: a chapter's goal, the accord, the Great Cleansing, the ending
         let guards = self.posts.guards.len();
@@ -305,6 +309,159 @@ impl World {
 
     pub fn alerts(&self) -> Vec<alerts::Alert> {
         alerts::current(&self.colony, &self.defs, &self.city, &self.roster, &self.stash, &self.ledger, self.last.as_ref(), self.jam_since, Some(&self.threats), Some(&self.economy))
+    }
+}
+
+/// What a snapshot holds (Full Design: Saves): every part of the World that changes, the caches with it so a restored
+/// World steps exactly as the one it was taken from; not the data files, which come from `crate::data` on restore.
+#[derive(serde::Serialize)]
+struct StateRef<'a> {
+    city: &'a City,
+    colony: &'a Colony,
+    stash: &'a Stash,
+    ledger: &'a Ledger,
+    bench: &'a BenchQueue,
+    roster: &'a Roster,
+    died: &'a Vec<Record>,
+    log: &'a CityLog,
+    day: u32,
+    jam_since: Option<u64>,
+    last: &'a Option<colony::ShiftOutcome>,
+    threats: &'a threat::Threats,
+    posts: &'a threat::Posts,
+    run_kills: u32,
+    economy: &'a economy::EconomySave,
+    plan: &'a Vec<(u32, people::Job, u32)>,
+    strata: u8,
+    raiders: bool,
+    laid: &'a Vec<crate::trade::Laid>,
+    sales: &'a Vec<cargo::Sale>,
+    campaign: &'a story::Campaign,
+    routes: &'a crate::routes::RouteBook,
+}
+
+#[derive(serde::Deserialize)]
+struct State {
+    city: City,
+    colony: Colony,
+    stash: Stash,
+    ledger: Ledger,
+    bench: BenchQueue,
+    roster: Roster,
+    died: Vec<Record>,
+    log: CityLog,
+    day: u32,
+    jam_since: Option<u64>,
+    last: Option<colony::ShiftOutcome>,
+    threats: threat::Threats,
+    posts: threat::Posts,
+    run_kills: u32,
+    economy: economy::EconomySave,
+    plan: Vec<(u32, people::Job, u32)>,
+    strata: u8,
+    raiders: bool,
+    laid: Vec<crate::trade::Laid>,
+    sales: Vec<cargo::Sale>,
+    campaign: story::Campaign,
+    routes: crate::routes::RouteBook,
+}
+
+/// A snapshot's first bytes: what it is and its layout's version (a layout change refuses older snapshots by name).
+const SNAPSHOT_MAGIC: &[u8; 4] = b"RWS1";
+
+impl World {
+    /// The whole World as bytes: postcard, then deflate (Full Design: Saves).
+    pub fn snapshot(&self) -> Vec<u8> {
+        use std::io::Write;
+        let s = StateRef {
+            city: &self.city,
+            colony: &self.colony,
+            stash: &self.stash,
+            ledger: &self.ledger,
+            bench: &self.bench,
+            roster: &self.roster,
+            died: &self.died,
+            log: &self.log,
+            day: self.day,
+            jam_since: self.jam_since,
+            last: &self.last,
+            threats: &self.threats,
+            posts: &self.posts,
+            run_kills: self.run_kills,
+            economy: &self.economy.s,
+            plan: &self.plan,
+            strata: self.strata,
+            raiders: self.raiders,
+            laid: &self.laid,
+            sales: &self.sales,
+            campaign: &self.campaign,
+            routes: &self.routes,
+        };
+        let body = postcard::to_allocvec(&s).expect("the World encodes");
+        let mut z = flate2::write::DeflateEncoder::new(Vec::with_capacity(body.len() / 4), flate2::Compression::fast());
+        z.write_all(&body).expect("deflate into memory");
+        let mut out = SNAPSHOT_MAGIC.to_vec();
+        out.extend(z.finish().expect("deflate into memory"));
+        out
+    }
+
+    /// The save of this World (Full Design: Saves): its snapshot, the header the shell shows without decoding it, and
+    /// the shell's view state beside it.
+    pub fn save_file(&self, ui: Vec<u8>, created_unix: u64, saved_unix: u64) -> save::SaveFile {
+        let mut f = save::SaveFile::new(self.campaign.seed as u64, self.campaign.difficulty as u8);
+        f.strain_code = Some(crate::meta::strain_code(&self.city.sim, &self.colony, self.campaign.seed).encode());
+        f.created_unix = created_unix;
+        f.saved_unix = saved_unix;
+        f.day = self.day;
+        f.tick = self.city.tick;
+        let pop = self.roster.sleepers();
+        f.label = format!("shift {} · {} · {pop} slimos", self.day, colony::CITY_TIER_NAMES[(Colony::city_tier(pop) as usize).clamp(1, 4) - 1]);
+        f.world = self.snapshot();
+        f.ui = ui;
+        f
+    }
+
+    /// A World from its snapshot, on the data files `crate::data` holds and the item table given.
+    pub fn restore(bytes: &[u8], table: ItemTable) -> Result<World, String> {
+        use std::io::Read;
+        if bytes.len() < 4 || &bytes[..4] != SNAPSHOT_MAGIC {
+            return Err("not a World snapshot of this build".into());
+        }
+        let mut body = Vec::new();
+        flate2::read::DeflateDecoder::new(&bytes[4..]).read_to_end(&mut body).map_err(|e| format!("snapshot inflate: {e}"))?;
+        let s: State = postcard::from_bytes(&body).map_err(|e| format!("snapshot decode: {e}"))?;
+        let data = crate::data::get();
+        let economy = economy::Economy::restore(data.factions.clone(), &table, s.economy);
+        Ok(World {
+            city: s.city,
+            colony: s.colony,
+            defs: data.structures.clone(),
+            laws: data.laws.clone(),
+            stash: s.stash,
+            ledger: s.ledger,
+            bench: s.bench,
+            table,
+            recipes: data.recipes.clone(),
+            roster: s.roster,
+            traits: data.traits.clone(),
+            names: data.names.clone(),
+            died: s.died,
+            log: s.log,
+            day: s.day,
+            jam_since: s.jam_since,
+            last: s.last,
+            threats: s.threats,
+            posts: s.posts,
+            run_kills: s.run_kills,
+            economy,
+            plan: s.plan,
+            strata: s.strata,
+            raiders: s.raiders,
+            laid: s.laid,
+            sales: s.sales,
+            campaign: s.campaign,
+            routes: s.routes,
+        })
     }
 }
 

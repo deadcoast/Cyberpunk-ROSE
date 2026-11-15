@@ -350,7 +350,7 @@ impl CampaignSteward {
         // no more mouths than the city feeds: the Mat's larder (Homes, meals) or the ledger's paste
         let sleepers = w.roster.sleepers() as u32;
         let paste = w.last.as_ref().map_or(0, |o| o.paste_meals);
-        let eats = paste * PASTE_SHARE <= sleepers.max(PASTE_SHARE) || w.ledger.eddies >= PASTE_HELD * colony::PASTE_EDDIES * sleepers;
+        let eats = paste * PASTE_SHARE <= sleepers.max(PASTE_SHARE) || w.ledger.eddies >= PASTE_HELD * balance::get().food.paste_eddies * sleepers;
         // the waiting and those the last flush turned back for want of beds (Recruitment: the drain's draw)
         let want = if eats { (sleepers as usize + w.roster.waiting.len() + w.roster.turned as usize) as i32 + SPARE_BEDS } else { (sleepers as i32).max(MOUTHS_LEAST) };
         // beds on the way: ghosts' first tier, and an upgrade's step (the warren)
@@ -864,9 +864,17 @@ impl CampaignSteward {
             let pick = if warm { signs.max_by_key(|&(r, fav, m)| (r, fav, std::cmp::Reverse(m))) } else { signs.min_by_key(|&(r, fav, m)| (r, std::cmp::Reverse(fav), m)) };
             let best = pick.or_else(|| stands.iter().copied().max_by_key(|&(r, fav, m)| (r, fav, std::cmp::Reverse(m))));
             if let Some((_, _, m)) = best {
+                // to the Mat within his Parley's reach of the grate, nearest it: the tile under a grate is often no
+                // Mat above the Sump, and an order onto it is refused (Garden's Ivan stood at the Heart through
+                // forty-nine shifts of chapter 6 with the Corpo remnants at +1 and +2)
                 let g = w.city.markets[m as usize];
-                let sw = w.city.sim.w;
-                let _ = crate::ivan::order(&mut w.campaign, &w.city.sim, (g % sw) as u16, (g / sw + 1) as u16);
+                let (sw, sh) = (w.city.sim.w as i32, w.city.sim.h as i32);
+                let (gx, gy) = ((g as i32) % sw, (g as i32) / sw);
+                let r = crate::ivan::PARLEY_REACH;
+                let spot = (-r..=r).flat_map(|dy| (-r..=r).map(move |dx| (gx + dx, gy + dy))).filter(|&(x, y)| x >= 0 && y >= 0 && x < sw && y < sh && mat::sim::is_hyphal(w.city.sim.hy[(y * sw + x) as usize])).min_by_key(|&(x, y)| ((x - gx).abs().max((y - gy).abs()), y, x));
+                if let Some((x, y)) = spot {
+                    let _ = crate::ivan::order(&mut w.campaign, &w.city.sim, x as u16, y as u16);
+                }
             }
             return;
         }
@@ -1012,6 +1020,15 @@ pub struct CampaignRun {
     pub warchest: Option<u32>,
     pub log: String,
     pub seconds: f32,
+    /// the city's hours at the end of each shift: the bot's run seconds times its pace factor (an idle shift's at 1)
+    pub hours: Vec<f32>,
+}
+
+impl CampaignRun {
+    /// The city's hours when the city first held `n` sleepers (Progression: the city tiers), if it did.
+    pub fn hours_at(&self, n: usize) -> Option<f32> {
+        self.shifts.iter().position(|c| c.population >= n).and_then(|k| self.hours.get(k).copied())
+    }
 }
 
 /// Play a campaign for an aim, up to `max` shifts or its ending; `each` hears every shift.
@@ -1032,6 +1049,9 @@ pub fn play(seed: u64, aim: Aim, max: u32, each: &mut dyn FnMut(&CampaignShift, 
         // Garden's Badges stood +3 at the alliance and 0 at the Great Cleansing on missed recovers), and a chain done
         // is a step the Garden's ending gains over every other script's
         p.steward.cool = p.w.economy.s.ally;
+        // and for an ending the ally's steps cost (the World-Eater's), no service from it: a service bought is the
+        // lever's favour, two points a day, and ten days of the Gangs' protection carried the ally from +1 to +2
+        p.steward.shun = p.w.economy.s.ally.filter(|_| story::ChapterFile::shipped().ending(aim.ending).is_some_and(|e| e.ally < 0.0));
         let run_on = cs.run_on(&p.w);
         let story_from = p.w.log.events.len();
         let rec = p.shift(run_on, &mut |w| cs.act(w)).clone();
@@ -1066,6 +1086,9 @@ pub fn play(seed: u64, aim: Aim, max: u32, each: &mut dyn FnMut(&CampaignShift, 
         };
         each(&cs_row, &rec);
         out.shifts.push(cs_row);
+        let pace = if rec.result == "no one to run" { 1.0 } else { run::telemetry::BOT_FACTOR };
+        let before = out.hours.last().copied().unwrap_or(0.0);
+        out.hours.push(before + rec.seconds * pace / 3600.0);
         if p.w.campaign.over() {
             break;
         }

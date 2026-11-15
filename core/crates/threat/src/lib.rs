@@ -16,6 +16,11 @@ use mat::MatSim;
 use people::{Depth, Job, Roster, Skill};
 use serde::{Deserialize, Serialize};
 
+/// A stage with no time of its own stays at most this long, in city ticks (a Cleansing's two player shifts).
+pub const STAGE_LASTS: u64 = 3000;
+/// A squad's leave: past its stage's time and this, what is still on the map has gone by another way (five minutes).
+pub const LEAVE_TICKS: u64 = 600;
+
 pub const THREATS_TOML: &str = include_str!("../../../../data/threats.toml");
 
 /// City ticks a second.
@@ -399,7 +404,7 @@ pub struct Shown {
 
 /// The city's people as the threats read them this shift: who stands Guard where, who tends which Pen, each slimo's
 /// Fight, and the D2s Conscription makes militia.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Posts {
     /// (slimo, structure) on Guard
     pub guards: Vec<(u32, u32)>,
@@ -467,8 +472,10 @@ impl Default for Campaign {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Threats {
+    /// the rules: data, not state; a snapshot takes them from the build
+    #[serde(skip, default = "ThreatFile::shipped")]
     pub rules: ThreatFile,
     pub seed: u64,
     /// the city's stratum: the highest the Mat has reached (Full Design v3.19, The stack and the breach)
@@ -1889,6 +1896,18 @@ impl Threats {
                     continue;
                 }
             }
+            // a squad still on the map long past its time has gone by another way (v3.24, this design's): a stage
+            // `lasts` and then a leave's five minutes at most, or a Cleansing's own time and that when it has none
+            // (the World-Eater script's Great Cleansing left its lamps among the Bloom's tissue, no way back up their
+            // grates, and chapter 7 waited ninety shifts on squads that could neither reach the Heart nor go home)
+            let limit = if st.lasts > 0 { st.lasts } else { STAGE_LASTS } + LEAVE_TICKS;
+            if now.saturating_sub(started) >= limit && phase != Phase::Done {
+                for &k in &mine {
+                    self.bodies[k].gone = true;
+                }
+            }
+            let past_limit = now.saturating_sub(started) >= limit;
+            let standing = if past_limit { 0 } else { standing };
             let leave = (st.break_at > 0.0 && fallen as f32 >= st.break_at * sent as f32) || (st.lasts > 0 && now.saturating_sub(started) >= st.lasts);
             if leave && phase == Phase::Bodies {
                 for &k in &mine {
@@ -1898,7 +1917,7 @@ impl Threats {
                     e.phase = Phase::Leaving;
                 }
             }
-            if standing == 0 && (st.id != "cleansing" || flamers_out) {
+            if standing == 0 && (st.id != "cleansing" || flamers_out || past_limit) {
                 // repelled: it left past its break line with the Heart standing (Full Design v3.18, Authority)
                 if st.break_at > 0.0 && fallen as f32 >= st.break_at * sent as f32 && !city.sim.heart_lost {
                     self.repelled.push(st.id.clone());

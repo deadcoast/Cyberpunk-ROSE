@@ -274,6 +274,8 @@ impl RoseSim {
         let board = game::trade::Board { lib: &crate::data().chunks, city_seed: w.economy.s.seed, strata: w.strata.max(1) };
         match game::trade::accept(&mut w.economy, (&w.city, &w.colony), &mut w.roster, &w.traits, &w.names, &w.table, Some(&board), offer.max(0) as u32, day.max(1) as u32, &mut w.log) {
             Ok((line, laid)) => {
+                // the body joins the Board's route as it is taken (game::routes)
+                w.routes.lay(&laid);
                 d.set("line", line.as_str());
                 d.set("why", "");
                 d.set("laid", &laid_array(&laid));

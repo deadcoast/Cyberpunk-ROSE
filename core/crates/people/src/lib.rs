@@ -714,7 +714,7 @@ impl Record {
 // ------------------------------------------------------------------ the shift
 
 /// Where a slimo was and what it did this shift, for the needs.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ShiftContext {
     pub on_mat: bool,
     pub signalled: bool,
@@ -955,14 +955,11 @@ pub struct Roster {
     pub turned: u32,
 }
 
-/// The flush (Full Design v3.21, Recruitment): a batch of 1–6 every 9–15 work cycles (minutes of the city's clock:
-/// Pass 1's three to five days of one-minute shifts); a newcomer not sheltered within ten cycles goes feral.
-pub const FLUSH_SIZE: (u32, u32) = (1, 6);
-
 /// A flush's batch at a grate of `stratum` (Full Design v3.19, Newcomers by stratum): FLUSH_SIZE for each stratum of
 /// the grate, times `mult` (the occupation's 2, Endless Sump's growth with the Mat), rounded.
 pub fn flush_size(rng: &mut Pcg32, stratum: u8, mult: f32) -> u32 {
-    let n: u32 = (0..stratum.max(1)).map(|_| FLUSH_SIZE.0 + rng.below(FLUSH_SIZE.1 - FLUSH_SIZE.0 + 1)).sum();
+    let fs = balance::get().recruitment.flush_size;
+    let n: u32 = (0..stratum.max(1)).map(|_| fs.0 + rng.below(fs.1 - fs.0 + 1)).sum();
     if (mult - 1.0).abs() < 1e-6 {
         n
     } else {
@@ -970,22 +967,11 @@ pub fn flush_size(rng: &mut Pcg32, stratum: u8, mult: f32) -> u32 {
     }
 }
 
-pub const FLUSH_EVERY: (u32, u32) = (9, 15);
 /// Work cycles a newcomer waits at its grate for a bed: about a run's length, so a city whose Runner is out finds
 /// them still there if it comes home in time.
 pub const FERAL_AFTER: u8 = 10;
 /// The census's (Full Design v3.18, Research: Flesh tier 4), in work cycles.
-pub const CENSUS_EVERY: (u32, u32) = (6, 10);
 pub const CENSUS_WAIT: u8 = 20;
-/// The batches a flush brings, by the city's tier (Hamlet, Quarter, City, Empire; Full Design v3.21, this design's): a
-/// city's draw grows with its tier, not with every grate it touches — at a clock a grate, forty reached grates sent
-/// four thousand bodies an hour and nineteen in twenty went feral; at 2 / 4 / 6 / 8 grates the Hamlet drew 9–28 an
-/// hour from its one grate and the Quarter came two hours late.
-pub const FLUSH_GRATES: [usize; 4] = [3, 5, 7, 8];
-/// Sleepers a batch brings past the city's free beds (Full Design v3.21, Recruitment; this design's): the drain sends
-/// the beds' worth and a body a batch more, so an unhoused newcomer is a nudge to build and not a flood — at the tier's
-/// batches alone a City's Bunkhouses filled and nineteen in twenty of four hundred an hour went feral.
-pub const FLUSH_OVER: usize = 1;
 /// The first batch comes down at the fourth cycle (Pass 2: "4:00, first newcomer batch drops at the grate").
 pub const FIRST_FLUSH: u32 = 4;
 
@@ -1009,7 +995,7 @@ pub struct RunReport {
 }
 
 /// What a shift tells the roster.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ShiftWork {
     pub crafts_by: Vec<u32>,
     pub sales_by: Vec<(u32, u32)>,
@@ -1055,12 +1041,12 @@ impl Roster {
         }
         // the tier's batches, round the reached grates longest without one first: a city with fewer grates than
         // batches takes the rest down the grates it has
-        let k = FLUSH_GRATES[(tier.clamp(1, 4) - 1) as usize];
+        let k = balance::get().recruitment.flush_grates[(tier.clamp(1, 4) - 1) as usize];
         let last = |g: u16| self.grate_flush.iter().find(|c| c.0 == g).map_or(0, |c| c.1);
         let mut order: Vec<usize> = (0..grates.len()).collect();
         order.sort_by_key(|&i| (last(grates[i].0), i));
         let mut came = 0;
-        let mut left = room + k * FLUSH_OVER;
+        let mut left = room + k * balance::get().recruitment.flush_over;
         self.turned = 0;
         for &i in order.iter().cycle().take(k) {
             let (g, stratum) = grates[i];
@@ -1076,7 +1062,8 @@ impl Roster {
     }
 
     fn flush_gap(&self, rng: &mut Pcg32) -> u32 {
-        let (lo, hi) = if self.census { CENSUS_EVERY } else { FLUSH_EVERY };
+        let r = &balance::get().recruitment;
+        let (lo, hi) = if self.census { r.census_every } else { r.flush_every };
         lo + rng.below(hi - lo + 1)
     }
 
@@ -1124,7 +1111,8 @@ impl Roster {
 
     /// A clinic day topside (Economy): a flush now, twice the size, whenever the next one is due. Returns how many came.
     pub fn clinic_flush(&mut self, traits: &TraitFile, names: &NameFile, rng: &mut Pcg32, day: u32) -> usize {
-        let n = 2 * (FLUSH_SIZE.0 + rng.below(FLUSH_SIZE.1 - FLUSH_SIZE.0 + 1));
+        let fs = balance::get().recruitment.flush_size;
+        let n = 2 * (fs.0 + rng.below(fs.1 - fs.0 + 1));
         let mut left = usize::MAX;
         self.batch(traits, names, rng, day, n, &mut left)
     }
@@ -1501,12 +1489,12 @@ mod tests {
         // five deep grates' batches roll dozens; with no bed free a body a batch comes down
         let grates = [(1, 5), (2, 5), (3, 5), (4, 5), (5, 5)];
         r.flush(&t, &n, &mut Pcg32::new(7), FIRST_FLUSH, 1, &grates, 2, 1.0, 0);
-        assert_eq!(sleepers(&r), 5 * FLUSH_OVER);
+        assert_eq!(sleepers(&r), 5 * balance::get().recruitment.flush_over);
         assert!(r.turned >= 10, "the draw past the beds is told: {}", r.turned);
         // twelve beds free: twelve and the five
         let mut s = Roster::new();
         s.flush(&t, &n, &mut Pcg32::new(7), FIRST_FLUSH, 1, &grates, 2, 1.0, 12);
-        assert_eq!(sleepers(&s), 12 + 5 * FLUSH_OVER);
+        assert_eq!(sleepers(&s), 12 + 5 * balance::get().recruitment.flush_over);
     }
 
     #[test]

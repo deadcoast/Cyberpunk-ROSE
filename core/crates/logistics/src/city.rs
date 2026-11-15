@@ -40,7 +40,7 @@ pub const PIT_TARGET: f32 = 40.0;
 pub const TIER_NUTRIENT: [f32; 4] = [0.0, 0.18, 0.30, 0.45];
 
 /// What a consumer takes (Full Design: Consumers).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Kind {
     Pit,
     Market,
@@ -65,7 +65,7 @@ impl Kind {
 
 /// A consumer the bridge registers: its kind and key (Pit index, market index, Still structure id), the Mat cell it
 /// takes cargo at, its demand (0–1, the share of its quota not met) and whether it lost signal priority.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Consumer {
     pub kind: Kind,
     pub key: u32,
@@ -75,7 +75,7 @@ pub struct Consumer {
 }
 
 /// A packet that reached its consumer this tick.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Arrival {
     pub cargo: u32,
     pub kind: Kind,
@@ -83,7 +83,7 @@ pub struct Arrival {
 }
 
 /// A packet waiting at its source tile for room on the cord.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 struct Pending {
     at: usize,
     cargo: u32,
@@ -111,7 +111,7 @@ pub struct CityStats {
 }
 
 /// The scale proof's synthetic city (Phase A): pods, a crowd walking market → nearest Pit → home, market hauls.
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Crowd {
     pub pods: Vec<usize>,
     pub f_market: FlowField,
@@ -122,7 +122,7 @@ pub struct Crowd {
     pub haul_every: u64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct City {
     pub sim: MatSim,
     pub rng: Pcg32,

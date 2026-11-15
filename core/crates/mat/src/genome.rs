@@ -1,7 +1,7 @@
 //! Ten genes in [0, 1] and their linear expression into CA parameters.
 //! Same mapping as the GDD table (Mat spec, Genome) and the Python prototype.
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Genome(pub [f32; 10]);
 
 pub const VIGOR: usize = 0;
@@ -60,7 +60,7 @@ impl Genome {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Params {
     /// nutrient a hypha needs around it before it will extend
     pub theta_grow: f32,

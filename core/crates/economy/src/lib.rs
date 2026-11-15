@@ -512,7 +512,7 @@ impl Economy {
         let walk = file.factions.iter().map(|f| std::array::from_fn(|c| f.base(CATEGORIES[c]))).collect();
         let s = EconomySave { seed, streets, standing: vec![Standing::default(); n], walk, stock: vec![Vec::new(); n], bought_service: vec![0; n], next_id: 1, ..EconomySave::default() };
         let mut e = Economy::resolve(file, table, s);
-        e.begin_day(1, 1);
+        e.begin_day(1, 1, &[first]);
         e
     }
 
@@ -566,8 +566,9 @@ impl Economy {
     // ------------------------------------------------------------ the surface's clock
 
     /// A new day: each demand walks a quarter of the way back to its buy-list value plus a seeded step; the surface's
-    /// events roll and age; the stock rotates; old offers lapse.
-    pub fn begin_day(&mut self, day: u32, chapter: u8) -> Vec<Note> {
+    /// events roll and age; the stock rotates, a stall's worth for each of a faction's streets the Mat reaches
+    /// (`reached`, the grates); old offers lapse.
+    pub fn begin_day(&mut self, day: u32, chapter: u8, reached: &[u16]) -> Vec<Note> {
         let mut notes = Vec::new();
         self.s.day = day;
         let rules = &self.file.rules;
@@ -612,7 +613,10 @@ impl Economy {
                 }
             }
             today.sort();
-            let mult = self.stock_mult(f, chapter);
+            // a stall at every street of the faction's the Mat reaches (Full Design v3.24, Economy: the streets; this
+            // design's): the first a whole day's units, each further one `street_stock` of them
+            let streets = self.s.streets.iter().filter(|s| s.faction as usize == f && reached.contains(&s.grate)).count().max(1);
+            let mult = self.stock_mult(f, chapter) * (1.0 + (streets - 1) as f32 * balance::get().economy.street_stock);
             self.s.stock[f] = today
                 .into_iter()
                 .map(|i| {
@@ -1159,7 +1163,7 @@ mod tests {
         let (mut e, _) = econ(11);
         let mut worst: f32 = 0.0;
         for day in 2..200 {
-            e.begin_day(day, 1);
+            e.begin_day(day, 1, &[]);
             for f in 0..4u8 {
                 for c in CATEGORIES {
                     worst = worst.max(e.drift(f, c).abs());

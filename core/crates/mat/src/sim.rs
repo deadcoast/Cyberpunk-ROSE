@@ -28,12 +28,6 @@ pub mod sub {
 }
 
 // ---------------------------------------------------------------- hyphal states
-/// The strand ends a Pit's surplus reaches in one Mat step (translocation; this design's).
-pub const TRANSLOCATE_ENDS: usize = 24;
-/// The share of a feed that rides to the frontier as it lands; the rest is the Pit's stock and feeds the tissue round
-/// it (with half of the Pit's standing stock riding every step, the Mat outgrew its food: a world_eater city of five
-/// thousand cells starved its climb in the Service Tunnels and never left them).
-pub const TRANSLOCATE_SHARE: f32 = 0.75;
 
 pub mod hy {
     pub const EMPTY: u8 = 0;
@@ -63,7 +57,7 @@ pub struct Stats {
 
 /// What the tree and the classes change of the Mat's step (Full Design v3.18, Progression): the game sets them each
 /// shift from what stands.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Mods {
     /// the signal range's multiplier (the Hive conduit: 1.5 with Chrome Affinity at 0.6 or more)
     pub range: f32,
@@ -86,7 +80,7 @@ impl Default for Mods {
 }
 
 /// One stratum (or a stack of them) of the Mat.
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct MatSim {
     pub w: usize,
     pub h: usize,
@@ -498,17 +492,17 @@ impl MatSim {
         }
     }
 
-    /// Drop scrap into a Pit. TRANSLOCATE_SHARE of it rides to the frontier at the next Mat step; the rest sits there
+    /// Drop scrap into a Pit. balance::get().mat.translocate_share of it rides to the frontier at the next Mat step; the rest sits there
     /// as stock, and the Mat draws it down at its own intake rate.
     pub fn feed(&mut self, x: usize, y: usize, amount: f32) {
         *self.pits.entry((x, y)).or_insert(0.0) += amount;
-        *self.fresh.entry((x, y)).or_insert(0.0) += amount * TRANSLOCATE_SHARE;
+        *self.fresh.entry((x, y)).or_insert(0.0) += amount * balance::get().mat.translocate_share;
     }
 
     /// Tiles a feed of `amount` grows as it lands (the Stash's "feed now"): the share that rides, a tile for each
     /// grow_cost + tip_starter.
     pub fn feed_growth(&self, amount: f32) -> usize {
-        (amount * TRANSLOCATE_SHARE * self.cells_per_nutrient() + 1e-3).floor() as usize
+        (amount * balance::get().mat.translocate_share * self.cells_per_nutrient() + 1e-3).floor() as usize
     }
 
     /// Fed Chrome drifts the genome: each gene moves by the delivered bias × tier drift and reflects at 0 and 1
@@ -774,7 +768,7 @@ impl MatSim {
         // within each kind the nearest the Pit first: a feed grows the Mat where it was fed (a frontier Pit its climb)
         let mut front: Vec<(u8, usize, usize)> = order.iter().enumerate().filter_map(|(k, &i)| kind(self, i).map(|t| (t, k, i))).collect();
         front.sort_unstable();
-        let ends = (TRANSLOCATE_ENDS as f32 * (0.5 + self.genome.0[crate::genome::CONDUCTANCE])).round() as usize;
+        let ends = (balance::get().mat.translocate_ends as f32 * (0.5 + self.genome.0[crate::genome::CONDUCTANCE])).round() as usize;
         let mut grown = 0;
         for (_, _, i) in front {
             if stock < cost || grown >= ends {
@@ -947,6 +941,25 @@ impl MatSim {
     }
 
     // ------------------------------------------------------------ hyphae
+    /// Whether ground `e` lies between the tissue the Heart reaches along the Mat (`outward`) and the city's own tissue
+    /// it does not: growing into it joins the two (a Bloom's tissue is another strain and is never mended to).
+    fn mends(&self, e: usize) -> bool {
+        let bloom = self.blooms();
+        let (mut joined, mut cut) = (false, false);
+        for d in 0..4 {
+            if let Some(j) = self.nb(e, d) {
+                if is_hyphal(self.hy[j]) && !self.bloom_at(j, bloom) {
+                    if self.outward[j] >= 0.0 {
+                        joined = true;
+                    } else {
+                        cut = true;
+                    }
+                }
+            }
+        }
+        joined && cut && !self.heart_lost
+    }
+
     /// Place a new tip in a growable empty neighbour of `c`; the target may touch at most `max_nbrs` hyphae.
     fn try_sprout(&mut self, c: usize, max_nbrs: u8, ncount: &[u8], occupied: &mut [bool]) -> Option<usize> {
         let need = self.p.theta_grow + self.grow_cost + self.tip_starter;
@@ -965,11 +978,19 @@ impl MatSim {
                     continue;
                 }
                 let ne = ncount[e];
-                if ne > max_nbrs {
+                // a mend: ground between the tissue the Heart reaches and the city's own tissue cut from it (Full Design
+                // v3.24, The climb mends; this design's). The neighbour limit keeps the Mat a branching network, and
+                // it also kept every gap a Sweep burned in a filled shaft shut for good: each empty tile there touched
+                // three strands, and the Garden script's climb stood cut at the Sump's crossing for 150 shifts beside
+                // tissue at 0.96 nutrient
+                let mend = self.mends(e);
+                if ne > max_nbrs && !mend {
                     continue;
                 }
                 let mut wgt = 0.25 + self.n[e]; // chemotropism: richer ground ahead is favoured, never required
-                if ne == 2 {
+                if mend {
+                    wgt *= 4.0;
+                } else if ne == 2 {
                     wgt *= 0.15; // closing a loop is rare
                 }
                 cands[k] = (e, wgt);

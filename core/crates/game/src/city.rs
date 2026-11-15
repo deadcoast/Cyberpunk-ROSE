@@ -188,6 +188,9 @@ pub struct Steward {
     /// a faction whose reputation it keeps where it stands: no new contract with it (`rose campaign`: a chain done is
     /// two steps, and the ally's every step is the Garden's ending and the World-Eater's loss)
     pub cool: Option<u8>,
+    /// a faction it does not court at all: no service bought from it either, its favour lever (`rose campaign`'s
+    /// World-Eater: the Gangs' protection, bought every shift a Patrol was due, carried the ally from +1 to +2)
+    pub shun: Option<u8>,
 }
 
 impl Steward {
@@ -537,7 +540,7 @@ impl Steward {
             }
         }
         for (f, svc) in want {
-            let Some(f) = f else { continue };
+            let Some(f) = f.filter(|&f| self.shun != Some(f)) else { continue };
             let Some(m) = crate::trade::market_of(&w.economy, &w.city, &w.colony, f) else { continue };
             let Some(entry) = w.economy.service_entry(f, svc) else { continue };
             if w.ledger.orders.iter().any(|o| o.faction == f && o.entry == entry) {

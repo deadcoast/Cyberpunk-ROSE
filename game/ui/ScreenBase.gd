@@ -77,6 +77,76 @@ func _process(_delta: float) -> void:
 	if want != _lit or want != "":
 		_lit = want
 		_light.queue_redraw()
+	_step_slams()
+
+# ---------------------------------------------------------------- kinetic labels (Full Design v3.24, Feel; PAC-107)
+## A label that lands: it slams in at twice its size, then two frames of glitch — its glyphs scrambled, a pixel off,
+## Hot Pink then Cyan — then it resolves to its text in its colour, a frame each at 30 frames a second. Whole pixels
+## and whole scales only (the art bible: no smooth scaling, no blur). `frame` lights the panel behind it for the
+## same four frames. Used for the moments that land: a reward, a loss, a chapter, Ivan's line, a new alert.
+const SLAM_FRAME_MS := 33.0
+const GLITCH := "#%&*+=<>/\\|!?$@"
+var _slams := {}   # Label -> {text, color, pos, start, frame}
+
+func slam(l: Label, text: String, color: Color = UiTheme.CHALK, frame: Control = null) -> void:
+	if l == null:
+		return
+	if not Sim.kinetic:
+		l.text = text
+		l.add_theme_color_override("font_color", color)
+		return
+	var prev = _slams.get(l)
+	var pos: Vector2 = prev.pos if prev != null else l.position
+	l.position = pos
+	_slams[l] = {"text": text, "color": color, "pos": pos, "start": float(Sim.anim_msec()), "frame": frame}
+	_slam_frame(l, 0)
+
+func _scramble(text: String, k: int) -> String:
+	var out := ""
+	for i in text.length():
+		var c := text[i]
+		out += c if c == " " or (i + k) % 3 == 0 else GLITCH[(i * 7 + k * 5 + c.unicode_at(0)) % GLITCH.length()]
+	return out
+
+func _slam_frame(l: Label, f: int) -> void:
+	var s: Dictionary = _slams[l]
+	var color: Color = s.color
+	match f:
+		0:
+			l.text = _scramble(s.text, 1)
+			l.scale = Vector2(2, 2)
+			l.position = s.pos - Vector2(0, 4)
+			l.add_theme_color_override("font_color", UiTheme.HOT_PINK)
+		1:
+			l.text = _scramble(s.text, 2)
+			l.scale = Vector2.ONE
+			l.position = s.pos + Vector2(1, 0)
+			l.add_theme_color_override("font_color", UiTheme.HOT_PINK)
+		2:
+			l.text = _scramble(s.text, 3)
+			l.position = s.pos - Vector2(1, 0)
+			l.add_theme_color_override("font_color", UiTheme.CYAN)
+		_:
+			l.text = s.text
+			l.scale = Vector2.ONE
+			l.position = s.pos
+			l.add_theme_color_override("font_color", color)
+	var fr = s.frame
+	if fr != null and is_instance_valid(fr):
+		fr.self_modulate = Color(1.6, 1.6, 1.8) if f < 4 else Color.WHITE
+
+func _step_slams() -> void:
+	if _slams.is_empty():
+		return
+	var now := float(Sim.anim_msec())
+	for l in _slams.keys():
+		if not is_instance_valid(l):
+			_slams.erase(l)
+			continue
+		var f := int((now - float(_slams[l].start)) / SLAM_FRAME_MS)
+		_slam_frame(l, f)
+		if f >= 4:
+			_slams.erase(l)
 
 ## A Cyan frame two pixels out from the lit control, pulsing; nothing when the beat's control is not on this screen.
 func _draw_light() -> void:

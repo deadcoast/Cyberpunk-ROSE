@@ -70,21 +70,60 @@ var focus_slimo := -1
 ## line an event, the city's clock in seconds, its class, what happened.
 var city_log_path := "user://telemetry/city.log"
 var _city_log: FileAccess
+## The city's events as they happen, for the screens' kinetic lines and the sound (Full Design v3.24, Feel): each
+## {t, class "landing" | "loss" | "decision", what}.
+signal city_event(e: Dictionary)
+var _sound_at := -1000.0
+## a loaded city goes on writing the log it had rather than starting one
+var _city_log_resume := false
 
 func _write_city_log() -> void:
 	var events: Array = sim.city_log_new()
 	if events.is_empty():
 		return
+	_reward_sounds(events)
+	for e in events:
+		city_event.emit(e)
 	if _city_log == null:
 		DirAccess.make_dir_recursive_absolute("user://telemetry")
-		_city_log = FileAccess.open(city_log_path, FileAccess.WRITE)
+		if _city_log_resume and FileAccess.file_exists(city_log_path):
+			_city_log = FileAccess.open(city_log_path, FileAccess.READ_WRITE)
+			if _city_log != null:
+				_city_log.seek_end()
+				_city_log.store_line("city  seed %d  loaded at day %d" % [seed_value, day])
+		else:
+			_city_log = FileAccess.open(city_log_path, FileAccess.WRITE)
+			if _city_log != null:
+				_city_log.store_line("city  seed %d  founded day %d" % [seed_value, day])
 		if _city_log == null:
 			return
-		_city_log.store_line("city  seed %d  founded day %d" % [seed_value, day])
 	for e in events:
 		var t := float(e.t)
 		_city_log.store_line("%3d:%04.1f  %-8s %s" % [int(t / 60.0), fmod(t, 60.0), String(e["class"]), String(e.what)])
 	_city_log.flush()
+
+## Every reward fires a sound with its line (Full Design v3.24, Feel): a landing the reward's blip, the big one for a
+## chapter, a trophy, a stratum reached or an ending; a loss its fall. One sound a quarter second at most, the biggest
+## of the moment, so a busy minute does not chatter.
+func _reward_sounds(events: Array) -> void:
+	var now := float(anim_ms)
+	if now - _sound_at < 250.0:
+		return
+	var best := ""
+	for e in events:
+		var what := String(e.what)
+		match String(e["class"]):
+			"landing":
+				if what.begins_with("chapter") or what.begins_with("Trophy") or what.contains("reached the") or what.begins_with("the ending"):
+					best = "sfx.reward.big"
+				elif best == "":
+					best = "sfx.reward"
+			"loss":
+				if best != "sfx.reward.big":
+					best = "sfx.loss"
+	if best != "" and get_node_or_null("/root/Audio") != null:
+		get_node("/root/Audio").play(best)
+		_sound_at = now
 
 func set_speed(hz: float) -> void:
 	tick_hz = hz
@@ -100,22 +139,15 @@ func ooze() -> String:
 	return why
 
 # ---------------------------------------------------------------- the colony's clock and the run hand-off
-## Day counter for provenance and the raider roll; a shift is a sim day for now.
+## The shift the city is in (the World's own count: RoseSim.day after a load); provenance and the raider roll read it.
 var day := 1
-## How many runs each route (key "s<stratum>:<seed>") has had: first-run generosity reads 0.
-var route_runs := {}
 ## The last run's haul as it went into the Stash — the rig, the Mat's haul, Spored regrowth: {placed, held, from};
 ## the Stash screen shows haul_note once
 var last_haul := {}
 var haul_note := ""
-## Our dead on the routes: [{seed, stratum, x, y, chunk, day, runner, rig: PackedByteArray, raided}] (save v3 corpses).
-var corpses: Array = []
-## Followers stranded at an extraction tile, by route key -> [ids].
-var stranded := {}
-## The last run's outcome, for the Route Board and the Heart.
+## The last run's outcome, for the Route Board and the Heart. The routes' runs, fog memory, bodies and stranded
+## followers are the World's (game::routes, RoseSim.route_runs and the rest), so a save carries them.
 var last_outcome := {}
-## Route memory bits per route key, from each run's outcome (save v3 route_memory).
-var route_memory := {}
 ## The city's one Stash (inventory crate through RoseStash); every screen is a view of it.
 var stash: RoseStash
 ## The campaign's panels (Full Design v3.19): where the Panels screen goes back to, a set to replay (the Codex's
@@ -180,13 +212,8 @@ func _shift_ended(shift: Dictionary) -> void:
 		save_profile()
 	shift_report = last_shift.get("report", {})
 	people_lines = last_shift.get("lines", PackedStringArray())
-	lay_bodies(last_shift.get("laid", []))
-
-## Recover contracts' bodies (Full Design v3.16, Economy: Contracts), laid at the far end of a Board route as the
-## link is taken: they join our dead on that route, under the contract's name, and raiders roll on them as on ours.
-func lay_bodies(laid: Array) -> void:
-	for b in laid:
-		corpses.append({"seed": int(b.route), "stratum": int(b.stratum), "x": int(b.x), "y": int(b.y), "chunk": String(b.chunk), "day": int(b.day), "runner": String(b.name), "rig": b.rig, "raided": false, "contract": int(b.contract)})
+	# recover contracts' bodies were laid on their routes by the World (game::routes); the shift's end is a save
+	autosave()
 
 ## The structure def the Colony's build tool places next ("" none); set by the Build menu.
 var build_tool := ""
@@ -231,14 +258,16 @@ func region_name(stratum: int) -> String:
 	return "S%d DRAIN" % stratum
 
 func memory_of(stratum: int, seed_v: int) -> PackedByteArray:
-	return route_memory.get(route_key(stratum, seed_v), PackedByteArray())
+	return ensure().route_memory(stratum, seed_v)
 
-func corpses_on(stratum: int, seed_value: int) -> Array:
-	var out := []
-	for c in corpses:
-		if int(c.stratum) == stratum and int(c.seed) == seed_value:
-			out.append(c)
-	return out
+## Our dead on a route and the recover contracts' bodies laid there: [{seed, stratum, x, y, chunk, day, runner, rig,
+## raided, contract}].
+func corpses_on(stratum: int, seed_v: int) -> Array:
+	return Array(ensure().bodies_on(stratum, seed_v))
+
+## Followers left at a route's extraction tile: [ids].
+func stranded_on(stratum: int, seed_v: int) -> Array:
+	return Array(ensure().stranded_on(stratum, seed_v))
 
 ## Record what a run gave back (RoseRun.outcome()) and advance the shift. `crew` is the launch's {runner_id,
 ## followers} (empty for a run without a record: tests).
@@ -284,14 +313,9 @@ func take_outcome(stratum: int, seed_value: int, runner_name: String, o: Diction
 	if int(last_haul.placed) + held > 0:
 		haul_note = "haul from %s: %d in%s" % [last_haul.from, int(last_haul.placed), ("   %d waiting at the Heart for room" % held) if held > 0 else ""]
 	if o.has("corpse"):
-		var c: Dictionary = o.corpse
-		corpses.append({"seed": seed_value, "stratum": stratum, "x": int(c.x), "y": int(c.y), "chunk": String(c.chunk), "day": int(c.day), "runner": runner_name, "rig": c.rig, "raided": bool(c.raided)})
-	var stranded_ids: PackedInt32Array = o.get("followers_stranded", PackedInt32Array())
-	if stranded_ids.size() > 0:
-		stranded[route_key(stratum, seed_value)] = Array(stranded_ids)
-	var mem: PackedByteArray = o.get("route_memory", PackedByteArray())
-	if not mem.is_empty():
-		route_memory[route_key(stratum, seed_value)] = mem
+		ensure().add_body(stratum, seed_value, o.corpse, runner_name)
+	ensure().strand(stratum, seed_value, o.get("followers_stranded", PackedInt32Array()))
+	ensure().remember_route(stratum, seed_value, o.get("route_memory", PackedByteArray()))
 	note_run(stratum, seed_value)
 	# Oathkeepers the run killed: their Attention lands in the Heart's zone at the shift's end; raiders count toward
 	# the clear-raiders contracts
@@ -311,12 +335,11 @@ func next_flood_roll() -> int:
 func route_key(stratum: int, seed_value: int) -> String:
 	return "s%d:%d" % [stratum, seed_value]
 
-func runs_of(stratum: int, seed_value: int) -> int:
-	return int(route_runs.get(route_key(stratum, seed_value), 0))
+func runs_of(stratum: int, seed_v: int) -> int:
+	return ensure().route_runs(stratum, seed_v)
 
-func note_run(stratum: int, seed_value: int) -> void:
-	var k := route_key(stratum, seed_value)
-	route_runs[k] = int(route_runs.get(k, 0)) + 1
+func note_run(stratum: int, seed_v: int) -> void:
+	ensure().note_route_run(stratum, seed_v)
 
 ## A nonce for this run's loot: the colony tick at departure, so re-running a route rolls fresh contents.
 func run_nonce() -> int:
@@ -336,7 +359,10 @@ var ending_recorded := false
 var newrun_preset := {}
 ## Every variable's starting value, so a New Run founds from a clean slate; the tests' settings are kept.
 var _defaults := {}
-const _KEEP := ["_defaults", "ticks_per_frame", "panel_hold", "profile", "profile_path"]
+const _KEEP := ["_defaults", "ticks_per_frame", "panel_hold", "profile", "profile_path", "save_dir", "kinetic"]
+## Labels that land slam in (ScreenBase.slam); the screenshot scripts turn it off so a shot shows the text, not a glitch
+## frame of it (their city ticks every frame, so a line lands every frame).
+var kinetic := true
 
 func _init() -> void:
 	for p in get_script().get_script_property_list():
@@ -356,6 +382,117 @@ func save_profile() -> void:
 	var f := FileAccess.open(profile_path, FileAccess.WRITE)
 	if f != null:
 		f.store_buffer(ensure_profile().to_bytes())
+
+# ---------------------------------------------------------------- saves (Full Design: Saves)
+## One autosave a run, written at every shift's end and as a run leaves the Board, and three slots the player writes
+## from Settings. A save is the World's snapshot (RoseSim.save_bytes) with the view state below beside it. Written to
+## a temporary file and renamed over the old; a save that does not read is renamed .bad and never overwritten. The
+## tests keep their own folder (save_dir), so a test never writes over the player's saves.
+var save_dir := "user://saves"
+const SLOTS := ["auto", "slot1", "slot2", "slot3"]
+## When the run was founded (seconds since 1970), kept in its saves; the last save written or loaded: {slot, label,
+## saved_unix, day}; why the last save failed ("" none).
+var created_unix := 0
+var last_save := {}
+var save_error := ""
+## The view state a save carries beside the World: where the player left the camera, the bookmarks and the overlay,
+## the alerts already shown, the last run's card and haul, New Run's choices.
+const _UI_KEYS := ["bookmarks", "colony_cam", "overlay", "alerts_shown", "focus_slimo", "last_outcome", "last_haul", "run_config", "ending_recorded", "created_unix"]
+
+func save_path(slot: String) -> String:
+	return "%s/%s.rose" % [save_dir, slot]
+
+## Write the city to a slot ("auto", "slot1".."slot3"): "" or why not.
+func save_game(slot: String) -> String:
+	if sim == null or sim.campaign().is_empty():
+		return "no city to save"
+	DirAccess.make_dir_recursive_absolute(save_dir)
+	var now := int(Time.get_unix_time_from_system())
+	if created_unix == 0:
+		created_unix = now
+	var ui := {}
+	for k in _UI_KEYS:
+		ui[k] = get(k)
+	var bytes: PackedByteArray = sim.save_bytes(var_to_bytes(ui), created_unix, now)
+	if bytes.is_empty():
+		return "no city to save"
+	var path := save_path(slot)
+	var tmp := path + ".tmp"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	if f == null:
+		return "cannot write %s" % tmp
+	f.store_buffer(bytes)
+	f.close()
+	if DirAccess.rename_absolute(tmp, path) != OK:
+		return "cannot write %s" % path
+	var h: Dictionary = RoseSim.save_header(bytes)
+	last_save = {"slot": slot, "label": String(h.get("label", "")), "saved_unix": now, "day": int(h.get("day", day))}
+	return ""
+
+## The autosave (every shift's end, a run's departure). A failure is kept for Settings to show; play goes on.
+func autosave() -> void:
+	if ticks_per_frame > 0 and save_dir == "user://saves":
+		return   # a headless test that kept the player's folder writes nothing there
+	save_error = save_game("auto")
+
+## What each slot holds: {slot: {why, label, day, saved_unix, ...} or {} when empty}.
+func save_slots() -> Dictionary:
+	var out := {}
+	for slot in SLOTS:
+		var path := save_path(slot)
+		if not FileAccess.file_exists(path):
+			out[slot] = {}
+			continue
+		out[slot] = RoseSim.save_header(FileAccess.get_file_as_bytes(path))
+	return out
+
+## The newest save that reads ("" none): what CONTINUE loads when this session holds no city.
+func newest_save() -> String:
+	var best := ""
+	var best_t := []
+	var slots := save_slots()
+	for slot in slots:
+		var h: Dictionary = slots[slot]
+		# the latest written; within one second, the later shift
+		var t := [int(h.get("saved_unix", 0)), int(h.get("day", 0)), int(h.get("tick", 0))]
+		if not h.is_empty() and String(h.get("why", "")) == "" and (best_t.is_empty() or t > best_t):
+			best = slot
+			best_t = t
+	return best
+
+## Load a slot: the city so far is let go and the saved one takes its place, with its view state. "" or why not; a
+## file that does not read is set aside as .bad and the city in hand is kept.
+func load_game(slot: String) -> String:
+	var path := save_path(slot)
+	if not FileAccess.file_exists(path):
+		return "no save in %s" % slot
+	var bytes := FileAccess.get_file_as_bytes(path)
+	var h: Dictionary = RoseSim.save_header(bytes)
+	if String(h.get("why", "")) != "":
+		DirAccess.rename_absolute(path, path + ".bad")
+		return "%s: %s (set aside as %s.bad)" % [slot, String(h.why), path.get_file()]
+	var next := RoseSim.new()
+	var r: Dictionary = next.load_bytes(bytes)
+	if String(r.get("why", "")) != "":
+		DirAccess.rename_absolute(path, path + ".bad")
+		return "%s: %s (set aside as %s.bad)" % [slot, String(r.why), path.get_file()]
+	if _city_log != null:
+		_city_log.close()
+		_city_log = null
+	for k in _defaults:
+		var v = _defaults[k]
+		set(k, v.duplicate(true) if (v is Array or v is Dictionary) else v)
+	sim = next
+	day = sim.day()
+	seed_value = int(sim.campaign().get("seed", seed_value))
+	var ui = bytes_to_var(r.get("ui", PackedByteArray()))
+	if ui is Dictionary:
+		for k in _UI_KEYS:
+			if ui.has(k):
+				set(k, ui[k])
+	last_save = {"slot": slot, "label": String(r.get("label", "")), "saved_unix": int(r.get("saved_unix", 0)), "day": day}
+	_city_log_resume = true
+	return ""
 
 ## New Run: the city so far is let go and the next is founded on the seed, mode ("campaign" or "endless"), difficulty
 ## and strain code ("" none; New Game+ otherwise). "" or why not — a code that does not read keeps the city.

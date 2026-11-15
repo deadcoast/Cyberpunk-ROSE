@@ -474,7 +474,9 @@ func _handle_events() -> void:
 				loot_no_room.clear()
 				var src := _source(loot_open)
 				var how := "FORCED" if bool(e.forced) else "OPEN"
-				loot_title.text = "%s %s   T%d   %d%s" % [String(src.get("kind", "")).to_upper(), how, int(src.get("tier", 0)), int(e.revealed), "   FIRST-RUN FIND" if bool(e.generous) else ""]
+				# the pull lands (Full Design v3.24, Feel): its title slams in with the reward's sound, a notable's louder
+				slam(loot_title, "%s %s   T%d   %d%s" % [String(src.get("kind", "")).to_upper(), how, int(src.get("tier", 0)), int(e.revealed), "   FIRST-RUN FIND" if bool(e.generous) else ""], UiTheme.CHALK)
+				Audio.play("sfx.reward.big" if int(e.get("notable", 0)) > 0 else "sfx.reward")
 				loot_foot.text = "..." if int(e.revealed) > 0 else "nothing in it   -   walk away to close"
 				loot_panel.visible = true
 				_redraw_found()
@@ -512,10 +514,16 @@ func _handle_events() -> void:
 				_flash(runner.position + Vector2(0, -40), "THE WATER RISES  +%d" % int(e.level), UiTheme.CYAN)
 			"raiders":
 				_flash(Vector2(int(e.x) * 32 + 16, int(e.y) * 32 - 8), "RAIDERS x%d" % int(e.n), UiTheme.MUZZLE)
+				Audio.play("sfx.siren")
+			"stirred":
+				# the drain stirs (Full Design v3.24, Threats): heard at its burrow before it is seen
+				_flash(Vector2(int(e.x) * 32 + 16, int(e.y) * 32 - 8), "something stirs", UiTheme.DUST)
+				Audio.play("sfx.alert")
 			"raided":
 				_refresh_sources()
 			"runner_hit":
 				_flash(runner.position + Vector2(0, -24), "-%d %s" % [int(e.damage), String(e.section)], UiTheme.HOT_PINK)
+				Audio.play("sfx.loss")
 				runner.modulate = Color(1.0, 0.5, 0.6)
 			"bleed":
 				_flash(runner.position + Vector2(0, -24), "bleeding", UiTheme.HOT_PINK)
@@ -566,6 +574,7 @@ func _handle_events() -> void:
 				over = "extracted"
 				over_t = 0.0
 				_flash(runner.position + Vector2(0, -28), "EXTRACTED", UiTheme.OOZE_GLOW)
+				Audio.play("sfx.reward.big")
 				_finish_run()
 			"follower_hit":
 				var fn: Sprite2D = follower_nodes.get(int(e.id))

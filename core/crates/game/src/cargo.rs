@@ -98,7 +98,7 @@ pub fn send(city: &mut City, colony: &Colony, defs: &StructureFile, stash: &Stas
 }
 
 /// A sale as it landed.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Sale {
     pub market: u8,
     pub eddies: u32,

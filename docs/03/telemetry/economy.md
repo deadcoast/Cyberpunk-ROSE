@@ -1,6 +1,6 @@
 # The economy, thirty shifts
 
-Written by `rose economy --seed 11 --shifts 30` on 2026-11-13 (Full Design v3.15, Economy — The proof; the Build plan's Phase D). The steward of `rose city` plays the seed trading — the surplus, its Chrome too, to whichever stall in reach pays most, five of a category a stall a shift, the three-link deliver and host contracts it can fill taken, protection bought when a Patrol is due at a Gang grate — then plays it again feeding, as `rose city` does: the same, but the Heart keeping 2.0 nutrient on the haul's Common and Uncommon Chrome. (A district's foreman keeps the Heart fed on the members' meals either way.) **Result: every demand's walk stayed inside its band every day** (widest walk 0.16, band 0.30).
+Written by `rose economy --seed 11 --shifts 30` on 2026-11-15 (Full Design v3.15, Economy — The proof; the Build plan's Phase D). The steward of `rose city` plays the seed trading — the surplus, its Chrome too, to whichever stall in reach pays most, five of a category a stall a shift, the three-link deliver and host contracts it can fill taken, protection bought when a Patrol is due at a Gang grate — then plays it again feeding, as `rose city` does: the same, but the Heart keeping 2.0 nutrient on the haul's Common and Uncommon Chrome. (A district's foreman keeps the Heart fed on the members' meals either way.) **Result: every demand's walk stayed inside its band every day** (widest walk 0.16, band 0.30).
 
 ## The streets
 
@@ -59,36 +59,36 @@ Written by `rose economy --seed 11 --shifts 30` on 2026-11-13 (Full Design v3.15
 
 | shift | day | grates | sold | earned | eddies | widest walk |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 1 | 1 | 2 | 54 | 40 | 0.06 |
-| 2 | 1 | 1 | 7 | 32 | 57 | 0.06 |
-| 3 | 1 | 1 | 10 | 32 | 74 | 0.09 |
-| 4 | 2 | 1 | 13 | 20 | 77 | 0.09 |
-| 5 | 2 | 1 | 11 | 25 | 79 | 0.09 |
-| 6 | 2 | 1 | 12 | 25 | 75 | 0.13 |
-| 7 | 3 | 1 | 12 | 35 | 81 | 0.13 |
-| 8 | 3 | 1 | 10 | 29 | 81 | 0.13 |
-| 9 | 3 | 1 | 13 | 15 | 67 | 0.13 |
-| 10 | 4 | 1 | 14 | 53 | 91 | 0.13 |
-| 11 | 4 | 1 | 12 | 30 | 92 | 0.13 |
-| 12 | 4 | 1 | 10 | 26 | 89 | 0.14 |
-| 13 | 5 | 1 | 13 | 20 | 80 | 0.14 |
-| 14 | 5 | 1 | 12 | 32 | 83 | 0.14 |
-| 15 | 5 | 1 | 9 | 29 | 83 | 0.16 |
-| 16 | 6 | 1 | 13 | 33 | 87 | 0.16 |
-| 17 | 6 | 1 | 13 | 42 | 100 | 0.16 |
-| 18 | 6 | 1 | 13 | 40 | 111 | 0.12 |
-| 19 | 7 | 1 | 12 | 19 | 101 | 0.12 |
-| 20 | 7 | 1 | 12 | 34 | 106 | 0.12 |
-| 21 | 7 | 1 | 15 | 31 | 108 | 0.13 |
-| 22 | 8 | 1 | 10 | 25 | 104 | 0.13 |
-| 23 | 8 | 1 | 10 | 19 | 94 | 0.13 |
-| 24 | 8 | 1 | 15 | 64 | 129 | 0.10 |
-| 25 | 9 | 1 | 10 | 18 | 118 | 0.10 |
-| 26 | 9 | 1 | 14 | 47 | 136 | 0.10 |
-| 27 | 9 | 1 | 13 | 33 | 140 | 0.10 |
-| 28 | 10 | 1 | 12 | 52 | 183 | 0.10 |
-| 29 | 10 | 1 | 15 | 61 | 215 | 0.10 |
-| 30 | 10 | 1 | 11 | 18 | 204 | 0.12 |
+| 1 | 1 | 1 | 2 | 54 | 42 | 0.06 |
+| 2 | 1 | 1 | 7 | 31 | 60 | 0.06 |
+| 3 | 1 | 1 | 0 | 0 | 47 | 0.09 |
+| 4 | 2 | 1 | 0 | 0 | 30 | 0.09 |
+| 5 | 2 | 1 | 6 | 10 | 11 | 0.09 |
+| 6 | 2 | 1 | 8 | 160 | 144 | 0.13 |
+| 7 | 3 | 1 | 8 | 10 | 129 | 0.13 |
+| 8 | 3 | 1 | 4 | 29 | 129 | 0.13 |
+| 9 | 3 | 1 | 7 | 12 | 140 | 0.13 |
+| 10 | 4 | 1 | 9 | 33 | 156 | 0.13 |
+| 11 | 4 | 1 | 11 | 38 | 183 | 0.13 |
+| 12 | 4 | 1 | 12 | 28 | 196 | 0.14 |
+| 13 | 5 | 1 | 5 | 11 | 196 | 0.14 |
+| 14 | 5 | 2 | 10 | 24 | 213 | 0.14 |
+| 15 | 5 | 2 | 9 | 41 | 247 | 0.16 |
+| 16 | 6 | 3 | 10 | 20 | 262 | 0.16 |
+| 17 | 6 | 3 | 9 | 36 | 293 | 0.16 |
+| 18 | 6 | 3 | 4 | 8 | 360 | 0.12 |
+| 19 | 7 | 3 | 6 | 29 | 388 | 0.12 |
+| 20 | 7 | 3 | 6 | 17 | 404 | 0.12 |
+| 21 | 7 | 4 | 4 | 10 | 413 | 0.13 |
+| 22 | 8 | 4 | 7 | 45 | 497 | 0.13 |
+| 23 | 8 | 4 | 7 | 25 | 521 | 0.13 |
+| 24 | 8 | 5 | 7 | 25 | 607 | 0.10 |
+| 25 | 9 | 5 | 12 | 104 | 770 | 0.10 |
+| 26 | 9 | 6 | 8 | 48 | 813 | 0.10 |
+| 27 | 9 | 6 | 3 | 9 | 815 | 0.10 |
+| 28 | 10 | 6 | 8 | 35 | 951 | 0.10 |
+| 29 | 10 | 6 | 5 | 16 | 958 | 0.10 |
+| 30 | 10 | 7 | 10 | 148 | 1093 | 0.12 |
 
 ## What sold, against its base
 
@@ -96,43 +96,58 @@ Realised price over base × condition (× 0.4 for an item sold blind), by the fa
 
 | faction | category | sold | blind | eddies | of base |
 | --- | --- | --- | --- | --- | --- |
-| Corpo remnants | curio | 3 | 3 | 9 | 153 % |
-| Corpo remnants | tech | 11 | 11 | 50 | 215 % |
-| Gangs | gear | 4 | 4 | 37 | 131 % |
-| Nomads | chrome | 141 | 140 | 176 | 92 % |
-| Nomads | contraband | 17 | 17 | 183 | 149 % |
-| Nomads | curio | 66 | 65 | 179 | 108 % |
-| Nomads | gear | 45 | 44 | 161 | 107 % |
-| Nomads | tech | 61 | 60 | 198 | 86 % |
+| Badges | curio | 9 | 9 | 24 | 126 % |
+| Badges | gear | 9 | 9 | 34 | 127 % |
+| Badges | tech | 13 | 13 | 74 | 115 % |
+| Corpo remnants | chrome | 5 | 5 | 43 | 135 % |
+| Corpo remnants | curio | 5 | 5 | 26 | 152 % |
+| Corpo remnants | tech | 10 | 10 | 110 | 198 % |
+| Gangs | chrome | 2 | 2 | 8 | 128 % |
+| Gangs | contraband | 2 | 2 | 115 | 141 % |
+| Gangs | gear | 9 | 9 | 52 | 141 % |
+| Nomads | chrome | 24 | 24 | 72 | 102 % |
+| Nomads | contraband | 3 | 3 | 158 | 121 % |
+| Nomads | curio | 49 | 48 | 106 | 109 % |
+| Nomads | gear | 35 | 35 | 139 | 110 % |
+| Nomads | tech | 29 | 28 | 95 | 111 % |
 
 ## Standing at the end
 
 | faction | reputation | favour | traded | tier open |
 | --- | --- | --- | --- | --- |
-| Nomads | +1 | 2 | 897 e | 3 |
-| Gangs | +0 | 0 | 37 e | 1 |
-| Corpo remnants | +0 | -2 | 59 e | 1 |
-| Badges | +0 | 0 | 0 e | 1 |
+| Nomads | +0 | 9 | 570 e | 2 |
+| Gangs | -1 | 8 | 175 e | 1 |
+| Corpo remnants | -1 | 8 | 179 e | 1 |
+| Badges | +0 | 5 | 132 e | 1 |
 | Oathkeepers | +0 | 0 | 0 e | 1 |
 
 ## Contracts
 
-- took Nomads 1/3: deliver 4 organic at 20+ (0/4), 20 e by shift 31
-- the Nomads' link 1/3 done: 20 e
-- the Nomads' contract missed (host): the chain breaks, reputation +1
+- took Gangs 1/3: deliver 2 gear at 50+ (0/2), 60 e by shift 21
+- the Gangs' link 1/3 done: 60 e
+- the Gangs' contract missed (deliver): the chain breaks, reputation -1
+- took Badges 1/3: deliver 3 Uncommon organic at 30+ (0/3), 40 e by shift 25
+- the Badges' link 1/3 done: 40 e
+- the Badges' link 2/3 done: 78 e
+- took Corpo remnants 1/3: deliver 2 tech at 30+ (0/2), 60 e by shift 28
+- the Corpo remnants' link 1/3 done: 60 e
+- the Corpo remnants' contract missed (host): the chain breaks, reputation -1
+- took Corpo remnants 1/3: deliver 1 Rare chrome at 50+ (0/1), 110 e by shift 32
+- the Badges' contract missed (clear raiders): the chain breaks, reputation +0
+- the Corpo remnants' link 1/3 done: 110 e
 
-In hand at the end: none.
+In hand at the end: Corpo remnants 2/3: deliver 2 Rare chrome at 50+ (1/2), 171 e by shift 32.
 
 ## Trading against feeding
 
 | | the nearer grate reached | shifts with no market | eddies at the end | sold | Chrome fed to the Heart |
 | --- | --- | --- | --- | --- | --- |
-| trading | not in 30 shifts | 0 | 204 | 348 | 0 |
-| feeding | shift 14 | 0 | 1074 | 203 | 211 |
+| trading | shift 14 | 0 | 1093 | 204 | 140 |
+| feeding | shift 19 | 0 | 1260 | 175 | 169 |
 
 ## Services
 
-Trading: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 4, hire 0 (0 hired).
+Trading: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 0, hire 0 (0 hired).
 
 Feeding: protection 0 (held off 0 Patrols), intel 0, timings 0, convoy 0, hire 0 (0 hired).
 

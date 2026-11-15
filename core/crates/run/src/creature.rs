@@ -218,11 +218,14 @@ pub struct ShiftRules {
     pub beyond_chunks: u32,
     pub overtime_every_s: f32,
     pub patrol_from_stratum: u8,
+    /// seconds a Runner off the Mat goes without trouble before the drain stirs (0: never)
+    #[serde(default)]
+    pub stir_s: f32,
 }
 
 impl Default for ShiftRules {
     fn default() -> Self {
-        ShiftRules { base_s: 480.0, per_chunk_s: 70.0, beyond_chunks: 8, overtime_every_s: 60.0, patrol_from_stratum: 2 }
+        ShiftRules { base_s: 480.0, per_chunk_s: 70.0, beyond_chunks: 8, overtime_every_s: 60.0, patrol_from_stratum: 2, stir_s: 0.0 }
     }
 }
 

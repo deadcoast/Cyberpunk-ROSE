@@ -141,7 +141,7 @@ pub enum Project {
 }
 
 /// What a finished project did.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Done {
     Node(String),
     /// branch, tier opened

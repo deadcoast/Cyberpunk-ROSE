@@ -582,7 +582,8 @@ mod tests {
             assert!((c - c_expect).abs() < 0.002, "p {p}: C {c} vs Dota's {c_expect}");
             assert!((prd_expected(c) - p).abs() < 0.002);
         }
-        assert_eq!(t.prd_c("locker", 1), 0.0, "no notables at tier 1");
+        // S1-S2's rare Rare (Full Design v3.24): a notable at tier 1, far rarer than at tier 3
+        assert!(t.prd_c("locker", 1) > 0.0 && t.prd_c("locker", 1) < t.prd_c("locker", 3) / 3.0, "the S1 locker's notable");
         assert!(t.prd_c("locker", 3) > 0.0 && t.prd_c("locker", 3) < 0.12);
         assert_eq!(t.prd_c("scout_drop", 2), 1.0);
     }
@@ -609,7 +610,7 @@ mod tests {
     }
 
     #[test]
-    fn s1_and_s2_lockers_top_out_at_uncommon_and_tiers_climb() {
+    fn s1_and_s2_lockers_hold_a_rare_rare_and_tiers_climb() {
         let (_, t, table) = setup(1, 1);
         let mut by_stratum: Vec<(f32, [u32; 5])> = Vec::new();
         for stratum in 1..=6u8 {
@@ -637,9 +638,14 @@ mod tests {
             }
             by_stratum.push((total_value as f32 / opens as f32, tiers));
         }
-        // S1 and S2 lockers: common and uncommon only
-        assert_eq!(by_stratum[0].1[2] + by_stratum[0].1[3] + by_stratum[0].1[4], 0, "S1 {:?}", by_stratum[0].1);
-        assert_eq!(by_stratum[1].1[2] + by_stratum[1].1[3] + by_stratum[1].1[4], 0, "S2 {:?}", by_stratum[1].1);
+        // S1 and S2 lockers: common and uncommon but for a rare Rare (Full Design v3.24), no Blackline or Relic, and the
+        // Rare under a tenth of what S3's lockers roll
+        for k in [0, 1] {
+            let b = &by_stratum[k].1;
+            assert_eq!(b[3] + b[4], 0, "S{} {:?}", k + 1, b);
+            let n: u32 = b.iter().sum();
+            assert!((b[2] as f32) < 0.1 * n as f32, "S{} {:?}", k + 1, b);
+        }
         assert!(by_stratum[2].1[2] > 0, "S3 lockers never rolled a Rare");
         // value per container, all sources, roughly doubles each stratum (design): between x1.4 and x3.2 per step
         let means: Vec<f32> = by_stratum.iter().map(|b| b.0).collect();

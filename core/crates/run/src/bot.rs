@@ -18,6 +18,8 @@ use mat::sim::sub;
 
 pub const FIGHT_HP: f32 = 0.40;
 pub const EXTRACT_HP: f32 = 0.30;
+/// Bleeding and out of antiseptic, the bot heads home below this share of its body.
+pub const BLEED_HOME_HP: f32 = 0.6;
 pub const EXTRACT_FREE_CELLS: usize = 3;
 pub const EXTRACT_SHIFT_LEFT_S: f32 = 90.0;
 /// a run the bot cannot finish in this many ticks is cut off (a stuck bot is a bug, not a result)
@@ -205,7 +207,9 @@ impl Bot {
 
         // ---- time to go home?
         let shift_left = s.shift_ticks.saturating_sub(s.tick) as f32 / TICK_HZ as f32;
-        if s.runner.rig.backpack.free_cells() < EXTRACT_FREE_CELLS || shift_left < EXTRACT_SHIFT_LEFT_S || hp < EXTRACT_HP || s.tick > MAX_TICKS / 2 {
+        // bleeding with nothing to stop it: home before the bleed takes the body (a cautious Runner's call)
+        let bleeding_out = s.runner.statuses.iter().any(|st| st.kind == crate::runner::StatusKind::Bleeding) && s.runner.has_quick(&s.table, "org_antiseptic").is_none() && hp < BLEED_HOME_HP;
+        if s.runner.rig.backpack.free_cells() < EXTRACT_FREE_CELLS || shift_left < EXTRACT_SHIFT_LEFT_S || hp < EXTRACT_HP || bleeding_out || s.tick > MAX_TICKS / 2 {
             self.going_home = true;
         }
         if self.going_home {

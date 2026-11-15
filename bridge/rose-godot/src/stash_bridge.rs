@@ -772,19 +772,16 @@ impl RoseStash {
         PackedByteArray::from(postcard::to_allocvec(&rig).unwrap_or_default().as_slice())
     }
 
-    /// Serialise through the save crate and back; returns true when the round trip reproduces the Stash.
+    /// The World through a save file and back (Full Design: Saves); true when the restored World holds this Stash,
+    /// its ledger and the Bench's queue as they are.
     #[func]
     fn save_round_trip(&mut self) -> bool {
-        let Some(mut sim) = self.sim.clone() else { return false };
-        let mut g = sim.bind_mut();
-        let Some(w) = g.world.as_mut() else { return false };
-        let mut file = save::SaveFile::new(1, 1);
-        file.stash = (&w.stash).clone();
-        file.ledger = w.ledger.clone();
-        file.bench = w.bench.clone();
-        let bytes = file.encode();
-        match save::SaveFile::decode(&bytes) {
-            Ok(back) => back.stash == file.stash && back.ledger == file.ledger && back.bench == file.bench,
+        let Some(sim) = self.sim.clone() else { return false };
+        let g = sim.bind();
+        let Some(w) = g.world.as_ref() else { return false };
+        let bytes = w.save_file(Vec::new(), 0, 0).encode();
+        match save::SaveFile::decode(&bytes).map_err(|e| e.to_string()).and_then(|f| game::World::restore(&f.world, crate::data().items.clone())) {
+            Ok(back) => back.stash == w.stash && back.ledger == w.ledger && back.bench == w.bench,
             Err(_) => false,
         }
     }

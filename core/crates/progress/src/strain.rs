@@ -106,7 +106,7 @@ impl StrainFile {
 }
 
 /// What the shift did to the strain, for the Strainbook (Full Design v3.18).
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct StrainShift {
     /// organ kinds grown this shift
     pub grown: Vec<u8>,

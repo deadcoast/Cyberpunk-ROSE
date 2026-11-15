@@ -1,0 +1,52 @@
+# The economy's knobs (Full Design v3.24, Balance; Phase G, PAC-104). Every number here is read at run time through
+# game::data, so `rose --data DIR` plays a proof on an edited copy without a rebuild. The structures' Parts costs and
+# beds are data/structures.toml's; the run's loot is data/loot.toml's. Each knob keeps the reasons its value was
+# chosen, as the code kept them before it moved here.
+
+[recruitment]
+# The flush (Full Design v3.21, Recruitment): a batch of 1–6 every 9–15 work cycles (minutes of the city's clock:
+# Pass 1's three to five days of one-minute shifts); a newcomer not sheltered within ten cycles goes feral. A batch at
+# a grate is flush_size newcomers for each stratum of the grate (Full Design v3.19, Newcomers by stratum).
+flush_size = [1, 6]
+flush_every = [9, 15]
+# the census (Full Design v3.18, Research: Flesh tier 4), in work cycles
+census_every = [6, 10]
+# The batches a flush brings, by the city's tier (Hamlet, Quarter, City, Empire; Full Design v3.21, this design's): a
+# city's draw grows with its tier, not with every grate it touches — at a clock a grate, forty reached grates sent
+# four thousand bodies an hour and nineteen in twenty went feral; at 2 / 4 / 6 / 8 grates the Hamlet drew 9–28 an
+# hour from its one grate and the Quarter came two hours late.
+flush_grates = [3, 5, 7, 8]
+# Sleepers a batch brings past the city's free beds (Full Design v3.21, Recruitment; this design's): the drain sends
+# the beds' worth and a body a batch more, so an unhoused newcomer is a nudge to build and not a flood — at the tier's
+# batches alone a City's Bunkhouses filled and nineteen in twenty of four hundred an hour went feral.
+flush_over = 1
+
+[food]
+# The share of each tile's surplus a shift's meals may take (Full Design v3.21, Homes, meals; this design's: eaten to
+# the reserve line, two thousand sleepers held a Mat burned back by a Cleansing at 3,400 cells for 150 shifts).
+larder_share = 0.5
+# A meal from the Mat: the signalled tissue at and about the home must hold it between them, and it is taken from
+# them, the richest tile first (v3.12: `rose city` measured the tissue round a fed Heart at 0.13–0.19, so the 0.2
+# floor this replaced starved a fed city onto paste; PAC-045: four sleepers drawing on one anchor tile starved two of
+# them while the tiles about it held their meals). 0.03 since v3.24: at 0.05 the steward's Hamlet sat at 56-92 sleepers
+# for nine shifts with one in five on paste and its ledger at nothing, and the World-Eater script's City of 1,600 ate
+# its 24,000 eddies in paste in thirty shifts and stood short of the Empire for sixty.
+meal_takes = 0.03
+# eddies a meal of paste costs when the larder is short
+paste_eddies = 2
+
+[mat]
+# The share of a feed that rides to the frontier as it lands; the rest is the Pit's stock and feeds the tissue round
+# it (with half of the Pit's standing stock riding every step, the Mat outgrew its food: a world_eater city of five
+# thousand cells starved its climb in the Service Tunnels and never left them).
+translocate_share = 0.75
+# The strand ends a Pit's surplus reaches in one Mat step at Conductance 0.5 (translocation; this design's).
+translocate_ends = 24
+
+[economy]
+# A faction's stall stocks a day's units at its first street the Mat reaches, and this share of them again at each
+# further one (Full Design v3.24, Economy: the streets; this design's): a market at a grate trades with that street's
+# faction alone, so a city reaching six of the Gangs' streets meets six stalls. Before, one day's stock a faction
+# whatever it reached: the Garden script's City bought every Part on offer from shift 69 on (none left at any stall)
+# while 20,000 eddies sat unspent and the beds waited on Parts.
+street_stock = 1.0

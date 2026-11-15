@@ -153,6 +153,11 @@ per_chunk_s = 70
 beyond_chunks = 8
 overtime_every_s = 60
 patrol_from_stratum = 2
+# the drain stirs (Full Design v3.24, Threats): a Runner off the Mat at three fifths of their body or more who has met no
+# trouble for this many seconds brings a crawler out of the burrow nearest them (0: never). The cadence budget asks a
+# loss at least every two minutes off the Mat, a third of that at the bot's pace; without it the bot's longest quiet
+# was 46-70 s in S1 and 49-62 s in S3. Whole packs at 25-35 s killed the bot on 60-80 % of its runs.
+stir_s = 40
 
 [awareness]
 suspicious = 0.4

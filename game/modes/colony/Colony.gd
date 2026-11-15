@@ -34,6 +34,14 @@ var ivan_frame: Panel
 var ivan_portrait: AssetSlot
 var bark_label: Label
 var hint_label: Label
+## The moment that lands (Full Design v3.24, Feel): the city's newest landing or loss, slammed in under the chapter's
+## line with a sound, standing four seconds; Ivan's line and the chapter's slam when they change.
+var reward_frame: Panel
+var reward_label: Label
+var _reward_until := 0.0
+var _bark_was := ""
+var _chapter_was := ""
+const REWARD_MS := 4000.0
 var tool := ""             # "" selects; "build" places Sim.build_tool; "bait", "salt", "sever", "zone"
 var tool_buttons := {}
 var rotated := false
@@ -97,7 +105,22 @@ func _ready() -> void:
 	world.set_overlay(Sim.overlay)
 	set_view(view_index)
 	Sim.ticked.connect(_on_tick)
+	Sim.city_event.connect(_on_city_event)
+	# what stands as the screen opens is not news: only a change slams
+	_bark_was = String(Sim.ensure().bark())
+	_chapter_was = String(Sim.ensure().campaign().get("card", ""))
+	bark_label.text = _bark_was
+	chapter_label.text = _chapter_was
 	_on_tick()
+
+## A landing or a loss: its line slams in and lights its frame (the sound is the Sim's, Audio's slot).
+func _on_city_event(e: Dictionary) -> void:
+	var k := String(e["class"])
+	if k == "decision":
+		return
+	reward_frame.visible = true
+	slam(reward_label, String(e.what).left(96), UiTheme.OOZE_GLOW if k == "landing" else UiTheme.HOT_PINK, reward_frame)
+	_reward_until = float(Sim.anim_msec()) + REWARD_MS
 
 func _exit_tree() -> void:
 	if cam != null:
@@ -173,6 +196,9 @@ func _build_content(c: Control) -> void:
 	bark_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	bark_label.size = Vector2(154, 46)
 	bark_label.max_lines_visible = 5
+	reward_frame = make_frame(c, Vector2(0, 42), Vector2(430, 14))
+	reward_label = make_label(reward_frame, "", Vector2(4, 4), UiTheme.OOZE_GLOW)
+	reward_frame.visible = false
 	var hint := make_frame(c, Vector2(0, 272), Vector2(432, 15))
 	hint_label = make_label(hint, "", Vector2(4, 4), UiTheme.DUST)
 	var bar := make_frame(c, Vector2(0, 288), Vector2(432, 18))
@@ -300,8 +326,16 @@ func _refresh_lines(sim: RoseSim) -> void:
 	city_label.text = "%s of %d   %d built  %d ghost%s  %d cut%s   beds %d/%d   %d district%s   AUTHORITY %d%s" % [
 		String(sim.city_tier_name(pop)).to_upper(), pop, built, ghosts, "" if ghosts == 1 else "s", cuts, "" if cuts == 1 else "s",
 		beds[1], beds[0], ds.size(), "" if ds.size() == 1 else "s", int(sim.authority()), food]
-	# Ivan's line, his portrait by his Authority state
-	bark_label.text = String(sim.bark())
+	# Ivan's line, his portrait by his Authority state; a new line slams in
+	var bark := String(sim.bark())
+	if bark != _bark_was:
+		_bark_was = bark
+		if bark != "":
+			slam(bark_label, bark, UiTheme.CHALK, ivan_frame)
+		else:
+			bark_label.text = ""
+	if reward_frame.visible and float(Sim.anim_msec()) > _reward_until:
+		reward_frame.visible = false
 	var v: Dictionary = sim.ivan()
 	if not v.is_empty():
 		var st := "a%d" % clampi(int(v.state), 1, 4)
@@ -310,7 +344,10 @@ func _refresh_lines(sim: RoseSim) -> void:
 			ivan_portrait.refresh()
 		ivan_portrait.modulate = Color(0.35, 0.35, 0.4) if bool(v.fell) else Color.WHITE
 	var camp: Dictionary = sim.campaign()
-	chapter_label.text = String(camp.get("card", ""))
+	var card := String(camp.get("card", ""))
+	if card != _chapter_was:
+		_chapter_was = card
+		slam(chapter_label, card, UiTheme.OOZE_GLOW, chapter_frame)
 	var waiting := String(camp.get("accord", "")) == "waiting"
 	for b in accord_buttons:
 		b.visible = waiting

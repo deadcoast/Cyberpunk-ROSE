@@ -12,7 +12,7 @@ pub fn tile_cost(sig: f32) -> u32 {
     10 + (20.0 * (1.0 - sig.clamp(0.0, 1.0))).round() as u32
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Field {
     /// weighted distance to the target in tenths of a tile; UNREACHED off the Mat or cut off
     pub dist: Vec<u32>,

@@ -108,6 +108,9 @@ pub enum Event {
     Dropped { source: usize, id: String },
     /// a minute of overtime passed: what the sewer sent (packs, patrols)
     Overtime { minute: u32, packs: u32, patrols: u32 },
+    /// the drain stirs: a crawler out of the burrow nearest a Runner who has met no trouble for `stir_s` (Full Design
+    /// v3.24, Threats: pressure never lapses)
+    Stirred { n: u32, x: u16, y: u16 },
     /// a raider gang came down its drain
     Raiders { gang: u8, n: u8, x: i32, y: i32 },
     /// a raider emptied a source
@@ -124,7 +127,7 @@ pub enum RunResult {
 
 /// A dead Runner's body as the sim records it; the save keeps it (save::CorpseRecord) and the next run of the
 /// route places it.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Corpse {
     pub x: u16,
     pub y: u16,
@@ -184,6 +187,9 @@ pub struct Outcome {
     pub injuries: Vec<&'static str>,
 }
 
+/// The share of their body a Runner holds for the drain to stir (the stir, `RunSim::stir`).
+pub const STIR_HEALTH: f32 = 0.6;
+
 #[derive(Clone, Debug)]
 pub struct RunSim {
     pub map: RouteMap,
@@ -205,6 +211,8 @@ pub struct RunSim {
     pub shift_ticks: u64,
     /// overtime minutes already answered
     overtime_minutes: u32,
+    /// the tick of the last trouble the Runner met (a hit, a bleed, raiders, the water, overtime, a stir)
+    last_trouble: u64,
     next_creature_id: u32,
     pub events: Vec<Event>,
     pub result: Option<RunResult>,
@@ -350,6 +358,7 @@ impl RunSim {
             follower_strikes: 0,
             shift_ticks,
             overtime_minutes: 0,
+            last_trouble: 0,
             next_creature_id,
             events: Vec::new(),
             result: None,
@@ -547,6 +556,34 @@ impl RunSim {
         }
         self.creatures.extend(spawned);
         self.events.push(Event::Overtime { minute, packs, patrols });
+    }
+
+    /// The drain stirs (Full Design v3.24, Threats; this design's): a Runner off the Mat who has met no trouble for
+    /// the shift rules' `stir_s` brings a crawler out of the burrow nearest them. The cadence budget asks a loss at least
+    /// every two minutes off the Mat (a third of that at the bot's pace); routes with no patrol in S1 and quiet S3
+    /// chunks left the bot's longest quiet at 46 s and 62 s (median) against its 40.
+    fn stir(&mut self) {
+        let stir = creature::ticks(self.defs.shift.stir_s) as u64;
+        if stir == 0 || self.overtime_ticks() > 0 || !self.runner.is_up() || self.tick.saturating_sub(self.last_trouble) < stir {
+            return;
+        }
+        let (rx, ry) = self.runner.tile();
+        // the quiet a hurt Runner has is earned: the drain stirs for one at three fifths of their body or more
+        let hp: i32 = self.runner.sections.iter().sum();
+        let max: i32 = self.runner.max_sections.iter().sum();
+        if self.on_mat_tile(rx, ry) || (hp as f32) < STIR_HEALTH * max as f32 {
+            return;
+        }
+        let near = self.map.spawns.iter().filter(|s| s.kind == crate::map::SpawnKind::Sewerat).min_by_key(|s| ((s.x as i32 - rx).abs() + (s.y as i32 - ry).abs(), s.x, s.y)).copied();
+        self.last_trouble = self.tick;
+        let Some(s) = near else { return };
+        // one crawler comes, the drain's least: a stir is a nudge, not an ambush (whole packs every 25-35 s killed the
+        // bot on 60-80 % of its runs, one of a pack on 38-55 % in S1)
+        let def = &self.defs.creature["crawler"];
+        let c = Creature::new(self.next_creature_id, Kind::Crawler, def, (s.x as i32, s.y as i32), s.chunk);
+        self.next_creature_id += 1;
+        self.creatures.push(c);
+        self.events.push(Event::Stirred { n: 1, x: s.x, y: s.y });
     }
 
     /// Raider gangs whose moment has come down their drain.
@@ -813,6 +850,7 @@ impl RunSim {
         self.raiders_loot();
         self.followers_act(&rules);
         self.overtime();
+        self.stir();
         self.flood_step();
         self.drown(&rules);
         // ---- life
@@ -824,7 +862,10 @@ impl RunSim {
         if self.runner.is_up() {
             self.open_source = self.source_here().filter(|&i| self.loot.sources[i].state == SourceState::Open);
         }
-        // ---- the cadence log takes this tick's events
+        // ---- the cadence log takes this tick's events; trouble resets the drain's patience
+        if self.events[events_before..].iter().any(|e| matches!(e, Event::RunnerHit { .. } | Event::Bleed { .. } | Event::Raiders { .. } | Event::Raided { .. } | Event::WaterRose { .. } | Event::Overtime { .. } | Event::Stirred { .. })) {
+            self.last_trouble = self.tick;
+        }
         if self.events.len() > events_before {
             let tick = self.tick;
             let names: Vec<String> = self.loot.sources.iter().map(|s| format!("{} t{}", s.kind.table(), s.tier)).collect();

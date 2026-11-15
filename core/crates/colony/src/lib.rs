@@ -36,15 +36,6 @@ pub const PETITION_AFTER: u8 = 2;
 /// names come a tenth of a shift's each work cycle, a player's shift being about ten minutes.
 pub const MINUTES_A_SHIFT: f32 = 10.0;
 /// Nutrient a cell needs for a meal, and what the meal takes.
-/// A meal from the Mat: the signalled tissue at and about the home must hold it between them, and it is taken from
-/// them, the richest tile first (v3.12: `rose city` measured the tissue round a fed Heart at 0.13–0.19, so the 0.2
-/// floor this replaced starved a fed city onto paste; PAC-045: four sleepers drawing on one anchor tile starved two of
-/// them while the tiles about it held their meals).
-pub const MEAL_TAKES: f32 = 0.05;
-/// The share of each tile's surplus a shift's meals may take (Full Design v3.21, Homes, meals; this design's: eaten to
-/// the reserve line, two thousand sleepers held a Mat burned back by a Cleansing at 3,400 cells for 150 shifts).
-pub const LARDER_SHARE: f32 = 0.5;
-pub const PASTE_EDDIES: u32 = 2;
 /// City tiers by population: Hamlet, Quarter, City, Empire.
 pub const CITY_TIERS: [usize; 4] = [20, 100, 500, 2000];
 pub const CITY_TIER_NAMES: [&str; 4] = ["Hamlet", "Quarter", "City", "Empire"];
@@ -485,7 +476,7 @@ pub const NERVE_RULES: usize = 4;
 pub const NERVE_REACH: i32 = 12;
 
 /// What the Nerve rules hold this beat, read by the threats, the cargo and the light (set by the game every 20 ticks).
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct NerveState {
     pub shut: HashSet<u32>,
     pub open: HashSet<u32>,
@@ -698,7 +689,7 @@ impl std::fmt::Display for PlaceError {
 }
 
 /// One shift's work and its consequences, for the bridge to apply to the Stash and the roster to read.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ShiftOutcome {
     /// (slimo, job, structure) this shift
     pub assignments: Vec<(u32, Job, u32)>,
@@ -792,7 +783,7 @@ pub struct Colony {
     #[serde(default)]
     pub nerves: Vec<(u32, Vec<NerveRule>)>,
     /// what the rules hold now
-    #[serde(skip)]
+    #[serde(default)]
     pub nerve: NerveState,
     /// the routes on a loop, and the runs come home from each stratum's route (Full Design v3.18, Route loops)
     #[serde(default)]
@@ -805,18 +796,18 @@ pub struct Colony {
     #[serde(default)]
     pub proposal_confirmed: bool,
     /// structures a Nerve rule dims, and Lume Bulbs dark by their rule or a Nerve rule (tiles), set by the game
-    #[serde(skip)]
+    #[serde(default)]
     pub dimmed: HashSet<u32>,
-    #[serde(skip)]
+    #[serde(default)]
     pub dark_bulbs: HashSet<u32>,
     /// what the shift's feeds did to the genome, gathered for the Strainbook at the shift's end
-    #[serde(skip)]
+    #[serde(default)]
     pub strain_shift: progress::StrainShift,
     /// cord distance from the Heart per tile, refreshed each shift
-    #[serde(skip)]
+    #[serde(default)]
     pub heart_dist: Vec<u32>,
     /// each slimo's wave distance this shift (its hub, its bed or the Heart)
-    #[serde(skip)]
+    #[serde(default)]
     pub wave: HashMap<u32, u32>,
 }
 
@@ -2372,7 +2363,8 @@ impl Colony {
         larder.sort_by(|a, b| mat.n[*b].total_cmp(&mat.n[*a]).then(a.cmp(b)));
         // a shift's meals take at most LARDER_SHARE of each tile's surplus: the rest rides on to the frontier, so a
         // city however big eats beside the Mat's growth and never flattens the gradient its trunk carries food up
-        let mut left_at: Vec<f32> = larder.iter().map(|&j| LARDER_SHARE * (mat.n[j] - line)).collect();
+        let food = &balance::get().food;
+        let mut left_at: Vec<f32> = larder.iter().map(|&j| food.larder_share * (mat.n[j] - line)).collect();
         let mut stock: f32 = left_at.iter().sum();
         let mut next = 0usize;
         for r in &roster.records {
@@ -2397,7 +2389,7 @@ impl Colony {
             let wd = self.wave_dist(defs, mat, r.id);
             let rationed = self.charter.flag_at("meal_draw_half", wd);
             // a meal: the Mat's nutrient at the home, else paste; Rationing halves the draw
-            let (takes, paste) = if rationed { (MEAL_TAKES * 0.5, PASTE_EDDIES / 2) } else { (MEAL_TAKES, PASTE_EDDIES) };
+            let (takes, paste) = if rationed { (balance::get().food.meal_takes * 0.5, balance::get().food.paste_eddies / 2) } else { (balance::get().food.meal_takes, balance::get().food.paste_eddies) };
             let mut fed = false;
             if signalled && stock >= takes {
                 let mut left = takes;
@@ -2818,7 +2810,7 @@ mod tests {
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
         assert!(o.contexts[&who].fed);
         let drew = before - table_sum(&mat, &tb);
-        assert!(drew >= MEAL_TAKES * 0.5 - 1e-5, "draw {drew}");
+        assert!(drew >= balance::get().food.meal_takes * 0.5 - 1e-5, "draw {drew}");
         assert!(o.contexts[&who].extra_target <= -5);
         assert!(o.laws_arrived.iter().any(|(l, _)| l == "rationing"));
         // paste costs 1 e
@@ -2834,8 +2826,8 @@ mod tests {
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 100, &mut |_| true);
         // the larder is that one table now: every sleeper on the network eats from it, each a whole meal again
         let drew = before - table_sum(&mat, &tb);
-        let meals = (drew / MEAL_TAKES).round();
-        assert!(meals >= 1.0 && (drew - meals * MEAL_TAKES).abs() < 1e-4, "draw {drew}");
+        let meals = (drew / balance::get().food.meal_takes).round();
+        assert!(meals >= 1.0 && (drew - meals * balance::get().food.meal_takes).abs() < 1e-4, "draw {drew}");
         assert!(o.contexts[&who].fed && o.contexts[&who].extra_target > -5);
     }
 
@@ -3096,14 +3088,14 @@ mod tests {
         mat.n[far] = 0.5;
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |_| true);
         assert!(o.contexts[&who].fed, "fed from tissue far from the home");
-        assert!(0.5 - mat.n[far] >= MEAL_TAKES - 1e-5, "the far tile paid the meal");
+        assert!(0.5 - mat.n[far] >= balance::get().food.meal_takes - 1e-5, "the far tile paid the meal");
         // the home's own tissue, else paste from the ledger
         empty_larder(&mut mat);
         let tb = set_table(&mut mat, x as usize, y as usize, 0.5);
         let before = table_sum(&mat, &tb);
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |_| true);
         assert!(o.contexts[&who].fed);
-        assert!(before - table_sum(&mat, &tb) >= MEAL_TAKES - 1e-5);
+        assert!(before - table_sum(&mat, &tb) >= balance::get().food.meal_takes - 1e-5);
         empty_larder(&mut mat);
         set_table(&mut mat, x as usize, y as usize, 0.0);
         let o = c.end_shift(&defs, &mut mat, &r, &t, 0, 0, &mut |_| true);

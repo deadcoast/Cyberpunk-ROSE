@@ -183,3 +183,211 @@ clock does; `shots.gd` adds what its Stash and Bench shots queue, as a haul brin
 
 **Not checked**: the steward's World-Eater script (OVR-017, the campaign proof still FAILS as in part 1); every verb
 through `World::apply` (OVR-012); frame time.
+
+## PAC-101 (part 3) — the campaign proof on the game's shift; PAC-101 closed (2026-11-15)
+
+**The World-Eater script** (OVR-017): traced with `rose campaign --aim world_eater`. The ending reads the genes and the
+ally's reputation past the alliance's own step (Garden +0.05 a step, World-Eater −0.05). The script signed the alliance
+with the Gangs at +1, and then bought the Gangs' protection every shift a Patrol was due at one of their grates: the
+Gangs' lever is protection bought, two favour a day, and ten days of it carried them to +2. At +2 the Garden scored
+(0.97 + 0.94) / 2 + 0.05 = 1.005 against the World-Eater's 1.00 − 0.05, and the Great Cleansing's "the ally's 4
+militia" in the log is the +2 (two a step). The fix is the steward's: for an ending the ally's steps cost (the
+World-Eater's) it buys no service from the ally once it is signed (`Steward::shun`). The World-Eater script then ends
+World-Eater (114 shifts, warchest 50,061, Lume 0.94 and Thrift 0.93); the ending's score is the design's and is
+unchanged.
+
+**The full proof**: `rose campaign` PASS, every script its own ending (1,397 s on two cores):
+
+| script | ending | shifts | Hamlet | Quarter | City | Empire | the end |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Garden | Garden | 146 | 0.6 h | 6.1 h | 10.4 h | 19.8 h | 20.8 h |
+| Hive | Hive | 134 | 0.6 h | 4.5 h | 7.8 h | 18.1 h | 19.1 h |
+| World-Eater | World-Eater | 114 | 0.6 h | 6.1 h | 9.8 h | 15.4 h | 16.3 h |
+| Accord | Accord | 159 | 0.6 h | 5.3 h | 9.7 h | 21.1 h | 22.2 h |
+| Scattered | Scattered | 11 | 0.6 h | — | — | — | 1.7 h |
+
+This table is PAC-105's starting point on the game's shift (the hours are the bot's run seconds times 3).
+
+**OVR-012 re-scoped, not built**: every verb through `World::apply(Input)` was planned so that S2's save could be the
+seed and an input log. The save is the World's snapshot instead (PAC-102 below: loading a late city takes under a
+tenth of a second; replaying nine of its shifts would take about 30 s), so nothing in S2 imports `World::apply`. The
+row moves to S10 Code health as a code-shape step. PAC-101's DoD (RoseSim holds the World, no orchestration and no
+unwrapped Option state in the bridge, the crowd's depth packed) was met in part 2; with the proof passing, the row closes.
+
+## PAC-102 — saves on disk (2026-11-15)
+
+**The World serialises** (OVR-020): serde on the Mat (`MatSim`, its genome, params, organs, the RNG), the logistics
+`City` with its cargo fields and walk fields, the threats with their caches (only the rules, which are data, are taken
+from the build on restore), the colony's per-shift working state (Nerve state, dimmed structures, dark bulbs, the
+strain's shift, the Heart's distances, the wave: before this they were skipped, and a city restored at shift 60 parted
+from the saved one in its roster within a shift), the log, the posts, the plan, the laid bodies and the sales.
+`World::snapshot()` is postcard then deflate; `World::restore(bytes, table)` takes the data files from `game::data`.
+
+- `cargo test`: `a_restored_world_steps_as_the_world_it_was_taken_from` — restored at the founding, 301 ticks into a
+  shift, and after the city proof's 10 shifts, each plays on (3 and 2 played shifts) to the same digest by part, the
+  same threats, surface, campaign, tick, nutrient and signal.
+- `rose save-check` (new): one process plays the Garden script to shift N, writes the save and the digests of three
+  played shifts after it (by part, and the threats, surface, campaign and routes by their printed state), and checks a
+  restore in the same process; a second process loads the file and plays the same shifts:
+
+| at shift | slimos | Mat cells joined | save | written in | loaded in | same process | fresh process |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 10 | 26 | 614 | 704,681 bytes | 13 ms | 17 ms | the same digests | PASS, 4 digests |
+| 60 | 360 | 10,227 | 4,755,196 bytes | 81 ms | 63 ms | the same digests | PASS, 4 digests |
+| 110 | 1,562 | 12,737 | 9,157,918 bytes | 152 ms | — | the same digests | PASS, 4 digests |
+
+**The campaign's state moves into the World** (OVR-021): the Board's routes — runs, fog memory, the bodies on them
+(ours and recover contracts', which the World now lays itself at the shift's end and on taking an offer) and the
+stranded — are `game::routes::RouteBook` in the World. `Sim.gd` reads them through `RoseSim` (`route_runs`,
+`route_memory`, `bodies_on`, `stranded_on` and their writers); its own dictionaries are gone. The day is the World's
+(`RoseSim.day()`). What stays in `Sim.gd` and rides in the save's view block: the camera, bookmarks, overlay, the
+alerts shown, the focused slimo, the last run's card and haul, New Run's choices.
+
+**The file** (OVR-022): save v18 is a header (seed, strain code, difficulty, created and saved times, the shift, the
+tick, a label "shift 61 · Quarter · 360 slimos") and the World's snapshot and the view block. Written to `.tmp` and
+renamed; a file that does not decode is renamed `.bad`. The three old save-crate tests became three on the new file
+(a round trip and an older version refused; a flipped byte and foreign bytes refused; a newer version refused).
+
+**The shell** (OVR-023): an autosave at every shift's end and as a run leaves the Board, before the rig is packed;
+three slots on Settings (SAVE and LOAD), the autosave LOAD-only; CONTINUE on the menu loads the newest save that reads
+when the session holds no city (the menu line names it and its time); Settings prints the city's seed and strain code
+(`RoseSim.strain_code`), the last save, and each slot's label. The fixed "seed 11 … save: autosave each shift" is gone.
+The tests keep their own save folders (`user://saves_test_<script>`), emptied as they start.
+
+**Quit and relaunch** (OVR-024): `game/tests/save.gd -- write` founds the city, plays three shifts (each ending in its
+autosave), writes slot 2, plays two more and quits; `-- read`, a fresh Godot process, finds the autosave newest, loads
+it in 12 ms and matches the fifth shift's digests, loads slot 2 and matches the third's (and its route runs, memory,
+body and view state), plays the two shifts and matches the fifth's again: PASS both. `run.sh` runs it in both tiers.
+
+**Not checked**: a save written by a build and loaded by a later one (any change to the World's fields refuses it: a
+development format, as the save crate's rule has it); the file's time on a slow disk.
+
+## PAC-106 — the run's early rewards and its quiet stretches (2026-11-15)
+
+**Notables in S1–S2** (OVR-070): Rare entered the loot rows at tier 3, so the first two strata rolled no notable (0.00 a
+run). A weight of 1–2 in 100 in rows 1–2 gave 0.00 and 0.15 a run: notable picks run on PRD, and PRD starts each run
+at the bottom of its ramp, so a small weight is nearly nothing over a run's thirty picks. Swept with `rose --data`
+(no rebuild): lockers 3/4/5 and crates 5/6/8 in S1 gave 0.20/0.35/0.55 a run. Shipped: S1 lockers 6, crates 8; S2
+lockers 4, crates 7 (in 100).
+
+**The quiet stretches** (OVR-071): the stretches the bot met no trouble in were S1's routes (no patrol, crawlers that
+stay at their burrows) and quiet S3 chunks. A rule, not a chunk edit: **the drain stirs** — a Runner off the Mat at
+three fifths of their body or more who has met no trouble for `stir_s` (40 s, `data/creatures.toml`) brings a crawler
+out of the burrow nearest them (`RunSim::stir`, an `Event::Stirred` the cadence log counts as a loss, as it counts
+raiders coming down). Tried and not kept: a whole pack at 25 s or 35 s (the bot died on 60–80 % of its runs), one of a
+pack at 30–38 s (38–55 % in S1). With one crawler the bot still died on 35–42 % in S1: the logs showed it bleeding out
+from a hit it had no antiseptic left for while it went on looting. The bot now heads home when it bleeds with no
+antiseptic below three fifths of its body (`run::bot`, `BLEED_HOME_HP`), a cautious Runner's call.
+
+`rose cadence --runs 20 --strata 1,2,3` on three ranges of route seeds:
+
+| seeds | stratum | deaths | notables / run | longest quiet (median) | blind e / min | verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1–20 | S1 | 30 % | 0.50 | 40 s | 10.8 | pull fast · loss ok · death ok |
+| 1–20 | S2 | 15 % | 0.65 | 40 s | 30.2 | pull fast · loss ok · death ok |
+| 1–20 | S3 | 20 % | 2.70 | 40 s | 28.5 | pull fast · loss ok · death ok |
+| 101–120 | S1 | 5 % | 0.65 | 40 s | 14.5 | pull fast · loss ok · death corridor |
+| 101–120 | S2 | 10 % | 0.75 | 40 s | 30.5 | pull fast · loss ok · death ok |
+| 101–120 | S3 | 20 % | 3.35 | 40 s | 41.6 | pull fast · loss ok · death ok |
+| 201–220 | S1 | 25 % | 0.45 | 40 s | 10.4 | pull fast · loss ok · death ok |
+| 201–220 | S2 | 35 % | 0.60 | 40 s | 31.1 | pull fast · loss ok · death wall |
+| 201–220 | S3 | 30 % | 3.05 | 40 s | 44.8 | pull fast · loss ok · death ok |
+
+Before (`telemetry/cadence.md` at 461b80c, seeds 1–20): notables 0.00 / 0.00 / 2.80, longest quiet 46 s / 8 s / 62 s,
+deaths 15 / 20 / 25 %, "loss lapses" in S1 and S3. Every stratum's quiet is now at the budget's 40 s, and notables are
+over the one-in-three in S1–S2 on every range. **Not met**: deaths left their 10–30 % band on two of the nine (S1 5 %
+on 101–120, S2 35 % on 201–220), so the DoD's "deaths still inside their bands" holds on seven of nine and the row stays
+in REVIEW; "pull fast" is the standing source-density finding (Expedition mode: the cadence budget), not this row's.
+
+## PAC-107 (part 1) — movers between ticks, kinetic labels, the sound channel (2026-11-15)
+
+**Movers between ticks** (OVR-080): `WorldView` keeps each slimo's and each packet's last step by id
+(`RoseSim.agent_ids`, `packet_ids`, the packet's shipment) and draws it between the tile it left and the tile it
+entered over its step's time on the picture's clock (`Sim.anim_ms`): a slimo over two ticks, a packet over one, in
+whole pixels, ooze-time slowing it with the clock; a jump of more than a tile lands at once. While anything glides the
+crowd and the cargo redraw each frame. The screenshots and the played session hold every stage and beat with it, and
+the Colony's shots changed (the movers stand where they glide to). **Not checked**: a shot at half a step, and frame
+time at a late city (PAC-103).
+
+**Kinetic labels** (OVR-081): `ScreenBase.slam(label, text, colour, frame)`: frame 0 at twice the size and scrambled
+in Hot Pink, frames 1 and 2 scrambled a pixel off (Hot Pink, then Cyan), frame 3 the text where it stood in its colour,
+a frame each 33 ms on the picture's clock, the panel behind lit for the four. Used where a moment lands: the Colony's
+new line for the city's newest landing or loss (shown four seconds under the chapter's card, hidden otherwise, so it
+takes no room at rest), Ivan's line and the chapter's card when they change (not when the screen opens), a pull's title
+on a run, the haul on the Stash. The smoke checks the slam's frames 0, 1 and 3. The screenshot scripts turn it off
+(`Sim.kinetic`): their city ticks every frame, so a line lands every frame, and a shot of a glitch frame showed
+scrambled text (seen and fixed: the first shots of this pass had Ivan's box in glitch glyphs).
+
+**The sound channel** (OVR-082): the `Audio` autoload makes Music, World, UI and Voice under Master; twelve slots,
+each a made file under `res://assets/sound/<id>.wav|.ogg` or a placeholder tone from its recipe (square, triangle or
+seeded noise, a hard envelope, 22 kHz 16-bit). The city's landings and losses play the reward's blip, the big one for a
+chapter, a trophy, a stratum or an ending, and the loss's fall, one a quarter second at most; a run's pull, notable,
+extraction, hit, raiders and stir play theirs. Settings sets each bus in steps of ten, kept in `user://settings.cfg`.
+The smoke: five buses, twelve slots each a stream (none made, all placeholders), a reward played, an unknown slot
+refused. The container has no sound device, so no sound was heard: Godot falls back to its dummy driver here.
+
+**Not done** (PAC-107 stays open): room for the world (OVR-083: the Colony at two thirds of the frame with a card open).
+
+## PAC-104 — balance as data; the campaign on three seeds (2026-11-15)
+
+**`data/balance.toml`** (OVR-050): the `balance` crate holds the economy's knobs and `game::data` loads the file as its
+eleventh, installing it before any reader asks (`balance::get()` in `mat`, `people`, `colony`, `economy`, `game`):
+recruitment (the flush's batch, its cadence, the census's, the tier's batches, the beds' draw), food (the larder's
+share, a meal's take, paste's price), the Mat (translocation's share and ends) and the economy (the per-street stock,
+PAC-105). Each value keeps the reasons the code kept beside it, as comments in the file. With the shipped values as
+the constants were, `rose city`'s report came out identical but for its log's path. The structures' Parts costs were
+already data. **Not moved**: the work cycle (`WORK_TICKS`, `SHIFT_TICKS` are compile-time constants used across the
+crates and the bridge). A value edited in a copy of `data/` moves a proof with `rose --data DIR` and no build: every
+loot, stir and meal sweep of PAC-105 and PAC-106 ran that way.
+
+**Three seeds** (OVR-052): `rose campaign --seeds 12,13` plays every script on each seed after `--seed` and writes the
+city's hours by script and seed and each script's range (`docs/03/telemetry/campaign_seeds.md`, 2,409 s on one core).
+Seed 11 alone stays the standing proof (`campaign.md`, PASS). The three-seed run FAILS the proof: on seed 12 the
+Garden script's Heart burned in chapter 3's Cleansing at shift 45 (the accord accepted, its flamers through the
+defences), and the Accord script ended in the Garden. Neither seed was played before this pass, so whether either was
+so before it is not known.
+
+## PAC-105 (part 1) — pacing: the late Parts, the single climb, chapter 6, the Hamlet's food (2026-11-15)
+
+Traced first (OVR-060), with prints in the steward that are removed again: its bed decisions shift by shift, Ivan's
+place and the factions' standing through chapter 6, and the Mat round the cut climb tile by tile.
+
+- **The late Parts** (OVR-062): from shift 69 the stalls in reach held no Parts at all while 20,000 eddies sat unspent.
+  A stall at every street: a faction's day of stock again for each further street of its in reach (`street_stock` 1.0).
+- **The single climb** (OVR-063): the cut stood at the Sump's crossing beside joined tissue at 0.96 nutrient; every
+  empty tile in the gap touched three strands, and the sprout's neighbour limit refused each. The climb mends: ground
+  between tissue the Heart reaches and the city's own tissue cut from it may be grown into whatever it touches. With
+  the per-street stock and no mend, the Garden script's climb stood cut from shift 60 to the end of 220; with the mend
+  it rejoined and the script ended at 113.
+- **A stage past its time** (OVR-065): the World-Eater script's Great Cleansing left its lamps among the Bloom's
+  tissue with no way back up their grates, and chapter 7 waited ninety shifts. A squad still on the map past its
+  stage's time and a leave's five minutes has gone by another way.
+- **Chapter 6** (OVR-066, the steward's): Ivan was ordered onto the tile under a grate, often no Mat above the Sump,
+  and refused; the Garden and Accord scripts waited 43–44 shifts for their alliance. Now to the Mat within his
+  Parley's reach: the Garden's alliance at shift 69, not 118.
+- **The Hamlet's food** (OVR-061): a meal takes 0.03 nutrient, not 0.05; the steward's Hamlet sat at 56–92 sleepers
+  for nine shifts with one in five on paste, and the World-Eater's City of 1,600 ate 24,000 eddies in paste.
+
+The runs between: Ivan's walk alone moved nothing past the Empire (the end waits on 2,000 sleepers); the per-street
+stock alone brought Hive, World-Eater and Accord to 13.8, 16.1 and 14.3 h and left the Garden's climb cut; with the
+mend Garden ended at 16.1 h and the World-Eater's Great Cleansing never left (OVR-065 found there).
+
+**The campaign at the end of this pass** (`rose campaign`, seed 11: PASS, every script its own ending; and seeds
+12–13):
+
+| script | seed 11: Quarter | seed 11: the end | Quarter, seeds 11–13 | the end, seeds 11–13 | inside 12–18 h |
+| --- | --- | --- | --- | --- | --- |
+| Garden | 5.5 h | 18.6 h | 3.8–5.5 h | 15.9–18.6 h (seed 12: Scattered at 6.4 h) | 1 of 3 |
+| Hive | 4.5 h | 14.6 h | 3.7–6.8 h | 14.6–20.7 h | 2 of 3 |
+| World-Eater | 6.9 h | 19.9 h | 6.1–8.7 h | 18.8–22.6 h | 0 of 3 |
+| Accord | 6.2 h | 15.0 h | 5.0–12.6 h | 15.0–20.9 h (seed 12: ended Garden) | 2 of 3 |
+
+Against the start of this pass (seed 11 on the game's shift: Garden 20.8 h, Hive 19.1 h, World-Eater 16.3 h, Accord
+22.2 h; the Quarter at 6.1 / 4.5 / 6.1 / 5.3 h): on seed 11 three of the four end inside 12–18 h or within an hour of
+it (Garden 18.6), the World-Eater runs 3.6 h longer (19.9), and the Hamlet comes at 1.0–1.4 h, not 0.6. **Not met**
+(the row stays open): every ending inside 12–18 h on three seeds (5 of 12); the Quarter at 4–5.5 h (3 of 12: early on seed 13, late on
+seed 12 and for the World-Eater on every seed); seed 12
+is slow from its first hour (the Hamlet at 2.7–3.2 h) and two of its scripts miss their endings. What is not yet
+traced: why seed 12's Hamlet comes three hours in, why the World-Eater's Empire comes last on every seed, and the
+Hamlet's 0.6 h to 1.0–1.4 h on seed 11 (the stir and the bot's bleeding-home rule change every run the city's Runner
+makes, and with it the haul the first beds are built from).

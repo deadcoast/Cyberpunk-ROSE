@@ -5,7 +5,7 @@
 use crate::sim::{hy, is_hyphal, sub, MatSim};
 
 /// Where an organ may grow (Full Design v3.18, the Organs table's Site column).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Site {
     /// any Node
     Any,
@@ -51,7 +51,7 @@ pub struct OrganDef {
 
 /// A grown organ: its kind (an index into the organ defs) and its tile. `rule` is the organ's edited rule (Organ
 /// rules): 0 is the default.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Organ {
     pub kind: u8,
     pub i: u32,
@@ -281,7 +281,7 @@ impl MatSim {
 }
 
 /// The organ kinds the Mat's own step reads, by their index in the defs.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Kinds {
     pub spur: Option<u8>,
     pub cyst: Option<u8>,

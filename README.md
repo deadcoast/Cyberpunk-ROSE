@@ -36,7 +36,8 @@ Where things come from
   (`game::data`): the game reads `data/` beside the project, `rose` reads `--data DIR`, and an edit moves the game and
   the proofs alike with no rebuild; a file that does not parse stops `rose` and fails the smoke. Barks, strings,
   chapters, strata, threats, tech and the strain file are data files compiled in.
-- One PCG32 stream per simulation; the save format is seed + inputs + snapshots and replays exactly (the game does not write saves yet: PAC-102).
+- One PCG32 stream per simulation; a save is the World's snapshot (an autosave every shift's end and at a run's departure, three slots on Settings, CONTINUE on the menu), and a restored World plays on to the same digests in a fresh process (`rose save-check`, `game/tests/save.gd`).
+- The economy's knobs are data (`data/balance.toml`, beside the loot, creatures and the rest): `rose --data DIR` plays any proof on an edited copy with no rebuild.
 
 Controls in the shell
 ---------------------
@@ -72,6 +73,6 @@ the stratum-to-stratum ratio.
 
 `rose cleansing --seed 11 --shifts 10` is Phase D's proof: the steward of `rose city` plays ten shifts, then a Cleansing comes down the first grate twice from the same state — as the city stands, and with two Sphincter Gates and a manned Scrap Turret on the squads' way — and it asserts the designed spread (the Heart falls undefended and stands defended with most of its Mat) and writes both logs to `docs/03/telemetry/cleansing.md`. The threats (`data/threats.toml`, the `threat` crate) run in `rose city` and the game alike: Attention per grate zone, the stage that comes down at a zone's line, the white light and bleach on the Mat, Blooms from cut-off strains, Flood shifts in the city and on runs, raiders on routes.
 
-`rose campaign --seed 11` is Phase E's proof (`data/chapters.toml`, the `story` crate, `game::campaign`, `game::proof`): five scripts play the campaign headless at the bot's pace, one for each ending — the steward of `rose city` running the shifts and a player on top that climbs the stack, raises the chapters' structures and defences, steers its gene pair with the Stash's Chrome and Ivan's feeds, answers the accord and signs the alliance — and it asserts each reaches its own ending; the report is `docs/03/telemetry/campaign.md` and every decision is in `out/campaign_<ending>_11.log` (about twenty-five minutes; `--aim` plays one script).
+`rose campaign --seed 11` is Phase E's proof (`data/chapters.toml`, the `story` crate, `game::campaign`, `game::proof`): five scripts play the campaign headless at the bot's pace, one for each ending — the steward of `rose city` running the shifts and a player on top that climbs the stack, raises the chapters' structures and defences, steers its gene pair with the Stash's Chrome and Ivan's feeds, answers the accord and signs the alliance — and it asserts each reaches its own ending; the report is `docs/03/telemetry/campaign.md` and every decision is in `out/campaign_<ending>_11.log` (about twenty-five minutes a seed; `--aim` plays one script; `--seeds 12,13` plays every script on more seeds and reports the city's hours and their range).
 
 `rose cadence --runs 20 --strata 1,2,3` plays seeded runs with the cautious bot (`run::bot`) and writes every run's cadence report and the aggregate against the design's budget to `docs/03/telemetry/cadence.md` (`--logs DIR` keeps each run's full log). Every run played in the game writes the same log to `user://telemetry/`.

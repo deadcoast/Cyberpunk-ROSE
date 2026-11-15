@@ -5,7 +5,7 @@ extends ScreenBase
 ## the rival, the services running); left, today's stock tier by tier with ORDER on the picked entry, then the
 ## market's queue and this faction's orders; right, the day's demand for the seven categories a stall buys with the
 ## buy-list value ticked and the glut marked, then the offers (ACCEPT) and the links in hand (SEND). Every number is
-## the economy crate's; a recover's body laid as it is taken joins the Board's corpses (Sim.lay_bodies).
+## the economy crate's; a recover's body laid as it is taken joins the Board's corpses (the World lays it: game::routes).
 
 const SLOT_W := 48
 const SLOT_H := 58
@@ -338,7 +338,6 @@ func _accept() -> void:
 	if String(r.get("why", "")) != "":
 		status = String(r.why)
 	else:
-		Sim.lay_bodies(r.get("laid", []))
 		status = String(r.get("line", ""))
 		picked_offer = -1
 	picked_entry = -1

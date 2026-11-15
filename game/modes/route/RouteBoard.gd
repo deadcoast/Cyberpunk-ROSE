@@ -136,7 +136,7 @@ func _fill_card(f: Panel, r: Dictionary, i: int) -> void:
 		for b in bodies:
 			names.append("%s d%d%s" % [String(b.runner), int(b.day), " raided" if bool(b.raided) else ""])
 		make_label(f, ("BODY: " if bodies.size() == 1 else "BODIES: ") + ", ".join(names), Vector2(6, 64), UiTheme.HOT_PINK)
-	var stranded: Array = Sim.stranded.get(Sim.route_key(int(r.stratum), int(r.seed)), [])
+	var stranded: Array = Sim.stranded_on(int(r.stratum), int(r.seed))
 	if stranded.size() > 0:
 		var sn := []
 		for id in stranded:
@@ -475,6 +475,9 @@ func _depart() -> void:
 	if routes.is_empty() or runner_id < 0:
 		return
 	var r: Dictionary = routes[selected]
+	# the run's entry is a save, taken as the city stands at the Board, the kit still in the Stash: a run is not
+	# saved, so a game quit mid-run comes back to the Board with its rig unpacked
+	Sim.autosave()
 	var rs := _runner_setup()
 	var rig: PackedByteArray = stash.pack_rig(hand_handle, PackedInt32Array(quick_handles), PackedInt32Array(pack_handles), int(rs.rig_rows), float(rs.carry_kg))
 	var followers := []

@@ -10,6 +10,7 @@ var frames_on_screen := 0
 var assets: Node
 var screens: Node
 var sim: Node
+var audio
 var out_dir := ""
 ## the stages held to happening, and the ones that did not
 var stages := 0
@@ -34,12 +35,22 @@ func _initialize() -> void:
 	# the engine's own random stream (New Run's offered seed) fixed, so the frames repeat byte for byte
 	seed(11)
 	assets = _autoload("Assets", "res://autoload/Assets.gd")
+	# the sound channel, silent: the slots resolve and what plays is counted
+	audio = _autoload("Audio", "res://autoload/Audio.gd")
+	audio.muted = true
 	screens = _autoload("Screens", "res://autoload/Screens.gd")
 	sim = _autoload("Sim", "res://autoload/Sim.gd")
+	# the shots show a label's text, not a frame of its slam (the smoke checks the slam's frames)
+	sim.kinetic = false
 	sim.today_fixed = 20261113
 	# the tests' own profile, fresh each time: nothing lands in the player's
 	sim.profile_path = "user://profile_test"
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(sim.profile_path))
+	# the test's own save folder, emptied: a test never writes over the player's saves or reads an old run's
+	sim.save_dir = "user://saves_test_shots"
+	for slot in sim.SLOTS:
+		for ext in ["", ".tmp", ".bad"]:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(sim.save_path(slot) + ext))
 	root.add_child((load("res://Main.tscn") as PackedScene).instantiate())
 	sim.ticks_per_frame = 2
 	# the campaign's panel sets play when the script shows them, not on their own

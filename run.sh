@@ -68,6 +68,17 @@ shots_run() {
   fi
 }
 
+# Quit and relaunch (game/tests/save.gd): one process plays and saves and quits, a fresh one takes CONTINUE and loads
+# the slot, and every digest must match the city that was saved.
+save_check() {
+  "$GODOT" --headless --path game --script res://tests/save.gd -- write 2>&1 | grep -E "\[save\]|SCRIPT ERROR"
+  "$GODOT" --headless --path game --script res://tests/save.gd -- read 2>&1 | grep -E "\[save\]|SCRIPT ERROR"
+  if ! "$GODOT" --headless --path game --script res://tests/save.gd -- read >/dev/null 2>&1; then
+    printf '  the save check FAILED\n'
+    return 1
+  fi
+}
+
 if [ "$QUICK" = 1 ]; then
   step "build" "cargo build --release (core, bridge, tools)"
   cargo build --release -q
@@ -80,6 +91,8 @@ if [ "$QUICK" = 1 ]; then
     step "godot" "import + headless smoke"
     "$GODOT" --headless --path game --import >/dev/null 2>&1 || true
     "$GODOT" --headless --path game --script res://tests/smoke.gd 2>&1 | grep -E "\[smoke\] ([0-9]+ screens|PASS|FAIL)|SCRIPT ERROR"
+    step "save" "save.gd: play, save, quit; a fresh process continues and loads to the same city"
+    save_check
     step "session" "play.gd under --fixed-fps 60: every beat held to happening, then play_digest.txt"
     play_session
   else
@@ -109,6 +122,9 @@ step "economy" "rose economy (Phase D's proof: thirty shifts trading, every dema
 ./target/release/rose --out out economy | tail -3
 step "campaign" "rose campaign (Phase E's proof: five scripts, each to its own ending -> docs/03/telemetry/campaign.md; about twenty-five minutes)"
 ./target/release/rose --out out campaign | tail -3
+step "save-check" "rose save-check (the Garden script's city at shift 60 saved, loaded in a fresh process, three shifts on)"
+./target/release/rose --out out save-check --aim garden --at 60 --then 3 --phase write | tail -1
+./target/release/rose --out out save-check --then 3 --phase read | tail -1
 
 install_ext
 
@@ -118,6 +134,8 @@ if command -v "$GODOT" >/dev/null 2>&1; then
   step "godot" "import + headless smoke"
   "$GODOT" --headless --path game --import >/dev/null 2>&1 || true
   "$GODOT" --headless --path game --script res://tests/smoke.gd 2>&1 | grep -E "\[smoke\]|SCRIPT ERROR"
+  step "save" "save.gd: play, save, quit; a fresh process continues and loads to the same city"
+  save_check
   if [ -n "${DISPLAY:-}" ] || command -v xvfb-run >/dev/null 2>&1; then
     step "shots" "native screenshots -> assets/shots (every stage held to happening)"
     shots_run

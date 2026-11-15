@@ -1,7 +1,7 @@
 //! The city's log (Full Design v3.12, The city's log): landings, losses and decisions on the city's clock (a tick
 //! is half a second; the run's clock and the city's are one).
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Class {
     Landing,
     Loss,
@@ -18,7 +18,7 @@ impl Class {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Event {
     pub tick: u64,
     pub class: Class,
@@ -31,7 +31,7 @@ impl Event {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct CityLog {
     pub events: Vec<Event>,
     /// how many the view has already taken

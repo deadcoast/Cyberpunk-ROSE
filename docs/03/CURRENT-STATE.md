@@ -156,3 +156,28 @@ view (PAC-103) and a bridge that cannot panic all stand on it; balance as data w
 before any pacing pass (PAC-105, PAC-106), so a fix can be told from noise; the feel items (PAC-107), the shell
 (PAC-108), the art lane's effect slots (PAC-109) and code health (PAC-110) after. The art rows (PAC-090–093) belong
 to the pixel-lab-agent and can start at any time: they block nothing in Phase G, and only PAC-109 adds slots to them.
+
+Since the review (2026-11-15)
+-----------------------------
+
+What Phase G has answered so far, by ID; the evidence is in `VERIFICATION-8.md` under the PAC named. The review above
+is left as it was measured.
+
+| ID | now | PAC |
+| --- | --- | --- |
+| SC-01, SC-02, SC-05 | done: the bridge owns the one World, no unwrapped bridge state, the crowd's depth packed; the campaign proof passes on the game's shift | PAC-101 |
+| NF-01 | done: saves on disk (the World's snapshot), autosave, three slots, CONTINUE, quit and relaunch checked across two processes | PAC-102 |
+| NF-02 | partly: Settings tells the truth (seed, strain code, last save, what works and what does not yet); the volumes work and persist; the rest of the listed settings do not yet | PAC-108 |
+| SC-04, TECH-01 | partly: the knobs in `data/balance.toml`, swept with `rose --data` and no build; the campaign on three seeds with its range; the work cycle is still compiled | PAC-104 |
+| CORE-01 | partly: the late Parts (a stall at every street) and chapter 6's alliance (the steward's Ivan); on seed 11 Garden 18.6 h, Hive 14.6, World-Eater 19.9, Accord 15.0; 5 of 12 endings inside 12–18 h over seeds 11–13 | PAC-105 |
+| CORE-02 | open: the Quarter at 4–5.5 h on 3 of 12 (meals at 0.03 tried) | PAC-105 |
+| CORE-03 | done for the gap: the climb mends across a burned gap in a filled shaft; a stage past its time leaves | PAC-105 |
+| CORE-04 | done: 0.45–0.65 notables a run in S1, 0.60–0.75 in S2 | PAC-106 |
+| CORE-05 | done: the longest quiet at 40 s in S1–S3 (the drain stirs); deaths in band on 7 of 9 | PAC-106 |
+| NF-03, QOL-02 | done: the sound channel with every sound a slot, kinetic labels where a moment lands, movers between ticks | PAC-107 |
+| QOL-01 | open: the world at two thirds of the Colony's frame | PAC-107 |
+| TECH-04 | done before this: `run.sh --quick`; it now plays the save check too | PAC-110 |
+
+Found along the way: the campaign proof had only ever been played on seed 11. On seed 12 the Garden script's Heart
+burns in chapter 3's Cleansing (shift 45) and the Accord script ends in the Garden; seed 12's Hamlet comes at 2.7–3.2
+hours. These are PAC-105's to trace.

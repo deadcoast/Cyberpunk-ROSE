@@ -103,11 +103,11 @@ fn facts(city: &City, threats: Option<&Threats>, roster: &Roster, raiders: bool)
 #[allow(clippy::too_many_arguments)]
 pub fn start_shift(econ: &mut Economy, ledger: &mut Ledger, city: &City, colony: &Colony, defs: &StructureFile, roster: &Roster, names: &NameFile, plan: &[(u32, Job, u32)], threats: Option<&Threats>, shift: u32, raiders: bool, log: &mut CityLog) {
     let day = Economy::day_of(shift);
+    let f = facts(city, threats, roster, raiders);
     if day != econ.s.day {
-        let notes = econ.begin_day(day, chapter(econ));
+        let notes = econ.begin_day(day, chapter(econ), &f.reached);
         note(log, city.tick, notes);
     }
-    let f = facts(city, threats, roster, raiders);
     let first = names.first.clone();
     econ.refresh_offers(&f, chapter(econ), &mut |s| first[(s % first.len().max(1) as u64) as usize].clone());
     set_books(econ, ledger, city, colony, defs, roster, plan);
@@ -122,7 +122,7 @@ pub struct Board<'a> {
 }
 
 /// A recover link's body as laid: the Board's route of `stratum` (seed `route`), for the routes' corpses.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Laid {
     pub contract: u32,
     pub stratum: u8,

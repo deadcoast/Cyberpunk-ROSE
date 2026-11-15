@@ -196,7 +196,7 @@ impl RoseSim {
         changed
     }
 
-    /// Where the game's data came from: "<file> disk" or "<file> compiled" for each of the ten files `game::data`
+    /// Where the game's data came from: "<file> disk" or "<file> compiled" for each of the eleven files `game::data`
     /// loads, then "ERROR data/<file>: <why>" for each file of `data/` that did not parse (Phase G, PAC-101).
     #[func]
     fn data_report(&self) -> PackedStringArray {
@@ -547,6 +547,12 @@ impl RoseSim {
         self.city().map_or_else(PackedInt32Array::new, |c| {
             PackedInt32Array::from(c.pk_pos.iter().map(|&p| p as i32).collect::<Vec<i32>>().as_slice())
         })
+    }
+
+    /// Which shipment each packet carries, in packet order: the id the view follows a packet by between ticks.
+    #[func]
+    fn packet_ids(&self) -> PackedInt32Array {
+        self.city().map_or_else(PackedInt32Array::new, |c| PackedInt32Array::from(c.pk_cargo.iter().map(|&p| p as i32).collect::<Vec<i32>>().as_slice()))
     }
 
     /// The tier rank (0 Common … 4 Relic) of the item each packet carries, in packet order; the Street view's pulse.

@@ -12,6 +12,7 @@ config/features=PackedStringArray("4.5", "GL Compatibility")
 [autoload]
 
 Assets="*res://autoload/Assets.gd"
+Audio="*res://autoload/Audio.gd"
 Screens="*res://autoload/Screens.gd"
 Sim="*res://autoload/Sim.gd"
 

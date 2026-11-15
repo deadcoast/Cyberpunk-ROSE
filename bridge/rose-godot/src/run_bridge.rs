@@ -856,6 +856,12 @@ impl RoseRun {
                     d.set("packs", packs as i64);
                     d.set("patrols", patrols as i64);
                 }
+                run::Event::Stirred { n, x, y } => {
+                    d.set("kind", "stirred");
+                    d.set("n", n as i64);
+                    d.set("x", x as i64);
+                    d.set("y", y as i64);
+                }
                 run::Event::Raiders { gang, n, x, y } => {
                     d.set("kind", "raiders");
                     d.set("gang", gang as i64);

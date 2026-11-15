@@ -24,6 +24,7 @@ var bulk: Panel
 var queue_panel: Panel
 var selected := -1
 var haul_note := ""
+var _haul_slammed := false   # the haul lands once (Full Design v3.24, Feel)
 var filter_cat := 0
 var filter_tier := 0
 var filter_cond := 0
@@ -378,7 +379,11 @@ func _draw_queue() -> void:
 	var q: Array = stash.queued()
 	var y := 16
 	if haul_note != "":
-		make_label(queue_panel, haul_note.left(54), Vector2(6, y), UiTheme.OOZE_GLOW)
+		var hl := make_label(queue_panel, haul_note.left(54), Vector2(6, y), UiTheme.OOZE_GLOW)
+		if not _haul_slammed:
+			_haul_slammed = true
+			slam(hl, haul_note.left(54), UiTheme.OOZE_GLOW)
+			Audio.play("sfx.land")
 		y += 12
 	var shown := 0
 	var sell_sum := 0

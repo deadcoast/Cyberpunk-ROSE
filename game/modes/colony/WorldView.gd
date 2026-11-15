@@ -206,8 +206,55 @@ func _paint_mat(x: int, y: int, hv: int, sg: float) -> void:
 		state = "fed" if sg > 0.3 else ("lean" if sg > 0.0 else "starving")
 	_put_cell(matlayer, x, y, spec[0], state, (x + y) % 4)
 
+# ---------------------------------------------------------------- between the ticks (Full Design v3.24, Feel; PAC-107)
+## Movers and cargo between ticks: each one's last step drawn from where it was to the tile it entered, over the
+## step's own time (a mover steps every WALK_TICKS ticks, a packet every tick), in whole pixels, so a slimo walks and
+## a packet rides instead of jumping a tile a tick. A jump of more than a tile (a Runner leaving, a body placed) is
+## drawn where it lands. Keyed by the slimo's id and the packet's shipment.
+const WALK_TICKS := 2   # logistics::city::WALK_EVERY
+var _walk := {}         # mover id -> [from (tiles), to (tiles), start ms]
+var _ride := {}         # packet id -> [from, to, start ms]
+
+## A tick's length on the picture's clock: the Sim's rate, a fifth in ooze-time; a headless test's ticks a frame.
+func _tick_ms() -> float:
+	if Sim.ticks_per_frame > 0:
+		return 1000.0 / 60.0 / float(Sim.ticks_per_frame)
+	return 1000.0 / maxf(Sim.tick_hz, 0.1) / (0.2 if Sim.ooze_left > 0.0 else 1.0)
+
+## Where a tracked one is drawn now, in tiles.
+func _at(rec: Array, dur: float, now: float) -> Vector2:
+	var t := clampf((now - float(rec[2])) / maxf(dur, 1.0), 0.0, 1.0)
+	return (rec[0] as Vector2).lerp(rec[1] as Vector2, t)
+
+func _track(table: Dictionary, ids: PackedInt32Array, pos: PackedInt32Array, dur: float, now: float) -> void:
+	var seen := {}
+	for k in mini(ids.size(), pos.size()):
+		var id: int = ids[k]
+		var to := Vector2(pos[k] % w, pos[k] / w)
+		seen[id] = true
+		var rec = table.get(id)
+		if rec == null:
+			table[id] = [to, to, now]
+		elif (rec[1] as Vector2) != to:
+			var from := _at(rec, dur, now)
+			table[id] = [from if from.distance_to(to) <= 1.5 else to, to, now]
+	for id in table.keys():
+		if not seen.has(id):
+			table.erase(id)
+
+## Anything still between two tiles: the crowd and the cargo redraw every frame until it lands.
+func _gliding(table: Dictionary, dur: float, now: float) -> bool:
+	for id in table:
+		var rec: Array = table[id]
+		if now - float(rec[2]) < dur and (rec[0] as Vector2) != (rec[1] as Vector2):
+			return true
+	return false
+
 func _on_tick() -> void:
 	var sim: RoseSim = Sim.ensure()
+	var now_ms := float(Sim.anim_msec())
+	_track(_walk, sim.agent_ids(), sim.agent_positions(), _tick_ms() * WALK_TICKS, now_ms)
+	_track(_ride, sim.packet_ids(), sim.packet_positions(), _tick_ms(), now_ms)
 	if refresh_strata():
 		full_paint()
 	var changed: PackedInt32Array = sim.changed_cells()
@@ -293,17 +340,24 @@ func _draw_cargo() -> void:
 	if pos.is_empty():
 		return
 	var tiers: PackedByteArray = sim.packet_tiers()
+	var ids: PackedInt32Array = sim.packet_ids()
 	var size := 8 if view_level == 0 else 16
 	var cols := [UiTheme.DUST, UiTheme.CYAN, UiTheme.HOT_PINK, UiTheme.OOZE_GLOW, UiTheme.VESTMENT]
 	var seen := {}
+	var dur := _tick_ms()
+	var now := float(Sim.anim_msec())
 	for k in pos.size():
 		var p: int = pos[k]
 		var n: int = seen.get(p, 0)
 		seen[p] = n + 1
 		var col: Color = cols[mini(int(tiers[k]) if k < tiers.size() else 0, 4)]
+		# where it rides between its last tile and this one, in whole pixels
+		var at := Vector2(p % w, p / w)
+		if k < ids.size() and _ride.has(ids[k]):
+			at = _at(_ride[ids[k]], dur, now)
 		# up to four to a tile, side by side along the tile's middle
-		var x := (p % w) * TILE + 2 + (n % 4) * (TILE - 4 - size) / 3 if view_level == 0 else (p % w) * TILE + (TILE - size) / 2
-		var y := (p / w) * TILE + (TILE - size) / 2
+		var x := int(round(at.x * TILE)) + 2 + (n % 4) * (TILE - 4 - size) / 3 if view_level == 0 else int(round(at.x * TILE)) + (TILE - size) / 2
+		var y := int(round(at.y * TILE)) + (TILE - size) / 2
 		cargo.draw_rect(Rect2(x - 1, y - 1, size + 2, size + 2), UiTheme.VOID)
 		cargo.draw_rect(Rect2(x, y, size, size), col)
 
@@ -486,7 +540,10 @@ func _draw_crowd() -> void:
 	var pos: PackedInt32Array = sim.agent_positions()
 	var st: PackedByteArray = sim.agent_states()
 	var depths: PackedByteArray = sim.agent_depths()
+	var ids: PackedInt32Array = sim.agent_ids()
 	var frame := int(Sim.anim_msec() / 125) % 8
+	var dur := _tick_ms() * WALK_TICKS
+	var now := float(Sim.anim_msec())
 	var slot := {}
 	for k in pos.size():
 		var p: int = pos[k]
@@ -507,7 +564,11 @@ func _draw_crowd() -> void:
 			continue
 		var fw := 32
 		var frames := maxi(1, tex.get_width() / fw)
-		var dst := Rect2(px * TILE + s * 8 - 12, py * TILE + TILE - tex.get_height(), fw, tex.get_height())
+		# where it walks between its last tile and this one, in whole pixels
+		var at := Vector2(px, py)
+		if k < ids.size() and _walk.has(ids[k]):
+			at = _at(_walk[ids[k]], dur, now)
+		var dst := Rect2(int(round(at.x * TILE)) + s * 8 - 12, int(round(at.y * TILE)) + TILE - tex.get_height(), fw, tex.get_height())
 		var src := Rect2((frame % frames) * fw, 0, fw, tex.get_height())
 		crowd.draw_texture_rect_region(tex, dst, src, Color.WHITE)
 
@@ -537,6 +598,12 @@ func _repaint_flood(sim: RoseSim) -> void:
 func _process(_delta: float) -> void:
 	if not fresh.is_empty():
 		fresh_fx.queue_redraw()
+	if bind_sim:
+		var now := float(Sim.anim_msec())
+		if _gliding(_walk, _tick_ms() * WALK_TICKS, now):
+			crowd.queue_redraw()
+		if _gliding(_ride, _tick_ms(), now):
+			cargo.queue_redraw()
 
 ## New Mat tissue: an acid outline that fades over FRESH_MS, so a feed's growth reads at a glance (Full Design v3.21,
 ## Translocation; the ooze pink of the first try vanished on the Mat's own purple).

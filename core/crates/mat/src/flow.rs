@@ -3,7 +3,7 @@
 
 use std::collections::VecDeque;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FlowField {
     pub w: usize,
     pub h: usize,

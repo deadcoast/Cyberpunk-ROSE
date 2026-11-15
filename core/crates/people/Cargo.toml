@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+balance = { path = "../balance" }
 mat = { path = "../mat" }
 serde.workspace = true
 toml.workspace = true

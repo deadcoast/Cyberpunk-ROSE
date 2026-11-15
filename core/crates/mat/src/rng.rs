@@ -1,7 +1,7 @@
 //! PCG32: one seeded stream per simulation. Every random draw in the sim comes from here,
 //! so (seed, inputs) replays a run exactly.
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Pcg32 {
     state: u64,
     inc: u64,

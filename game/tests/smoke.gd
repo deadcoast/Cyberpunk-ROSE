@@ -20,6 +20,7 @@ var t_start := 0
 var assets: Node
 var screens: Node
 var sim: Node
+var audio
 
 func _autoload(name: String, path: String) -> Node:
 	# a SceneTree script does not get the project's autoloads; mount them under root by name so scripts resolve them
@@ -33,11 +34,19 @@ func _autoload(name: String, path: String) -> Node:
 func _initialize() -> void:
 	t_start = Time.get_ticks_msec()
 	assets = _autoload("Assets", "res://autoload/Assets.gd")
+	# the sound channel, silent: the slots resolve and what plays is counted
+	audio = _autoload("Audio", "res://autoload/Audio.gd")
+	audio.muted = true
 	screens = _autoload("Screens", "res://autoload/Screens.gd")
 	sim = _autoload("Sim", "res://autoload/Sim.gd")
 	# the tests' own profile, fresh each time: nothing lands in the player's
 	sim.profile_path = "user://profile_test"
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(sim.profile_path))
+	# the test's own save folder, emptied: a test never writes over the player's saves or reads an old run's
+	sim.save_dir = "user://saves_test_smoke"
+	for slot in sim.SLOTS:
+		for ext in ["", ".tmp", ".bad"]:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(sim.save_path(slot) + ext))
 	var scene := load("res://Main.tscn")
 	main = scene.instantiate()
 	root.add_child(main)
@@ -46,7 +55,7 @@ func _initialize() -> void:
 	sim.panel_hold = true
 	screen_ids = screens.ids()
 	print("[smoke] extension RoseSim: %s  RoseItems: %s  RoseStash: %s  RoseRun: %s" % [ClassDB.class_exists("RoseSim"), ClassDB.class_exists("RoseItems"), ClassDB.class_exists("RoseStash"), ClassDB.class_exists("RoseRun")])
-	# the data: all ten files through game::data, read from data/ beside the project, none failing (Phase G, PAC-101)
+	# the data: all eleven files through game::data, read from data/ beside the project, none failing (Phase G, PAC-101)
 	var report: PackedStringArray = RoseSim.new().data_report()
 	var disk := 0
 	for line in report:
@@ -54,8 +63,39 @@ func _initialize() -> void:
 			_check(false, "data: " + line)
 		elif line.ends_with(" disk"):
 			disk += 1
-	_check(disk == 10, "data: %d of 10 files read from data/ (%s)" % [disk, ", ".join(report)])
+	_check(disk == 11, "data: %d of 11 files read from data/ (%s)" % [disk, ", ".join(report)])
 	print("[smoke] data      %d of %d files from data/" % [disk, report.size()])
+	# the sound channel (Full Design v3.24, Feel): the four buses under Master, every slot a stream (a made file or its
+	# placeholder), a slot that is not one refused
+	audio.ensure_buses()
+	for b in audio.BUSES:
+		_check(AudioServer.get_bus_index(b) > 0, "audio: no %s bus" % b)
+	var made := 0
+	for id in audio.SLOTS:
+		var st: AudioStream = audio.stream(id)
+		_check(st != null and st.get_length() > 0.0, "audio: slot %s has no stream" % id)
+		_check(AudioServer.get_bus_index(String(audio.SLOTS[id][0])) >= 0, "audio: slot %s on no bus" % id)
+		made += int(audio.is_made(id))
+	_check(audio.play("sfx.reward") == "" and audio.played.has("sfx.reward"), "audio: the reward did not play")
+	_check(audio.play("sfx.nothing") != "", "audio: an unknown slot played")
+	print("[smoke] audio     %d buses, %d sound slots (%d made, the rest placeholders)" % [audio.BUSES.size() + 1, audio.SLOTS.size(), made])
+	# a kinetic label (Full Design v3.24, Feel): frame 0 at twice its size and scrambled, frames 1-2 a glitch a pixel
+	# off, from frame 3 its text where it stood
+	var base: Control = load("res://ui/ScreenBase.gd").new()
+	var slams := 0
+	var lb := Label.new()
+	base.add_child(lb)
+	lb.position = Vector2(10, 20)
+	base.slam(lb, "TROPHY: THE FIRST FLOOD", Color.WHITE)
+	_check(lb.scale == Vector2(2, 2) and lb.text != "TROPHY: THE FIRST FLOOD" and lb.text.length() == 23, "slam: frame 0 is not the slam (%s, %s)" % [lb.text, lb.scale])
+	base._slam_frame(lb, 1)
+	_check(lb.scale == Vector2.ONE and lb.position == Vector2(11, 20) and lb.text != "TROPHY: THE FIRST FLOOD", "slam: frame 1 is not a glitch")
+	base._slam_frame(lb, 3)
+	_check(lb.text == "TROPHY: THE FIRST FLOOD" and lb.position == Vector2(10, 20) and lb.scale == Vector2.ONE, "slam: frame 3 did not resolve")
+	slams = 3
+	base.free()
+	_check(slams == 3, "slam: the check did not run")
+	print("[smoke] kinetic   a slam: twice the size, two glitch frames, resolved at frame 3")
 
 func _check(cond: bool, msg: String) -> void:
 	if not cond:

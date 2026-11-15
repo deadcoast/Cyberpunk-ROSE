@@ -19,6 +19,7 @@ mod colony_bridge;
 mod people;
 mod profile_bridge;
 mod run_bridge;
+mod save_bridge;
 mod sim_bridge;
 mod stash_bridge;
 

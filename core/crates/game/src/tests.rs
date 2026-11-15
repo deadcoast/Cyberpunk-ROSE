@@ -660,3 +660,56 @@ fn a_bred_strain_proposes_a_bypass_round_a_standing_jam_and_lays_it_when_confirm
     crate::handoff::answer(&mut w.colony, false);
     assert!(w.colony.proposal.is_empty());
 }
+
+/// What a restored World must match: the digest by part, the threats' gauges and bodies, the surface, the campaign.
+fn same_world(a: &World, b: &World, at: &str) {
+    let da = crate::city::digest_split(&a.city, &a.colony, &a.stash, &a.ledger, &a.roster, &a.log, Some(&a.economy));
+    let db = crate::city::digest_split(&b.city, &b.colony, &b.stash, &b.ledger, &b.roster, &b.log, Some(&b.economy));
+    assert_eq!(da, db, "{at}: the digests by part");
+    assert_eq!(a.threats.save(), b.threats.save(), "{at}: the threats");
+    assert_eq!(a.economy.s, b.economy.s, "{at}: the surface");
+    assert_eq!(a.campaign, b.campaign, "{at}: the campaign");
+    assert_eq!((a.day, a.city.tick, a.city.sim.n.clone(), a.city.sim.sig.clone()), (b.day, b.city.tick, b.city.sim.n.clone(), b.city.sim.sig.clone()), "{at}: the Mat's food and signal");
+}
+
+/// A save is the World's snapshot (Full Design: Saves): a World restored from one steps exactly as the World it was
+/// taken from — at the founding, mid-shift, and after the steward's shifts with runs, Guards, offers and bodies.
+#[test]
+fn a_restored_world_steps_as_the_world_it_was_taken_from() {
+    let table = || ItemTable::from_toml(ITEMS_TOML).unwrap();
+    // the founding, then three played shifts each way
+    let mut a = world();
+    let mut b = World::restore(&a.snapshot(), table()).expect("restores");
+    same_world(&a, &b, "founded");
+    for _ in 0..3 {
+        a.play_shift();
+        b.play_shift();
+    }
+    same_world(&a, &b, "founded + 3");
+    // mid-shift: 301 ticks in, then the shift out and two more
+    for _ in 0..301 {
+        a.tick();
+    }
+    let mut b = World::restore(&a.snapshot(), table()).unwrap();
+    for w in [&mut a, &mut b] {
+        for _ in 301..crate::shift::SHIFT_TICKS {
+            w.tick();
+        }
+        w.end_shift();
+        w.play_shift();
+        w.play_shift();
+    }
+    same_world(&a, &b, "mid-shift + 2");
+    // ten of the city proof's shifts (the steward, a run a shift), then three played shifts each way
+    let (_, mut a) = crate::city::play_world(11, 10, &mut |_, _| {});
+    let snap = a.snapshot();
+    let mut b = World::restore(&snap, table()).unwrap();
+    for _ in 0..3 {
+        a.play_shift();
+        b.play_shift();
+    }
+    same_world(&a, &b, "the city proof's 10 + 3");
+    assert!(snap.len() < 4 << 20, "a snapshot of a 10-shift city is {} bytes", snap.len());
+    // a snapshot that is not one is refused, not misread
+    assert!(World::restore(b"RWS0junk", table()).is_err());
+}

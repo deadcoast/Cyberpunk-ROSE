@@ -132,6 +132,24 @@ enum Cmd {
         #[arg(long, default_value = "docs/03/telemetry/economy.md")]
         report: PathBuf,
     },
+    /// The save across two processes (Full Design: Saves): `--phase write` plays a campaign script to shift `--at`,
+    /// writes the save and the digests of `--then` played shifts after it; `--phase read`, a fresh process, loads the
+    /// save, plays the same shifts and checks each digest.
+    SaveCheck {
+        #[arg(long, default_value_t = 11)]
+        seed: u64,
+        #[arg(long, default_value = "garden")]
+        aim: String,
+        #[arg(long, default_value_t = 60)]
+        at: u32,
+        #[arg(long, default_value_t = 3)]
+        then: u32,
+        #[arg(long, default_value = "out/save_check.rose")]
+        file: PathBuf,
+        /// write or read
+        #[arg(long)]
+        phase: String,
+    },
     /// Phase E's proof: the campaign headless at the bot's pace, chapter 1 to an ending, for each aim's script.
     Campaign {
         #[arg(long, default_value_t = 11)]
@@ -143,6 +161,9 @@ enum Cmd {
         shifts: u32,
         #[arg(long, default_value = "docs/03/telemetry/campaign.md")]
         report: PathBuf,
+        /// more seeds after --seed, comma-separated: every script on each, the city's hours a seed and their range
+        #[arg(long, default_value = "")]
+        seeds: String,
     },
 }
 
@@ -516,7 +537,8 @@ fn main() {
         Cmd::City { seed, shifts, report, log } => cmd_city(&t, seed, shifts, &report, &log),
         Cmd::Cleansing { seed, shifts, report } => cmd_cleansing(&t, seed, shifts, &report),
         Cmd::Economy { seed, shifts, report } => cmd_economy(&t, seed, shifts, &report),
-        Cmd::Campaign { seed, aim, shifts, report } => cmd_campaign(&t, seed, &aim, shifts, &report),
+        Cmd::Campaign { seed, aim, shifts, report, seeds } => cmd_campaign(&t, seed, &aim, shifts, &report, &seeds),
+        Cmd::SaveCheck { seed, aim, at, then, file, phase } => cmd_save_check(&t, seed, &aim, at, then, &file, &phase),
     }
     println!();
 }
@@ -839,12 +861,17 @@ fn chrono_free_date() -> String {
 }
 
 // ---------------------------------------------------------------- campaign
-fn cmd_campaign(t: &Term, seed: u64, aim: &str, shifts: u32, report: &Path) {
+fn cmd_campaign(t: &Term, seed: u64, aim: &str, shifts: u32, report: &Path, more: &str) {
     let aims: Vec<game::proof::Aim> = game::proof::aims().into_iter().filter(|a| aim == "all" || a.ending == aim).collect();
-    t.head("campaign", &format!("seed {seed}: {} script{} up to {shifts} shifts", aims.len(), if aims.len() == 1 { "" } else { "s" }));
+    let mut seeds = vec![seed];
+    seeds.extend(more.split(',').filter_map(|x| x.trim().parse::<u64>().ok()).filter(|&x| x != seed));
+    t.head("campaign", &format!("seed{} {}: {} script{} up to {shifts} shifts", if seeds.len() == 1 { "" } else { "s" }, seeds.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", "), aims.len(), if aims.len() == 1 { "" } else { "s" }));
     let started = Instant::now();
     let mut runs: Vec<(game::proof::Aim, game::proof::CampaignRun)> = Vec::new();
-    for a in aims {
+    // every seed after the first: the same scripts, their hours and endings (the first seed's are `runs`)
+    let mut others: Vec<(game::proof::Aim, game::proof::CampaignRun)> = Vec::new();
+    for (&sd, a) in seeds.iter().flat_map(|sd| aims.iter().map(move |a| (sd, *a))) {
+        let seed = sd;
         t.hrow(&[("shift", 5), ("ch", 3), ("S", 2), ("run", 4), ("result", 10), ("pop", 4), ("beds", 4), ("cells", 6), ("top", 4), ("genes (aim)", 12), ("tiers", 5), ("def", 3), ("bloom", 12), ("P/C/e", 10), ("att", 9), ("research", 18), ("story", 50)]);
         let (run_, _) = game::proof::play(seed, a, shifts, &mut |c, _| {
             let story = c.story.join("; ");
@@ -854,17 +881,22 @@ fn cmd_campaign(t: &Term, seed: u64, aim: &str, shifts: u32, report: &Path) {
         let log = PathBuf::from(format!("out/campaign_{}_{seed}.log", a.ending));
         let _ = std::fs::create_dir_all("out");
         std::fs::write(&log, &run_.log).expect("log");
-        runs.push((a, run_));
+        if sd == seeds[0] {
+            runs.push((a, run_));
+        } else {
+            others.push((a, run_));
+        }
     }
     // the proof (Full Design v3.20, Narrative and Ivan: The proof): each script ends the campaign in its own ending
-    let pass = runs.iter().all(|(a, r)| r.ending.as_deref() == Some(a.ending));
+    let pass = runs.iter().chain(others.iter()).all(|(a, r)| r.ending.as_deref() == Some(a.ending));
     println!("  {}   {:.0} s", if pass { t.hi("PASS every script reached its ending") } else { t.hi("FAIL a script missed its ending") }, started.elapsed().as_secs_f32());
     let gene = |k: usize| mat::genome::GENE_NAMES[k];
     // the first shift a column reached each value
     let first = |r: &game::proof::CampaignRun, v: u8, f: &dyn Fn(&game::proof::CampaignShift) -> u8| r.shifts.iter().find(|c| f(c) >= v).map_or("—".to_string(), |c| c.day.to_string());
     let mut md = String::new();
     md.push_str("# The campaign, chapter 1 to an ending\n\n");
-    md.push_str(&format!("Written by `rose campaign --seed {seed} --shifts {shifts}` on {} (Full Design v3.20, Narrative and Ivan: The proof; the Build plan's Phase E). Five scripts play the campaign headless at the bot's pace, one for each ending: the steward of `rose city` running the shifts and the campaign's own player on top — the research the chapters ask for, the climb up the stack, the defences once the Oathkeepers come, the gene pair it steers with Ivan's feeds and the Stash's Chrome, the accord refused once a Gate and a Turret stand (taken before), an alliance at chapter 6 and the Great Cleansing met at chapter 7; Scattered's script raises no defence and refuses the accord, and the chapter's Cleansing burns the Heart. **Result: {}.**\n\n", chrono_free_date(), if pass { "every script reached its ending" } else { "a script missed its ending" }));
+    let seeds_arg = if seeds.len() > 1 { format!(" --seeds {}", seeds[1..].iter().map(|s| s.to_string()).collect::<Vec<_>>().join(",")) } else { String::new() };
+    md.push_str(&format!("Written by `rose campaign --seed {seed}{seeds_arg} --shifts {shifts}` on {} (Full Design v3.20, Narrative and Ivan: The proof; the Build plan's Phase E). Five scripts play the campaign headless at the bot's pace, one for each ending: the steward of `rose city` running the shifts and the campaign's own player on top — the research the chapters ask for, the climb up the stack, the defences once the Oathkeepers come, the gene pair it steers with Ivan's feeds and the Stash's Chrome, the accord refused once a Gate and a Turret stand (taken before), an alliance at chapter 6 and the Great Cleansing met at chapter 7; Scattered's script raises no defence and refuses the accord, and the chapter's Cleansing burns the Heart. **Result: {}.**\n\n", chrono_free_date(), if pass { "every script reached its ending" } else { "a script missed its ending" }));
     md.push_str(&format!("| script | genes steered | the accord | ending | warchest | shifts | chapters 2–7 opened at shift | strata 2–6 reached at shift | the genome at the end, {} to {} | slimos at the end | seconds |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n", gene(0), gene(9)));
     for (a, r) in &runs {
         // a chapter opened when the city first stood in it or past it short of the ending (which closes them all)
@@ -887,7 +919,27 @@ fn cmd_campaign(t: &Term, seed: u64, aim: &str, shifts: u32, report: &Path) {
             md.push_str(&format!("| {} | {} | S{} | {} | {} | {} | {} | {} | {} / {} / {} | {:.0} |\n", c.day, c.chapter, c.stratum, c.population, c.cells, c.top_row, gs.join(" | "), c.bloom.0, c.stock.0, c.stock.1, c.stock.2, c.attention.0));
         }
     }
-    md.push_str(&format!("\nThe logs, every decision and event of each run: `out/campaign_<ending>_{seed}.log`.\n"));
+    // the city's hours (Full Design v3.21, Progression's city tiers; the first run 12-18 h): the bot's run seconds times
+    // its pace factor, a seed a row, and each script's range over the seeds
+    let h = |v: Option<f32>| v.map_or("—".to_string(), |x| format!("{x:.1} h"));
+    md.push_str(&format!("\n## The city's hours\n\nThe bot's run seconds times its pace factor ({}, an assumption until a recorded human run calibrates it), when the city first held each tier's sleepers and when the campaign ended (Progression: Hamlet 20, Quarter 100, City 500, Empire 2,000; a first run 12–18 hours).\n\n| script | seed | ending | Hamlet | Quarter | City | Empire | the end |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n", run::telemetry::BOT_FACTOR));
+    let all: Vec<&(game::proof::Aim, game::proof::CampaignRun)> = runs.iter().chain(others.iter()).collect();
+    for (a, r) in &all {
+        let end = r.ending.as_ref().and_then(|_| r.hours.last().copied());
+        md.push_str(&format!("| {} | {} | {} | {} | {} | {} | {} | {} |\n", a.ending, r.seed, r.ending.clone().unwrap_or_else(|| "none".into()), h(r.hours_at(20)), h(r.hours_at(100)), h(r.hours_at(500)), h(r.hours_at(2000)), h(end)));
+    }
+    if seeds.len() > 1 {
+        md.push_str("\n| script | seeds | Quarter, range | the end, range | inside 12–18 h |\n| --- | --- | --- | --- | --- |\n");
+        for a in &aims {
+            let rs: Vec<&game::proof::CampaignRun> = all.iter().filter(|(b, _)| b.ending == a.ending).map(|(_, r)| r).collect();
+            let q: Vec<f32> = rs.iter().filter_map(|r| r.hours_at(100)).collect();
+            let e: Vec<f32> = rs.iter().filter_map(|r| r.ending.as_ref().and_then(|_| r.hours.last().copied())).collect();
+            let range = |v: &[f32]| if v.is_empty() { "—".to_string() } else { format!("{:.1}–{:.1} h", v.iter().cloned().fold(f32::MAX, f32::min), v.iter().cloned().fold(0.0, f32::max)) };
+            let inside = e.iter().filter(|&&x| (12.0..=18.0).contains(&x)).count();
+            md.push_str(&format!("| {} | {} | {} | {} | {} of {} |\n", a.ending, rs.len(), range(&q), range(&e), inside, rs.len()));
+        }
+    }
+    md.push_str(&format!("\nThe logs, every decision and event of each run: `out/campaign_<ending>_<seed>.log`.\n"));
     if let Some(parent) = report.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -895,5 +947,86 @@ fn cmd_campaign(t: &Term, seed: u64, aim: &str, shifts: u32, report: &Path) {
     println!("  {} {}", t.dim("wrote"), report.display());
     if !pass {
         std::process::exit(1);
+    }
+}
+
+// ---------------------------------------------------------------- the save across two processes
+fn digest_line(w: &game::World) -> String {
+    let parts = game::city::digest_split(&w.city, &w.colony, &w.stash, &w.ledger, &w.roster, &w.log, Some(&w.economy));
+    let mut line = format!("day {} tick {}", w.day, w.city.tick);
+    for (name, d) in parts {
+        line.push_str(&format!(" {name}={d:016x}"));
+    }
+    // the parts the digest does not cover, by their printed state: the threats as a save keeps them, the surface,
+    // the campaign, the Board's routes
+    let h = |s: String| {
+        use std::hash::{Hash, Hasher};
+        let mut x = std::collections::hash_map::DefaultHasher::new();
+        s.hash(&mut x);
+        x.finish()
+    };
+    line.push_str(&format!(" threats={:016x} economy={:016x} campaign={:016x} routes={:016x}", h(format!("{:?}", w.threats.save())), h(format!("{:?}", w.economy.s)), h(format!("{:?}", w.campaign)), h(format!("{:?}", w.routes))));
+    line
+}
+
+fn cmd_save_check(t: &Term, seed: u64, aim: &str, at: u32, then: u32, file: &Path, phase: &str) {
+    let expect = file.with_extension("expect");
+    match phase {
+        "write" => {
+            let a = game::proof::aims().into_iter().find(|a| a.ending == aim).expect("an aim: garden, hive, world_eater, accord, scattered");
+            t.head("save-check", &format!("write: seed {seed}, the {aim} script to shift {at}, then {then} played shifts"));
+            let started = Instant::now();
+            let (_, mut w) = game::proof::play(seed, a, at, &mut |_, _| {});
+            println!("  played to day {} in {:.0} s: {} slimos, {} Mat cells joined", w.day, started.elapsed().as_secs_f32(), w.roster.sleepers(), logistics::joined_to_heart(&w.city.sim).iter().filter(|&&j| j).count());
+            let t0 = Instant::now();
+            let bytes = w.save_file(Vec::new(), 0, 0).encode();
+            let save_ms = t0.elapsed().as_secs_f64() * 1000.0;
+            if let Some(dir) = file.parent() {
+                std::fs::create_dir_all(dir).expect("the save's folder");
+            }
+            std::fs::write(file, &bytes).expect("the save");
+            // the same save restored in this process too: a part a snapshot misses parts here, a part that differs by
+            // process (an order drawn from a hasher's seed) only across the two
+            let mut here = game::World::restore(&save::SaveFile::decode(&bytes).expect("reads").world, game::data::get().items.clone()).expect("restores");
+            let mut lines = vec![digest_line(&w)];
+            let mut same = digest_line(&here) == lines[0];
+            for _ in 0..then {
+                w.play_shift();
+                here.play_shift();
+                lines.push(digest_line(&w));
+                same &= digest_line(&here) == *lines.last().unwrap();
+            }
+            println!("  restored in this process: {}", if same { "the same digests" } else { "PARTED" });
+            std::fs::write(&expect, lines.join("\n") + "\n").expect("the digests");
+            println!("  save {} bytes in {save_ms:.0} ms -> {}; {} digests -> {}", bytes.len(), file.display(), lines.len(), expect.display());
+        }
+        "read" => {
+            t.head("save-check", &format!("read: {} in a fresh process, then {then} played shifts", file.display()));
+            let bytes = std::fs::read(file).expect("the save");
+            let t0 = Instant::now();
+            let f = save::SaveFile::decode(&bytes).unwrap_or_else(|e| panic!("the save does not read: {e}"));
+            let mut w = game::World::restore(&f.world, game::data::get().items.clone()).unwrap_or_else(|e| panic!("the World does not restore: {e}"));
+            let load_ms = t0.elapsed().as_secs_f64() * 1000.0;
+            let want: Vec<String> = std::fs::read_to_string(&expect).expect("the digests").lines().map(String::from).collect();
+            let mut got = vec![digest_line(&w)];
+            for _ in 0..then {
+                w.play_shift();
+                got.push(digest_line(&w));
+            }
+            let parted = want.iter().zip(got.iter()).position(|(a, b)| a != b);
+            println!("  loaded '{}' in {load_ms:.0} ms", f.label);
+            match parted {
+                None if want.len() == got.len() => println!("  {}  {} digests equal across the two processes", t.hi("PASS"), got.len()),
+                _ => {
+                    let k = parted.unwrap_or(want.len().min(got.len()));
+                    println!("  {}  digest {k} parted:\n    wrote {}\n    read  {}", t.hi("FAIL"), want.get(k).map_or("-", |s| s), got.get(k).map_or("-", |s| s));
+                    std::process::exit(1);
+                }
+            }
+        }
+        _ => {
+            eprintln!("--phase write or --phase read");
+            std::process::exit(2);
+        }
     }
 }
